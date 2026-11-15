@@ -31,17 +31,8 @@ export const Screen1Splash: React.FC = () => {
         </svg>
       </div>
 
-      {/* Simulated Status Bar */}
-      <div className="relative z-10 flex justify-between items-center px-6 pt-3 text-[11px] font-semibold text-slate-800">
-        <span>9:41</span>
-        <div className="flex items-center space-x-1.5">
-          <span className="w-3 h-2 border border-slate-700 rounded-sm relative after:content-[''] after:absolute after:-right-1 after:top-0.5 after:w-0.5 after:h-1 after:bg-slate-700" />
-          <span>5G</span>
-        </div>
-      </div>
-
       {/* Top: Brand Logo */}
-      <div className="relative z-10 pt-4 px-6 flex flex-col items-center">
+      <div className="relative z-10 pt-8 px-6 flex flex-col items-center">
         <div className="w-full max-w-[260px] flex items-center justify-center">
           <img
             src="/assets/logo.png"

@@ -1,6 +1,6 @@
 import React from 'react';
 import { ChevronLeft, Menu, Bell, Settings } from 'lucide-react';
-import { useData, ScreenId } from '../../context/DataContext';
+import { useData } from '../../context/DataContext';
 
 interface AppHeaderProps {
   title?: string;
@@ -38,24 +38,15 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   };
 
   return (
-    <header className="sticky top-0 left-0 right-0 z-30 bg-gradient-to-r from-brand-darkRed via-brand-red to-brand-darkRed text-white shadow-md">
-      {/* Top simulated status bar space */}
-      <div className="h-6 w-full flex items-center justify-between px-6 text-[10px] text-white/80 font-medium">
-        <span>9:41</span>
-        <div className="flex items-center space-x-1.5">
-          <span className="inline-block w-3 h-2 border border-white/80 rounded-sm relative after:content-[''] after:absolute after:-right-1 after:top-0.5 after:w-0.5 after:h-1 after:bg-white/80" />
-          <span>5G</span>
-        </div>
-      </div>
-
-      <div className="px-4 py-2.5 flex items-center justify-between min-h-[52px]">
+    <header className="sticky top-0 left-0 right-0 z-30 bg-gradient-to-r from-brand-darkRed via-brand-red to-brand-darkRed text-white shadow-md pt-safe">
+      <div className="px-4 py-2.5 flex items-center justify-between min-h-[56px]">
         {/* Left Side */}
         <div className="flex items-center w-10">
           {showBack && (
             <button
               onClick={handleBack}
               aria-label="Back"
-              className="p-1 -ml-1 text-white hover:bg-white/10 rounded-full active-press transition"
+              className="p-1.5 -ml-1 text-white hover:bg-white/10 rounded-full active-press transition"
             >
               <ChevronLeft className="w-6 h-6 stroke-[2.5]" />
             </button>
@@ -65,7 +56,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
             <button
               onClick={onMenuClick}
               aria-label="Menu"
-              className="p-1 -ml-1 text-white hover:bg-white/10 rounded-full active-press transition"
+              className="p-1.5 -ml-1 text-white hover:bg-white/10 rounded-full active-press transition"
             >
               <Menu className="w-6 h-6 stroke-[2.2]" />
             </button>
@@ -75,11 +66,11 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         {/* Center */}
         <div className="flex-1 flex justify-center items-center">
           {showLogo ? (
-            <div className="bg-white px-3.5 py-1 rounded-full shadow-sm border border-slate-100 flex items-center justify-center transform scale-95">
+            <div className="bg-white px-3 py-1 rounded-full shadow-sm flex items-center justify-center">
               <img
                 src="/assets/logo.png"
                 alt="Extra Diesel Logo"
-                className="h-8 w-auto object-contain max-w-[140px]"
+                className="h-7 w-auto object-contain max-w-[130px]"
               />
             </div>
           ) : (

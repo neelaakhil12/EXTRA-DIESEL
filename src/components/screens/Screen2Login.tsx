@@ -112,7 +112,7 @@ export const Screen2Login: React.FC = () => {
   return (
     <div className="relative min-h-full flex flex-col justify-between bg-white select-none overflow-y-auto">
       {/* Top Header */}
-      <div className="relative z-10 px-4 pt-3 flex items-center justify-between">
+      <div className="relative z-10 px-4 pt-4 flex items-center justify-between">
         <button
           onClick={() => {
             if (step === 'otp') {
@@ -126,7 +126,6 @@ export const Screen2Login: React.FC = () => {
         >
           <ChevronLeft className="w-6 h-6 stroke-[2.5]" />
         </button>
-        <span className="text-xs font-semibold text-slate-400">9:41</span>
         <div className="w-6" />
       </div>
 
