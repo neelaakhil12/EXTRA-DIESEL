@@ -86,18 +86,13 @@ export const Screen6MyOrders: React.FC = () => {
                   className="bg-white rounded-2xl p-3.5 shadow-card border border-slate-200/80 flex items-center justify-between transition hover:border-slate-300"
                 >
                   <div className="flex items-center space-x-3">
-                    {/* Truck Thumbnail */}
-                    <div className="w-14 h-12 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center overflow-hidden flex-shrink-0 p-1">
+                    {/* Truck Thumbnail with Clean Grand Look */}
+                    <div className="w-16 h-12 rounded-xl bg-slate-100 border border-slate-200/80 overflow-hidden flex-shrink-0 shadow-sm flex items-center justify-center p-0.5">
                       <img
-                        src="/assets/truck-thumb.png"
+                        src="/assets/order-truck-thumb.png"
                         alt="Bowser Truck"
-                        className="w-full h-full object-contain"
-                        onError={(e) => {
-                          // Fallback to truck icon
-                          (e.target as any).style.display = 'none';
-                        }}
+                        className="w-full h-full object-cover rounded-lg"
                       />
-                      <Truck className="w-6 h-6 text-brand-red" />
                     </div>
 
                     {/* Order Details */}

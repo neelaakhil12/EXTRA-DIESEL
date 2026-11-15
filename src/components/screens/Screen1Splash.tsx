@@ -42,11 +42,11 @@ export const Screen1Splash: React.FC = () => {
         </div>
       </div>
 
-      {/* Center: Diesel Bowser Truck with City Backdrop */}
+      {/* Center: Grand Diesel Bowser Truck with City Backdrop */}
       <div className="relative z-10 px-4 my-auto flex flex-col items-center">
-        <div className="w-full max-w-[320px] rounded-2xl overflow-hidden shadow-sm bg-white p-1">
+        <div className="w-full max-w-[340px] rounded-2xl overflow-hidden shadow-elevated bg-white p-1 border border-slate-100">
           <img
-            src="/assets/truck-splash.png"
+            src="/assets/splash-truck-grand.png"
             alt="Extra Diesel Delivery Bowser Truck"
             className="w-full h-auto object-cover rounded-xl"
           />

@@ -27,19 +27,19 @@ export const Screen3Home: React.FC = () => {
       title: 'Fuel Delivered',
       subtitle: 'At Your Doorstep',
       badge: 'Zero Spillage • PESO Approved',
-      image: '/assets/hero-banner.png'
+      image: '/assets/hero-slider-1.png'
     },
     {
       title: 'Smart Metering',
       subtitle: 'Accurate Quantity Assured',
       badge: 'Automated Dispensing System',
-      image: '/assets/truck-splash.png'
+      image: '/assets/hero-slider-2.png'
     },
     {
       title: 'Corporate B2B Fleet',
       subtitle: 'Bulk Discounts & Credit',
       badge: '15-Day Flexible Billing',
-      image: '/assets/hero-banner.png'
+      image: '/assets/hero-slider-3.png'
     }
   ];
 
@@ -92,41 +92,50 @@ export const Screen3Home: React.FC = () => {
           </button>
         </div>
 
-        {/* Hero Slider Banner */}
-        <div className="relative rounded-2xl overflow-hidden shadow-card border border-slate-200/80 bg-slate-900 min-h-[165px]">
-          <img
-            src={heroSlides[currentSlide].image}
-            alt="Hero Banner"
-            className="w-full h-[165px] object-cover opacity-90 transition-all duration-700"
-          />
+        {/* Hero Slider Banner with Grand Look */}
+        <div className="relative rounded-2xl overflow-hidden shadow-elevated border border-slate-200/80 bg-slate-900 h-[180px]">
+          {heroSlides.map((slide, index) => (
+            <div
+              key={index}
+              className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${
+                currentSlide === index ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
+              }`}
+            >
+              <img
+                src={slide.image}
+                alt={slide.title}
+                className="w-full h-full object-cover object-center"
+              />
 
-          {/* Overlay gradient */}
-          <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent p-4 flex flex-col justify-between text-white">
-            <div>
-              <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-brand-yellow text-slate-950 uppercase tracking-wider mb-1">
-                {heroSlides[currentSlide].badge}
-              </span>
-              <h3 className="text-lg font-black leading-tight drop-shadow-sm">
-                {heroSlides[currentSlide].title}
-              </h3>
-              <p className="text-lg font-black text-brand-yellow drop-shadow-sm leading-tight">
-                {heroSlides[currentSlide].subtitle}
-              </p>
+              {/* Gradient Overlay for crystal clear typography */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-black/20 p-4 flex flex-col justify-between text-white">
+                <div>
+                  <span className="inline-block px-2.5 py-0.5 rounded-md text-[10px] font-extrabold bg-brand-yellow text-slate-950 uppercase tracking-wider mb-1.5 shadow-sm">
+                    {slide.badge}
+                  </span>
+                  <h3 className="text-xl font-black leading-tight drop-shadow-md">
+                    {slide.title}
+                  </h3>
+                  <p className="text-xl font-black text-brand-yellow drop-shadow-md leading-tight">
+                    {slide.subtitle}
+                  </p>
+                </div>
+              </div>
             </div>
+          ))}
 
-            {/* Slider Dots */}
-            <div className="flex items-center space-x-1.5 pb-1">
-              {heroSlides.map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => setCurrentSlide(i)}
-                  className={`h-1.5 rounded-full transition-all ${
-                    currentSlide === i ? 'w-5 bg-white' : 'w-1.5 bg-white/40'
-                  }`}
-                  aria-label={`Slide ${i + 1}`}
-                />
-              ))}
-            </div>
+          {/* Slider Dots */}
+          <div className="absolute bottom-3 left-4 z-20 flex items-center space-x-2">
+            {heroSlides.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setCurrentSlide(i)}
+                className={`h-1.5 rounded-full transition-all duration-300 ${
+                  currentSlide === i ? 'w-6 bg-brand-yellow shadow' : 'w-2 bg-white/60 hover:bg-white'
+                }`}
+                aria-label={`Slide ${i + 1}`}
+              />
+            ))}
           </div>
         </div>
 
