@@ -1,49 +1,53 @@
 import React, { useState, useEffect } from 'react';
 import {
   Fuel,
-  ClipboardList,
-  Calendar,
-  Building2,
-  ChevronRight,
-  TrendingDown,
-  ShieldCheck,
+  MapPin,
+  ChevronDown,
+  Clock,
   Sparkles,
-  Truck
+  ShieldCheck,
+  ChevronRight,
+  Flame,
+  TrendingDown,
+  Truck,
+  Droplets,
+  Zap,
+  CheckCircle2,
+  PhoneCall
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
-import { AppHeader } from '../common/AppHeader';
 import { BottomNavigation } from '../common/BottomNavigation';
 import { SideDrawer } from '../common/SideDrawer';
 import { NotificationModal } from '../common/NotificationModal';
 
 export const Screen3Home: React.FC = () => {
-  const { setCurrentScreen, setActiveNavTab, fuelRate } = useData();
+  const { setCurrentScreen, selectedAddress, fuelRate } = useData();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
 
   const heroSlides = [
     {
-      title: 'Fuel Delivered',
-      subtitle: 'At Your Doorstep',
-      badge: 'Zero Spillage • PESO Approved',
+      title: 'Automated Smart Bowser',
+      subtitle: 'Mahindra Bolero TG 07 W 3015',
+      badge: 'PESO & ATEX Certified • Calibrated Meter',
+      image: '/assets/vehicle-bolero-side.jpg'
+    },
+    {
+      title: 'High-Speed Pure Diesel',
+      subtitle: 'Delivered at Doorstep',
+      badge: 'Zero Spillage • 100% Quality Assured',
       image: '/assets/hero-slider-1.png'
     },
     {
-      title: 'Smart Metering',
-      subtitle: 'Accurate Quantity Assured',
-      badge: 'Automated Dispensing System',
-      image: '/assets/hero-slider-2.png'
-    },
-    {
       title: 'Corporate B2B Fleet',
-      subtitle: 'Bulk Discounts & Credit',
-      badge: '15-Day Flexible Billing',
-      image: '/assets/hero-slider-3.png'
+      subtitle: 'Bulk Slabs & Flexible Credit',
+      badge: 'DG Sets • Fleets • Construction',
+      image: '/assets/vehicle-bolero-front.jpg'
     }
   ];
 
-  // Auto-scroll slider
+  // Auto-scroll hero slider
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % heroSlides.length);
@@ -51,19 +55,148 @@ export const Screen3Home: React.FC = () => {
     return () => clearInterval(timer);
   }, [heroSlides.length]);
 
+  // Product categories matching reference screenshot
+  const productCategories = [
+    {
+      id: 'emergency',
+      name: 'Emergency Diesel',
+      badge: '30-Min SLA',
+      desc: 'Immediate breakdown support',
+      icon: Flame,
+      color: 'from-amber-500 to-red-600',
+      action: () => setCurrentScreen('order')
+    },
+    {
+      id: 'diesel-delivery',
+      name: 'Diesel Delivery',
+      badge: 'Best Rate',
+      desc: 'Doorstep bowser fueling',
+      icon: Fuel,
+      color: 'from-red-600 to-rose-700',
+      action: () => setCurrentScreen('order')
+    },
+    {
+      id: 'def',
+      name: 'Diesel Exhaust Fluid',
+      badge: 'BS-VI Ready',
+      desc: 'High purity DEF / AdBlue',
+      icon: Droplets,
+      color: 'from-blue-600 to-indigo-700',
+      action: () => setCurrentScreen('order')
+    },
+    {
+      id: 'lubricants',
+      name: 'Cooling & Lubes',
+      badge: 'Industrial',
+      desc: 'Engine coolants & oils',
+      icon: Zap,
+      color: 'from-emerald-600 to-teal-700',
+      action: () => setCurrentScreen('order')
+    }
+  ];
+
   return (
-    <div className="relative min-h-full flex flex-col bg-[#F7F8FA] pb-20 select-none">
-      {/* Top Red Header */}
-      <AppHeader
-        showMenu
-        onMenuClick={() => setIsDrawerOpen(true)}
-        showLogo
-        showNotifications
-        onNotificationClick={() => setIsNotifOpen(true)}
-      />
+    <div className="relative min-h-full flex flex-col bg-[#F7F8FA] pb-24 select-none">
+      {/* Top Address & Profile Bar matching image copy 12.png */}
+      <header className="sticky top-0 z-30 bg-white border-b border-slate-100 px-4 py-3 shadow-xs">
+        <div className="flex items-center justify-between">
+          {/* Location Selector */}
+          <button
+            onClick={() => setCurrentScreen('edit-location')}
+            className="flex items-center space-x-2 text-left group active-press"
+          >
+            <div className="w-9 h-9 rounded-full bg-red-50 text-brand-red flex items-center justify-center font-bold text-sm border border-red-100 flex-shrink-0">
+              J
+            </div>
+            <div className="max-w-[210px]">
+              <div className="flex items-center space-x-1 text-xs font-bold text-slate-900 group-hover:text-brand-red transition">
+                <span className="truncate">{selectedAddress.locationName || selectedAddress.label || 'Secunderabad'}</span>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-500 group-hover:translate-y-0.5 transition" />
+              </div>
+              <p className="text-[11px] text-slate-500 truncate">
+                {selectedAddress.street}, {selectedAddress.area}
+              </p>
+            </div>
+          </button>
+
+          {/* Profile Circle Avatar matching reference */}
+          <button
+            onClick={() => setCurrentScreen('profile')}
+            className="w-9 h-9 rounded-full bg-gradient-to-tr from-brand-red to-rose-500 text-white font-bold text-xs flex items-center justify-center shadow-xs ring-2 ring-red-100 active-press"
+            aria-label="Profile"
+          >
+            N
+          </button>
+        </div>
+      </header>
 
       <div className="p-4 space-y-4">
-        {/* Today's Fuel Price & Quality Bar */}
+        {/* Next Available Slot Promotional Banner matching reference */}
+        <div className="bg-gradient-to-r from-red-700 via-brand-red to-red-800 text-white rounded-2xl p-3.5 shadow-md flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white">
+              <Clock className="w-5 h-5 stroke-[2.5]" />
+            </div>
+            <div>
+              <div className="text-[11px] font-semibold text-red-100 uppercase tracking-wider">
+                Next Available Slot
+              </div>
+              <div className="text-sm font-extrabold text-white">
+                Today, 10:00 PM - 05:00 AM
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => setCurrentScreen('order')}
+            className="px-3.5 py-1.5 rounded-full bg-white text-brand-red text-xs font-extrabold shadow-sm active-press hover:bg-red-50 transition"
+          >
+            Book Slot
+          </button>
+        </div>
+
+        {/* Hero Showcase with real Mahindra Bolero Bowser */}
+        <div className="relative rounded-2xl overflow-hidden shadow-elevated border border-slate-200/80 bg-slate-950 h-[190px]">
+          {heroSlides.map((slide, index) => (
+            <div
+              key={index}
+              className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${
+                index === currentSlide ? 'opacity-100 z-10' : 'opacity-0 z-0'
+              }`}
+            >
+              <img
+                src={slide.image}
+                alt={slide.title}
+                className="w-full h-full object-cover object-center brightness-90 transform scale-100 hover:scale-105 transition-transform duration-700"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent"></div>
+              <div className="absolute bottom-3 left-3 right-3 text-white">
+                <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-brand-red text-white mb-1 shadow-xs">
+                  {slide.badge}
+                </span>
+                <h2 className="text-base font-extrabold leading-tight text-white drop-shadow-sm">
+                  {slide.title}
+                </h2>
+                <p className="text-xs text-slate-200 font-medium">{slide.subtitle}</p>
+              </div>
+            </div>
+          ))}
+
+          {/* Dots Indicator */}
+          <div className="absolute top-3 right-3 z-20 flex space-x-1.5 bg-black/40 backdrop-blur-md px-2 py-1 rounded-full">
+            {heroSlides.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setCurrentSlide(i)}
+                className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                  i === currentSlide ? 'bg-brand-red w-4' : 'bg-white/60'
+                }`}
+                aria-label={`Slide ${i + 1}`}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Live Diesel Price Bar */}
         <div className="bg-white rounded-2xl p-3 shadow-card border border-slate-200/80 flex items-center justify-between">
           <div className="flex items-center space-x-2.5">
             <div className="w-9 h-9 rounded-xl bg-red-50 text-brand-red flex items-center justify-center font-bold">
@@ -79,187 +212,153 @@ export const Screen3Home: React.FC = () => {
                 </span>
               </div>
               <div className="text-base font-extrabold text-slate-900 leading-tight">
-                ₹{fuelRate.toFixed(2)} <span className="text-xs font-medium text-slate-500">/ Liter</span>
+                ₹{fuelRate.toFixed(2)} <span className="text-xs font-medium text-slate-500">/ 1 Liter</span>
               </div>
             </div>
           </div>
 
           <button
             onClick={() => setCurrentScreen('order')}
-            className="px-3.5 py-1.5 rounded-full bg-brand-red text-white text-xs font-bold shadow-sm active-press hover:bg-brand-darkRed transition"
+            className="px-4 py-2 rounded-xl bg-gradient-to-r from-brand-red to-brand-darkRed text-white text-xs font-bold shadow-sm active-press hover:bg-brand-darkRed transition"
           >
             Order Now
           </button>
         </div>
 
-        {/* Hero Slider Banner with Grand Look */}
-        <div className="relative rounded-2xl overflow-hidden shadow-elevated border border-slate-200/80 bg-slate-900 h-[180px]">
-          {heroSlides.map((slide, index) => (
-            <div
-              key={index}
-              className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${
-                currentSlide === index ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
-              }`}
-            >
-              <img
-                src={slide.image}
-                alt={slide.title}
-                className="w-full h-full object-cover object-center"
-              />
+        {/* Product Categories Horizontal Carousel matching image copy 12.png */}
+        <div>
+          <div className="flex items-center justify-between mb-2.5">
+            <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide">
+              Product Categories
+            </h3>
+            <span className="text-[11px] font-semibold text-brand-red">All Deliverable</span>
+          </div>
 
-              {/* Gradient Overlay for crystal clear typography */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-black/20 p-4 flex flex-col justify-between text-white">
-                <div>
-                  <span className="inline-block px-2.5 py-0.5 rounded-md text-[10px] font-extrabold bg-brand-yellow text-slate-950 uppercase tracking-wider mb-1.5 shadow-sm">
-                    {slide.badge}
-                  </span>
-                  <h3 className="text-xl font-black leading-tight drop-shadow-md">
-                    {slide.title}
-                  </h3>
-                  <p className="text-xl font-black text-brand-yellow drop-shadow-md leading-tight">
-                    {slide.subtitle}
-                  </p>
-                </div>
-              </div>
-            </div>
-          ))}
-
-          {/* Slider Dots */}
-          <div className="absolute bottom-3 left-4 z-20 flex items-center space-x-2">
-            {heroSlides.map((_, i) => (
+          <div className="flex space-x-3 overflow-x-auto pb-2 scrollbar-none -mx-4 px-4">
+            {productCategories.map((cat) => (
               <button
-                key={i}
-                onClick={() => setCurrentSlide(i)}
-                className={`h-1.5 rounded-full transition-all duration-300 ${
-                  currentSlide === i ? 'w-6 bg-brand-yellow shadow' : 'w-2 bg-white/60 hover:bg-white'
-                }`}
-                aria-label={`Slide ${i + 1}`}
-              />
+                key={cat.id}
+                onClick={cat.action}
+                className="flex-shrink-0 w-[140px] bg-white rounded-2xl p-3 border border-slate-200/80 shadow-xs text-left active-press hover:border-brand-red transition group"
+              >
+                <div className={`w-10 h-10 rounded-xl bg-gradient-to-tr ${cat.color} text-white flex items-center justify-center mb-2 shadow-xs`}>
+                  <cat.icon className="w-5 h-5" />
+                </div>
+                <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 block w-max mb-1">
+                  {cat.badge}
+                </span>
+                <h4 className="text-xs font-bold text-slate-900 leading-tight group-hover:text-brand-red transition">
+                  {cat.name}
+                </h4>
+                <p className="text-[10px] text-slate-500 mt-0.5 line-clamp-1">{cat.desc}</p>
+              </button>
             ))}
           </div>
         </div>
 
-        {/* Four Main Service Cards (2x2 Grid) */}
-        <div className="grid grid-cols-2 gap-3">
-          {/* Card 1: Order Diesel */}
+        {/* Real Vehicle Bowser Card with Grand Look based upon website */}
+        <div className="bg-white rounded-2xl p-4 shadow-card border border-slate-200/80 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-[11px] font-bold text-brand-red uppercase tracking-wider flex items-center space-x-1">
+                <Truck className="w-3.5 h-3.5 mr-1" />
+                <span>Our Mobile Bowser Fleet</span>
+              </div>
+              <h3 className="text-sm font-extrabold text-slate-900">
+                Mahindra Bolero Smart Bowser (TG 07 W 3015)
+              </h3>
+            </div>
+            <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">
+              ● Active on Duty
+            </span>
+          </div>
+
+          {/* Real Vehicle Photos Gallery */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="relative rounded-xl overflow-hidden h-28 border border-slate-200 bg-slate-100">
+              <img
+                src="/assets/vehicle-bolero-side.jpg"
+                alt="Extra Diesel Mahindra Bolero side view"
+                className="w-full h-full object-cover object-center"
+              />
+              <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/60 backdrop-blur-md text-white text-[9px] font-bold">
+                Smart Dispenser
+              </span>
+            </div>
+            <div className="relative rounded-xl overflow-hidden h-28 border border-slate-200 bg-slate-100">
+              <img
+                src="/assets/vehicle-bolero-front.jpg"
+                alt="Extra Diesel Mahindra Bolero front view"
+                className="w-full h-full object-cover object-center"
+              />
+              <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/60 backdrop-blur-md text-white text-[9px] font-bold">
+                TG 07 W 3015
+              </span>
+            </div>
+          </div>
+
+          {/* Bowser Specs Badges */}
+          <div className="grid grid-cols-3 gap-2 pt-1">
+            <div className="bg-slate-50 rounded-xl p-2 text-center border border-slate-100">
+              <div className="text-[10px] text-slate-500 font-semibold">Meter Type</div>
+              <div className="text-xs font-bold text-slate-800">Calibrated Digital</div>
+            </div>
+            <div className="bg-slate-50 rounded-xl p-2 text-center border border-slate-100">
+              <div className="text-[10px] text-slate-500 font-semibold">Certification</div>
+              <div className="text-xs font-bold text-slate-800">PESO / ATEX</div>
+            </div>
+            <div className="bg-slate-50 rounded-xl p-2 text-center border border-slate-100">
+              <div className="text-[10px] text-slate-500 font-semibold">Accuracy</div>
+              <div className="text-xs font-bold text-slate-800">±0.1% Zero Loss</div>
+            </div>
+          </div>
+
           <button
             onClick={() => setCurrentScreen('order')}
-            className="bg-white rounded-2xl p-4 shadow-card border border-slate-200/80 flex flex-col items-center justify-center text-center active-press hover:border-brand-red transition group"
+            className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-black text-white text-xs font-bold shadow-xs active-press transition flex items-center justify-center space-x-1.5"
           >
-            <div className="w-12 h-12 rounded-2xl bg-red-50 text-brand-red flex items-center justify-center mb-2 group-hover:scale-105 transition">
-              <Fuel className="w-6 h-6 stroke-[2.2]" />
-            </div>
-            <span className="text-xs font-bold text-slate-900 leading-tight">
-              Order<br />Diesel
-            </span>
-          </button>
-
-          {/* Card 2: My Orders */}
-          <button
-            onClick={() => {
-              setCurrentScreen('orders');
-              setActiveNavTab('orders');
-            }}
-            className="bg-white rounded-2xl p-4 shadow-card border border-slate-200/80 flex flex-col items-center justify-center text-center active-press hover:border-brand-red transition group"
-          >
-            <div className="w-12 h-12 rounded-2xl bg-red-50 text-brand-red flex items-center justify-center mb-2 group-hover:scale-105 transition">
-              <ClipboardList className="w-6 h-6 stroke-[2.2]" />
-            </div>
-            <span className="text-xs font-bold text-slate-900 leading-tight">
-              My<br />Orders
-            </span>
-          </button>
-
-          {/* Card 3: Subscription */}
-          <button
-            onClick={() => setCurrentScreen('subscription')}
-            className="bg-white rounded-2xl p-4 shadow-card border border-slate-200/80 flex flex-col items-center justify-center text-center active-press hover:border-brand-red transition group"
-          >
-            <div className="w-12 h-12 rounded-2xl bg-red-50 text-brand-red flex items-center justify-center mb-2 group-hover:scale-105 transition">
-              <Calendar className="w-6 h-6 stroke-[2.2]" />
-            </div>
-            <span className="text-xs font-bold text-slate-900 leading-tight">
-              Subscription
-            </span>
-          </button>
-
-          {/* Card 4: Business (B2B) */}
-          <button
-            onClick={() => setCurrentScreen('b2b')}
-            className="bg-white rounded-2xl p-4 shadow-card border border-slate-200/80 flex flex-col items-center justify-center text-center active-press hover:border-brand-red transition group"
-          >
-            <div className="w-12 h-12 rounded-2xl bg-red-50 text-brand-red flex items-center justify-center mb-2 group-hover:scale-105 transition">
-              <Building2 className="w-6 h-6 stroke-[2.2]" />
-            </div>
-            <span className="text-xs font-bold text-slate-900 leading-tight">
-              Business<br />(B2B)
-            </span>
+            <span>Request This Bowser to Site</span>
+            <ChevronRight className="w-4 h-4 text-slate-300" />
           </button>
         </div>
 
-        {/* Our Services Section */}
-        <div className="pt-2">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-bold text-slate-900">Our Services</h3>
-            <button
-              onClick={() => setCurrentScreen('order')}
-              className="text-xs font-bold text-brand-red flex items-center hover:underline"
-            >
-              <span>View All</span>
-              <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
-            </button>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            {/* Service 1: Residential (B2C) */}
-            <div
-              onClick={() => setCurrentScreen('order')}
-              className="bg-white rounded-2xl overflow-hidden shadow-card border border-slate-200/80 cursor-pointer active-press hover:border-brand-red transition"
-            >
-              <div className="h-16 w-full overflow-hidden bg-slate-100">
-                <img
-                  src="/assets/service-residential.png"
-                  alt="Residential Service"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="p-2.5">
-                <h4 className="text-xs font-bold text-slate-900">Residential (B2C)</h4>
-                <p className="text-[10px] text-slate-500 mt-0.5 leading-snug">
-                  Gated communities &amp; home DG power
-                </p>
-              </div>
-            </div>
-
-            {/* Service 2: Commercial Fleets */}
-            <div
-              onClick={() => setCurrentScreen('b2b')}
-              className="bg-white rounded-2xl overflow-hidden shadow-card border border-slate-200/80 cursor-pointer active-press hover:border-brand-red transition"
-            >
-              <div className="h-16 w-full overflow-hidden bg-slate-100">
-                <img
-                  src="/assets/service-commercial.png"
-                  alt="Commercial Fleets"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="p-2.5">
-                <h4 className="text-xs font-bold text-slate-900">Commercial Fleets</h4>
-                <p className="text-[10px] text-slate-500 mt-0.5 leading-snug">
-                  Trucks, logistics &amp; site machinery
-                </p>
-              </div>
+        {/* Quick Order Now Promo Card */}
+        <div className="rounded-2xl p-4 bg-gradient-to-tr from-brand-darkRed via-brand-red to-orange-600 text-white shadow-elevated relative overflow-hidden">
+          <div className="relative z-10 space-y-2">
+            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-white/20 backdrop-blur-md uppercase tracking-wider">
+              Express Doorstep Delivery
+            </span>
+            <h3 className="text-lg font-black leading-tight text-white">
+              Need Pure Fuel Instantly?
+            </h3>
+            <p className="text-xs text-red-100 max-w-[240px]">
+              No more jerry cans or drum spillage. Order pure diesel delivered directly into your generator, trucks or equipment.
+            </p>
+            <div className="pt-2 flex items-center space-x-2">
+              <button
+                onClick={() => setCurrentScreen('order')}
+                className="px-4 py-2.5 rounded-xl bg-white text-brand-red text-xs font-extrabold shadow-sm active-press hover:bg-slate-50 transition"
+              >
+                Place Order Now
+              </button>
+              <a
+                href="tel:+919848020940"
+                className="p-2.5 rounded-xl bg-white/20 text-white hover:bg-white/30 transition flex items-center justify-center"
+                aria-label="Call Helpline"
+              >
+                <PhoneCall className="w-4 h-4" />
+              </a>
             </div>
           </div>
         </div>
       </div>
 
+      {/* 5-Tab Bottom Navigation matching image copy 12.png */}
+      <BottomNavigation />
+
       {/* Side Drawer & Notification Modal */}
       <SideDrawer isOpen={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} />
       <NotificationModal isOpen={isNotifOpen} onClose={() => setIsNotifOpen(false)} />
-
-      {/* Bottom Navigation */}
-      <BottomNavigation />
     </div>
   );
 };

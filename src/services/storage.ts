@@ -12,153 +12,192 @@ const STORAGE_KEYS = {
   VIEW_MODE: 'extra_diesel_view_mode' // 'mobile' | 'desktop'
 };
 
+// Default Customer matching reference screenshots ("Nagesh")
 export const INITIAL_USER: User = {
   id: 'usr_001',
-  name: 'Hemanth Kumar',
-  phone: '+91 98765 43210',
-  email: 'hemanth.kumar@example.com',
+  name: 'Nagesh',
+  phone: '+91 98480 20940',
+  email: 'nagesh.tadur@gmail.com',
   role: 'customer',
   avatar: '/assets/driver-avatar.png',
   isB2BVerified: true,
-  companyName: 'Kumar Infra & Logistics Pvt Ltd',
-  gstin: '36AAACK1234F1Z5',
+  companyName: 'Nagesh Infrastructure & Power Projects',
+  gstin: '36AAATN2094F1Z5',
   creditLimit: 500000,
-  availableCredit: 412500
+  availableCredit: 425000
 };
 
+// Customer Addresses matching image copy 10 & 11 reference ("Fab city", Secunderabad)
 export const INITIAL_ADDRESSES: Address[] = [
   {
     id: 'addr_1',
-    label: 'Home',
-    street: '12-5-67, Green Park Colony',
-    area: 'Green Park Colony',
-    city: 'Hyderabad',
+    label: 'Site',
+    street: '12-13-339',
+    area: 'Street Number 7, Tarnaka',
+    city: 'Secunderabad',
     state: 'Telangana',
-    pincode: '500016',
+    country: 'India',
+    pincode: '500017',
     isDefault: true,
-    contactName: 'Hemanth Kumar',
-    contactPhone: '+91 98765 43210'
+    contactName: 'Nagesh',
+    contactPhone: '+91 98480 20940',
+    locationName: 'Fab city',
+    notes: 'Near Gate 3, Electrical Substation road. Security check required.'
   },
   {
     id: 'addr_2',
-    label: 'Site Office',
-    street: 'Plot No. 42, Phase 2, Hitech City',
-    area: 'Madhapur',
+    label: 'Office',
+    street: 'Plot No. 42, Phase 2',
+    area: 'Hitech City, Madhapur',
     city: 'Hyderabad',
     state: 'Telangana',
+    country: 'India',
     pincode: '500081',
     isDefault: false,
     contactName: 'Site Supervisor Rao',
-    contactPhone: '+91 98480 22334'
+    contactPhone: '+91 98480 22334',
+    locationName: 'Corporate Office',
+    notes: 'Basement parking entrance for diesel generator filling.'
   },
   {
     id: 'addr_3',
-    label: 'Factory / Plant',
-    street: 'Shed 12, Industrial Development Area',
-    area: 'Patancheru',
+    label: 'Home',
+    street: 'Villa 14, Green Meadows',
+    area: 'Jubilee Hills Checkpost',
     city: 'Hyderabad',
     state: 'Telangana',
-    pincode: '502319',
+    country: 'India',
+    pincode: '500033',
     isDefault: false,
-    contactName: 'Plant Incharge Reddy',
-    contactPhone: '+91 99887 76655'
+    contactName: 'Nagesh',
+    contactPhone: '+91 98480 20940',
+    locationName: 'Residence'
+  }
+];
+
+export const INITIAL_B2B_ASSETS: B2BAsset[] = [
+  {
+    id: 'ast_1',
+    name: 'Mahindra Bolero Mobile Bowser',
+    category: 'Bowser Vehicle',
+    identifier: 'TG 07 W 3015',
+    capacityLiters: 1500,
+    locationId: 'addr_1',
+    image: '/assets/vehicle-bolero-side.jpg'
+  },
+  {
+    id: 'ast_2',
+    name: 'Cummins 250 kVA Prime Generator',
+    category: 'DG Set',
+    identifier: 'DG-SITE-A1',
+    capacityLiters: 450,
+    locationId: 'addr_1'
+  },
+  {
+    id: 'ast_3',
+    name: 'CAT 320D Hydraulic Excavator',
+    category: 'Heavy Machinery',
+    identifier: 'EXC-CAT-09',
+    capacityLiters: 400,
+    locationId: 'addr_1'
+  },
+  {
+    id: 'ast_4',
+    name: 'Ashok Leyland 16-Wheel Dumper Fleet',
+    category: 'Commercial Fleet',
+    identifier: 'FLEET-DUMP-04',
+    capacityLiters: 350,
+    locationId: 'addr_2'
   }
 ];
 
 export const INITIAL_ORDERS: Order[] = [
   {
-    id: 'ED20261114',
-    createdAt: '14 Nov, 2026 • 10:15 AM',
+    id: 'ED20261116-8941',
+    createdAt: '16 Nov, 2026 • 10:15 PM',
     status: 'arriving_soon',
-    liters: 200,
-    ratePerLiter: 94.50,
-    subtotal: 18900,
-    deliveryFee: 0,
-    tax: 945,
-    totalAmount: 19845,
+    productName: 'Diesel',
+    liters: 1,
+    ratePerLiter: 104.47,
+    productValue: 104.47,
+    handlingFee: 499.00,
+    gstAmount: 89.82,
+    gstRate: 18,
+    subtotal: 603.47,
+    deliveryFee: 499.00,
+    tax: 89.82,
+    totalAmount: 693.29,
+    grandTotal: 693.29,
     deliveryType: 'one-time',
-    vehicleType: 'Delivery Truck',
+    vehicleType: 'Mahindra Bolero Bowser TG 07 W 3015',
+    selectedAssetId: 'ast_1',
+    selectedAssetName: 'Mahindra Bolero Mobile Bowser (TG 07 W 3015)',
     address: INITIAL_ADDRESSES[0],
-    slot: '10:00 AM - 12:00 PM',
-    paymentMethod: 'UPI / Online',
+    slot: '10:00 pm - 05:00 am',
+    deliveryDate: 'Thu 19 Nov',
+    customerNotes: 'Deliver near DG room 2 at Fab city site.',
+    poNumber: 'PO-2026-NAG-081',
+    paymentMethod: 'Razorpay UPI / Online',
     paymentStatus: 'paid',
+    paymentTransactionId: 'pay_rzp_test_9841',
     driver: {
       name: 'Ramesh Kumar',
       phone: '+91 98765 43210',
       avatar: '/assets/driver-avatar.png',
-      vehicleNo: 'TS 09 ED 7721',
+      vehicleNo: 'TG 07 W 3015',
+      vehicleImage: '/assets/vehicle-bolero-side.jpg',
       etaMinutes: 15,
       currentLat: 17.4435,
       currentLng: 78.3842
     },
     timeline: [
-      { status: 'placed', title: 'Order Placed', time: '14 Nov, 2026 • 10:00 AM', completed: true },
-      { status: 'confirmed', title: 'Order Confirmed', time: '14 Nov, 2026 • 10:15 AM', completed: true },
-      { status: 'out_for_delivery', title: 'Out for Delivery', time: '14 Nov, 2026 • 10:40 AM', completed: true },
-      { status: 'arriving_soon', title: 'Arriving Soon', time: 'ETA: 15 mins', completed: true },
-      { status: 'delivered', title: 'Delivered', time: 'Expected 11:15 AM', completed: false }
+      { status: 'placed', title: 'Order Placed', time: '16 Nov • 10:00 PM', completed: true },
+      { status: 'confirmed', title: 'Order Confirmed', time: '16 Nov • 10:05 PM', completed: true },
+      { status: 'out_for_delivery', title: 'Out for Delivery', time: '16 Nov • 10:15 PM', completed: true },
+      { status: 'arriving_soon', title: 'Arriving Soon (ETA: 15 mins)', time: 'En route to Fab city', completed: true },
+      { status: 'delivered', title: 'Delivered', time: 'Expected 10:35 PM', completed: false }
     ]
   },
   {
-    id: 'ED20261110',
-    createdAt: '10 Nov, 2026 • 11:20 AM',
+    id: 'ED20261112-7420',
+    createdAt: '12 Nov, 2026 • 11:20 AM',
     status: 'delivered',
-    liters: 300,
-    ratePerLiter: 94.20,
-    subtotal: 28260,
-    deliveryFee: 0,
-    tax: 1413,
-    totalAmount: 29673,
-    deliveryType: 'one-time',
-    vehicleType: 'Delivery Truck',
-    address: INITIAL_ADDRESSES[0],
-    slot: '11:00 AM - 01:00 PM',
-    paymentMethod: 'UPI',
-    paymentStatus: 'paid',
-    driver: {
-      name: 'Suresh Varma',
-      phone: '+91 98451 12345',
-      avatar: '/assets/driver-avatar.png',
-      vehicleNo: 'TS 07 ED 4511',
-      etaMinutes: 0
-    },
-    timeline: [
-      { status: 'placed', title: 'Order Placed', time: '10 Nov, 2026 • 11:00 AM', completed: true },
-      { status: 'confirmed', title: 'Order Confirmed', time: '10 Nov, 2026 • 11:20 AM', completed: true },
-      { status: 'out_for_delivery', title: 'Out for Delivery', time: '10 Nov, 2026 • 11:45 AM', completed: true },
-      { status: 'arriving_soon', title: 'Arriving Soon', time: '10 Nov, 2026 • 12:10 PM', completed: true },
-      { status: 'delivered', title: 'Delivered', time: '10 Nov, 2026 • 12:25 PM', completed: true }
-    ]
-  },
-  {
-    id: 'ED20261105',
-    createdAt: '05 Nov, 2026 • 04:30 PM',
-    status: 'delivered',
+    productName: 'Diesel',
     liters: 200,
-    ratePerLiter: 94.80,
-    subtotal: 18960,
-    deliveryFee: 0,
-    tax: 948,
-    totalAmount: 19908,
-    deliveryType: 'subscription',
-    vehicleType: 'Delivery Truck',
-    address: INITIAL_ADDRESSES[1],
-    slot: '04:00 PM - 06:00 PM',
-    paymentMethod: 'Diesel Corporate Credit',
+    ratePerLiter: 104.47,
+    productValue: 20894.00,
+    handlingFee: 499.00,
+    gstAmount: 89.82,
+    gstRate: 18,
+    subtotal: 21393.00,
+    deliveryFee: 499.00,
+    tax: 89.82,
+    totalAmount: 21482.82,
+    grandTotal: 21482.82,
+    deliveryType: 'one-time',
+    vehicleType: 'Mahindra Bolero Bowser TG 07 W 3015',
+    selectedAssetId: 'ast_2',
+    selectedAssetName: 'Cummins 250 kVA Prime Generator',
+    address: INITIAL_ADDRESSES[0],
+    slot: '10:00 pm - 05:00 am',
+    deliveryDate: 'Wed 12 Nov',
+    paymentMethod: 'UPI / Razorpay',
     paymentStatus: 'paid',
+    paymentTransactionId: 'pay_rzp_test_7420',
     driver: {
       name: 'Ramesh Kumar',
       phone: '+91 98765 43210',
       avatar: '/assets/driver-avatar.png',
-      vehicleNo: 'TS 09 ED 7721',
+      vehicleNo: 'TG 07 W 3015',
+      vehicleImage: '/assets/vehicle-bolero-side.jpg',
       etaMinutes: 0
     },
     timeline: [
-      { status: 'placed', title: 'Order Placed', time: '05 Nov, 2026 • 04:15 PM', completed: true },
-      { status: 'confirmed', title: 'Order Confirmed', time: '05 Nov, 2026 • 04:30 PM', completed: true },
-      { status: 'out_for_delivery', title: 'Out for Delivery', time: '05 Nov, 2026 • 04:50 PM', completed: true },
-      { status: 'arriving_soon', title: 'Arriving Soon', time: '05 Nov, 2026 • 05:15 PM', completed: true },
-      { status: 'delivered', title: 'Delivered', time: '05 Nov, 2026 • 05:35 PM', completed: true }
+      { status: 'placed', title: 'Order Placed', time: '12 Nov • 11:00 AM', completed: true },
+      { status: 'confirmed', title: 'Order Confirmed', time: '12 Nov • 11:15 AM', completed: true },
+      { status: 'out_for_delivery', title: 'Out for Delivery', time: '12 Nov • 11:30 AM', completed: true },
+      { status: 'arriving_soon', title: 'Arriving Soon', time: '12 Nov • 11:50 AM', completed: true },
+      { status: 'delivered', title: 'Delivered Successfully', time: '12 Nov • 12:05 PM', completed: true }
     ]
   }
 ];
@@ -170,55 +209,27 @@ export const INITIAL_SUBSCRIPTIONS: Subscription[] = [
     preferredDays: ['Mon', 'Thu'],
     liters: 200,
     deliveryAddress: INITIAL_ADDRESSES[0],
-    vehicleType: 'Delivery Truck',
+    vehicleType: 'Mahindra Bolero Bowser TG 07 W 3015',
     startDate: '01 Nov, 2026',
-    nextDeliveryDate: '17 Nov, 2026',
+    nextDeliveryDate: '19 Nov, 2026',
     status: 'active',
-    ratePerLiter: 94.50
+    ratePerLiter: 104.47
   }
 ];
 
 export const INITIAL_INVOICES: Invoice[] = [
   {
-    id: 'INV-2026-114',
-    orderId: 'ED20261114',
+    id: 'INV-2026-116',
+    orderId: 'ED20261116-8941',
     invoiceNumber: 'ED-INV-9941',
-    date: '14 Nov, 2026',
-    customerName: 'Hemanth Kumar',
-    customerPhone: '+91 98765 43210',
-    liters: 200,
-    ratePerLiter: 94.50,
-    baseAmount: 18900,
-    gstAmount: 945,
-    totalAmount: 19845,
-    status: 'paid'
-  },
-  {
-    id: 'INV-2026-110',
-    orderId: 'ED20261110',
-    invoiceNumber: 'ED-INV-9820',
-    date: '10 Nov, 2026',
-    customerName: 'Hemanth Kumar',
-    customerPhone: '+91 98765 43210',
-    liters: 300,
-    ratePerLiter: 94.20,
-    baseAmount: 28260,
-    gstAmount: 1413,
-    totalAmount: 29673,
-    status: 'paid'
-  },
-  {
-    id: 'INV-2026-105',
-    orderId: 'ED20261105',
-    invoiceNumber: 'ED-INV-9705',
-    date: '05 Nov, 2026',
-    customerName: 'Hemanth Kumar',
-    customerPhone: '+91 98765 43210',
-    liters: 200,
-    ratePerLiter: 94.80,
-    baseAmount: 18960,
-    gstAmount: 948,
-    totalAmount: 19908,
+    date: '16 Nov, 2026',
+    customerName: 'Nagesh',
+    customerPhone: '+91 98480 20940',
+    liters: 1,
+    ratePerLiter: 104.47,
+    baseAmount: 104.47,
+    gstAmount: 89.82,
+    totalAmount: 693.29,
     status: 'paid'
   }
 ];
@@ -227,7 +238,7 @@ export const INITIAL_NOTIFICATIONS: NotificationItem[] = [
   {
     id: 'notif_1',
     title: 'Bowser Arriving Soon!',
-    message: 'Bowser TS 09 ED 7721 driven by Ramesh Kumar is 15 minutes away from your location.',
+    message: 'Bowser TG 07 W 3015 driven by Ramesh Kumar is 15 minutes away from Fab city.',
     time: '5 mins ago',
     read: false,
     type: 'order'
@@ -235,7 +246,7 @@ export const INITIAL_NOTIFICATIONS: NotificationItem[] = [
   {
     id: 'notif_2',
     title: 'Order Confirmed',
-    message: 'Your diesel delivery order #ED20261114 for 200 Liters has been confirmed.',
+    message: 'Your diesel delivery order #ED20261116-8941 has been confirmed for slot 10:00 pm - 05:00 am.',
     time: '25 mins ago',
     read: false,
     type: 'order'
@@ -243,37 +254,10 @@ export const INITIAL_NOTIFICATIONS: NotificationItem[] = [
   {
     id: 'notif_3',
     title: 'Daily Fuel Price Update',
-    message: 'High-speed diesel rate is ₹94.50/L today. Order now for zero delivery fees on orders above 200L.',
+    message: 'High-speed diesel rate is ₹104.47/L today in Secunderabad / Hyderabad.',
     time: 'Today 06:00 AM',
     read: true,
     type: 'promo'
-  }
-];
-
-export const INITIAL_B2B_ASSETS: B2BAsset[] = [
-  {
-    id: 'ast_1',
-    name: 'Cummins 250 kVA Prime Generator',
-    category: 'DG Set',
-    identifier: 'DG-SITE-A1',
-    capacityLiters: 450,
-    locationId: 'addr_2'
-  },
-  {
-    id: 'ast_2',
-    name: 'CAT 320D Hydraulic Excavator',
-    category: 'Heavy Machinery',
-    identifier: 'EXC-CAT-09',
-    capacityLiters: 400,
-    locationId: 'addr_2'
-  },
-  {
-    id: 'ast_3',
-    name: 'Ashok Leyland 16-Wheel Dumper Fleet',
-    category: 'Commercial Fleet',
-    identifier: 'FLEET-DUMP-04',
-    capacityLiters: 350,
-    locationId: 'addr_3'
   }
 ];
 
@@ -317,7 +301,7 @@ export const storage = {
   getB2BAssets: (): B2BAsset[] => getStorageItem(STORAGE_KEYS.B2B_ASSETS, INITIAL_B2B_ASSETS),
   setB2BAssets: (a: B2BAsset[]) => setStorageItem(STORAGE_KEYS.B2B_ASSETS, a),
 
-  getFuelRate: (): number => getStorageItem(STORAGE_KEYS.FUEL_RATE, 94.50),
+  getFuelRate: (): number => getStorageItem(STORAGE_KEYS.FUEL_RATE, 104.47),
   setFuelRate: (rate: number) => setStorageItem(STORAGE_KEYS.FUEL_RATE, rate),
 
   getViewMode: (): 'mobile' | 'desktop' => getStorageItem(STORAGE_KEYS.VIEW_MODE, 'mobile'),

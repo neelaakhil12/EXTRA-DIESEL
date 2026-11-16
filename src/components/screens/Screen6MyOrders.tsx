@@ -89,7 +89,7 @@ export const Screen6MyOrders: React.FC = () => {
                     {/* Truck Thumbnail with Clean Grand Look */}
                     <div className="w-16 h-12 rounded-xl bg-slate-100 border border-slate-200/80 overflow-hidden flex-shrink-0 shadow-sm flex items-center justify-center p-0.5">
                       <img
-                        src="/assets/order-truck-thumb.png"
+                        src="/assets/vehicle-bolero-side.jpg"
                         alt="Bowser Truck"
                         className="w-full h-full object-cover rounded-lg"
                       />
@@ -179,32 +179,46 @@ export const Screen6MyOrders: React.FC = () => {
             {/* Itemized Fuel Bill */}
             <div className="space-y-2 border-t pt-3">
               <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                Itemized Invoice
+                ORDER DETAILS RECEIPT
               </h4>
               <div className="flex justify-between text-xs text-slate-600">
-                <span>Diesel Quantity</span>
-                <span className="font-bold text-slate-900">{selectedOrder.liters} Liters</span>
+                <span>Product</span>
+                <span className="font-bold text-slate-900">{selectedOrder.productName || 'Diesel'}</span>
               </div>
               <div className="flex justify-between text-xs text-slate-600">
-                <span>Fuel Rate</span>
-                <span className="font-bold text-slate-900">₹{selectedOrder.ratePerLiter.toFixed(2)}/L</span>
+                <span>Quantity</span>
+                <span className="font-bold text-slate-900">{selectedOrder.liters} Liter{selectedOrder.liters > 1 ? 's' : ''}</span>
               </div>
               <div className="flex justify-between text-xs text-slate-600">
-                <span>Subtotal</span>
-                <span className="font-semibold text-slate-900">₹{selectedOrder.subtotal.toLocaleString('en-IN')}</span>
+                <span>Rate / Liter</span>
+                <span className="font-bold text-slate-900">₹{selectedOrder.ratePerLiter.toFixed(2)} / 1 Liter</span>
+              </div>
+              <div className="flex justify-between text-xs text-slate-600 pt-1 border-t border-slate-100">
+                <span>Product Value</span>
+                <span className="font-bold text-slate-900">₹{(selectedOrder.productValue || selectedOrder.subtotal).toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-xs text-slate-600">
-                <span>GST (5%)</span>
-                <span className="font-semibold text-slate-900">₹{selectedOrder.tax.toLocaleString('en-IN')}</span>
+                <span>Fuel Handling Fee (Up to 500)</span>
+                <span className="font-bold text-slate-900">₹{(selectedOrder.handlingFee ?? 499.00).toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-xs text-slate-600">
-                <span>Delivery Bowser Service</span>
-                <span className="font-semibold text-emerald-600">FREE</span>
+                <span>GST - 18%</span>
+                <span className="font-bold text-slate-900">₹{(selectedOrder.gstAmount ?? 89.82).toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-sm font-extrabold text-slate-900 pt-2 border-t">
-                <span>Total Amount</span>
-                <span className="text-brand-red">₹{selectedOrder.totalAmount.toLocaleString('en-IN')}</span>
+              <div className="flex justify-between text-sm font-extrabold text-slate-900 pt-2 border-t border-slate-200">
+                <span>Total Payable Amount</span>
+                <span className="text-brand-red">₹{selectedOrder.totalAmount.toFixed(2)}</span>
               </div>
+              <div className="flex justify-between text-xs text-slate-600 pt-1">
+                <span>Assigned Bowser</span>
+                <span className="font-bold text-slate-800">Mahindra Bolero (TG 07 W 3015)</span>
+              </div>
+              {selectedOrder.slot && (
+                <div className="flex justify-between text-xs text-slate-600">
+                  <span>Delivery Time Slot</span>
+                  <span className="font-bold text-slate-800">{selectedOrder.slot}</span>
+                </div>
+              )}
             </div>
 
             {/* Destination Address */}

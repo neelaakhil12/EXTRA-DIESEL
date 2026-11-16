@@ -8,6 +8,7 @@ import { Screen1Splash } from './components/screens/Screen1Splash';
 import { Screen2Login } from './components/screens/Screen2Login';
 import { Screen3Home } from './components/screens/Screen3Home';
 import { Screen4OrderDiesel } from './components/screens/Screen4OrderDiesel';
+import { ScreenEditLocation } from './components/screens/ScreenEditLocation';
 import { Screen5TrackOrder } from './components/screens/Screen5TrackOrder';
 import { Screen6MyOrders } from './components/screens/Screen6MyOrders';
 import { Screen7Subscription } from './components/screens/Screen7Subscription';
@@ -30,6 +31,8 @@ const AppContent: React.FC = () => {
         return <Screen3Home />;
       case 'order':
         return <Screen4OrderDiesel />;
+      case 'edit-location':
+        return <ScreenEditLocation />;
       case 'track':
         return <Screen5TrackOrder />;
       case 'orders':

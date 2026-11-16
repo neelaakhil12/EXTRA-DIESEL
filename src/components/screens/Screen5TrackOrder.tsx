@@ -215,7 +215,7 @@ export const Screen5TrackOrder: React.FC = () => {
               </div>
               <div className="pr-1">
                 <span className="text-[10px] font-black text-slate-900 block leading-tight">
-                  Bowser TS 09
+                  Bolero TG 07
                 </span>
                 <span className="text-[9px] font-bold text-brand-red leading-none">
                   ETA: 15 mins
@@ -266,7 +266,7 @@ export const Screen5TrackOrder: React.FC = () => {
                 {driverPhone}
               </p>
               <span className="text-[10px] text-emerald-800 font-bold bg-emerald-50 px-2 py-0.5 rounded-md mt-1 inline-block border border-emerald-200/60">
-                Bowser: TS 09 ED 7721
+                Vehicle: Mahindra Bolero (TG 07 W 3015)
               </span>
             </div>
           </div>
@@ -284,7 +284,7 @@ export const Screen5TrackOrder: React.FC = () => {
 
             {/* WhatsApp Support Button */}
             <a
-              href={`https://wa.me/919876543210?text=Hello%20Extra%20Diesel,%20inquiring%20about%20Order%20${order.id}`}
+              href={`https://wa.me/919848020940?text=Hello%20Extra%20Diesel,%20inquiring%20about%20Order%20${order.id}`}
               target="_blank"
               rel="noreferrer"
               aria-label="WhatsApp Support"
@@ -295,21 +295,54 @@ export const Screen5TrackOrder: React.FC = () => {
           </div>
         </div>
 
-        {/* Quick Order Info summary */}
-        <div className="bg-slate-100/70 rounded-xl p-3 text-xs text-slate-600 space-y-1">
+        {/* Real Vehicle Delivery Showcase Card */}
+        <div className="bg-white rounded-2xl p-3.5 shadow-card border border-slate-200/80 flex items-center space-x-3">
+          <img
+            src="/assets/vehicle-bolero-side.jpg"
+            alt="Mahindra Bolero Bowser"
+            className="w-20 h-14 object-cover rounded-xl border border-slate-200 flex-shrink-0"
+          />
+          <div className="flex-1 min-w-0">
+            <span className="text-[10px] font-bold text-brand-red uppercase tracking-wide">
+              Assigned Mobile Bowser
+            </span>
+            <h4 className="text-xs font-black text-slate-900 truncate">
+              Mahindra Bolero • Reg: TG 07 W 3015
+            </h4>
+            <p className="text-[11px] text-slate-500 truncate">
+              PESO Approved • Automated Calibrated Meter
+            </p>
+          </div>
+        </div>
+
+        {/* Quick Order Info summary with itemized details */}
+        <div className="bg-white rounded-2xl p-4 shadow-card border border-slate-200/80 text-xs text-slate-600 space-y-2">
+          <div className="text-xs font-bold text-slate-900 uppercase tracking-wider pb-1 border-b border-slate-100">
+            Order Receipt & Dispatch Summary
+          </div>
           <div className="flex justify-between">
-            <span>Fuel Quantity:</span>
-            <strong className="text-slate-900 font-bold">{order.liters} Liters</strong>
+            <span>Product & Quantity:</span>
+            <strong className="text-slate-900 font-bold">{order.productName || 'Diesel'} — {order.liters} Liter{order.liters > 1 ? 's' : ''}</strong>
+          </div>
+          <div className="flex justify-between">
+            <span>Delivery Time Slot:</span>
+            <strong className="text-slate-900 font-bold">{order.slot || '10:00 pm - 05:00 am'}</strong>
           </div>
           <div className="flex justify-between">
             <span>Destination:</span>
             <strong className="text-slate-900 font-medium truncate max-w-[200px]">
-              {order.address.street}, {order.address.city}
+              {order.address.locationName || order.address.street}, {order.address.city}
             </strong>
           </div>
-          <div className="flex justify-between">
-            <span>Total Value:</span>
-            <strong className="text-brand-red font-bold">₹{order.totalAmount.toLocaleString('en-IN')}</strong>
+          {order.handlingFee !== undefined && (
+            <div className="flex justify-between text-slate-500">
+              <span>Handling Fee + GST (18%):</span>
+              <span>₹{(order.handlingFee + (order.gstAmount || 0)).toFixed(2)}</span>
+            </div>
+          )}
+          <div className="flex justify-between text-sm font-black text-slate-900 pt-2 border-t border-slate-100">
+            <span>Total Payable Amount:</span>
+            <strong className="text-brand-red font-bold">₹{order.totalAmount.toFixed(2)}</strong>
           </div>
         </div>
       </div>

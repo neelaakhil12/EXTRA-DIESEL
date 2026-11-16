@@ -14,42 +14,61 @@ export interface User {
   availableCredit?: number;
 }
 
+export type AddressType = 'Home' | 'Office' | 'Site' | 'Other';
+
 export interface Address {
   id: string;
-  label: string;
-  street: string;
-  area: string;
+  label: string; // 'Home' | 'Office' | 'Site' | 'Other'
+  street: string; // Flat / House / Building
+  area: string; // Area / Sector / Street
   city: string;
   state: string;
+  country?: string;
   pincode: string;
   isDefault: boolean;
   contactName?: string;
   contactPhone?: string;
+  locationName?: string; // e.g. "Fab city"
+  notes?: string;
 }
 
 export type OrderStatus = 'placed' | 'confirmed' | 'out_for_delivery' | 'arriving_soon' | 'delivered' | 'cancelled';
 
 export interface Order {
-  id: string; // e.g. "ED20261114"
-  createdAt: string; // e.g. "14 Nov, 2026 • 10:15 AM"
+  id: string; // e.g. "ED20261116-8941"
+  createdAt: string; // e.g. "16 Nov, 2026 • 10:15 PM"
   status: OrderStatus;
+  productName: string; // e.g. "Diesel"
   liters: number;
   ratePerLiter: number;
+  productValue: number;
+  handlingFee: number;
+  gstAmount: number;
+  gstRate?: number; // 18%
   subtotal: number;
   deliveryFee: number;
   tax: number;
   totalAmount: number;
+  grandTotal: number;
   deliveryType: 'one-time' | 'subscription';
   vehicleType: string;
+  selectedAssetId?: string;
+  selectedAssetName?: string;
   address: Address;
-  slot: string;
+  slot: string; // e.g. "10:00 pm - 05:00 am"
+  deliveryDate?: string; // e.g. "Thu 19 Nov"
+  customerNotes?: string;
+  poNumber?: string;
+  proformaUrl?: string;
   paymentMethod: string;
   paymentStatus: 'paid' | 'pending' | 'credit';
+  paymentTransactionId?: string;
   driver?: {
     name: string;
     phone: string;
     avatar: string;
     vehicleNo: string;
+    vehicleImage?: string;
     etaMinutes: number;
     currentLat?: number;
     currentLng?: number;
@@ -67,7 +86,7 @@ export type SubscriptionFrequency = 'weekly' | 'monthly' | 'selected-days';
 export interface Subscription {
   id: string;
   frequency: SubscriptionFrequency;
-  preferredDays: string[]; // e.g. ['Mon', 'Thu']
+  preferredDays: string[];
   liters: number;
   deliveryAddress: Address;
   vehicleType: string;
@@ -96,10 +115,11 @@ export interface Invoice {
 export interface B2BAsset {
   id: string;
   name: string;
-  category: 'DG Set' | 'Commercial Fleet' | 'Heavy Machinery' | 'Storage Tank';
+  category: 'DG Set' | 'Commercial Fleet' | 'Heavy Machinery' | 'Storage Tank' | 'Bowser Vehicle';
   identifier: string;
   capacityLiters: number;
   locationId: string;
+  image?: string;
 }
 
 export interface NotificationItem {
@@ -109,4 +129,14 @@ export interface NotificationItem {
   time: string;
   read: boolean;
   type: 'order' | 'promo' | 'system';
+}
+
+export interface ProductCategory {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  image: string;
+  available: boolean;
+  badge?: string;
 }

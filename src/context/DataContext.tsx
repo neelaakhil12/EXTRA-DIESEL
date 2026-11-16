@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 import { Order, Subscription, Address, Invoice, NotificationItem, OrderStatus } from '../types';
 import { storage } from '../services/storage';
 import { api } from '../services/api';
@@ -8,6 +8,7 @@ export type ScreenId =
   | 'login'
   | 'home'
   | 'order'
+  | 'edit-location'
   | 'track'
   | 'orders'
   | 'subscription'
@@ -18,7 +19,7 @@ export type ScreenId =
   | 'addresses'
   | 'invoices';
 
-export type NavTab = 'home' | 'orders' | 'track' | 'profile';
+export type NavTab = 'cube' | 'orders' | 'home' | 'payments' | 'analytics';
 
 interface DataContextType {
   currentScreen: ScreenId;
@@ -40,12 +41,20 @@ interface DataContextType {
   markNotifsRead: () => void;
   fuelRate: number;
   createNewOrder: (params: {
+    productName?: string;
     liters: number;
     address: Address;
-    deliveryType: 'one-time' | 'subscription';
-    vehicleType: string;
+    deliveryType?: 'one-time' | 'subscription';
+    vehicleType?: string;
+    selectedAssetId?: string;
+    selectedAssetName?: string;
     slot: string;
+    deliveryDate?: string;
+    customerNotes?: string;
+    poNumber?: string;
+    proformaUrl?: string;
     paymentMethod: string;
+    paymentTransactionId?: string;
   }) => Promise<Order>;
   updateOrderStatus: (orderId: string, status: OrderStatus) => Promise<void>;
   createSubscription: (params: {
@@ -69,8 +78,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [currentScreen, setCurrentScreen] = useState<ScreenId>('splash');
   const [activeNavTab, setActiveNavTab] = useState<NavTab>('home');
   const [orders, setOrders] = useState<Order[]>(() => storage.getOrders());
-  const [activeTrackingOrderId, setActiveTrackingOrderIdState] = useState<string>('ED20261114');
-  const [selectedOrderId, setSelectedOrderId] = useState<string | null>('ED20261114');
+  const [activeTrackingOrderId, setActiveTrackingOrderIdState] = useState<string>('ED20261116-8941');
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>('ED20261116-8941');
   const [subscriptions, setSubscriptions] = useState<Subscription[]>(() => storage.getSubscriptions());
   const [addresses, setAddresses] = useState<Address[]>(() => storage.getAddresses());
   const [selectedAddress, setSelectedAddress] = useState<Address>(() => {
@@ -95,16 +104,23 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const setActiveTrackingOrderId = (id: string) => {
     setActiveTrackingOrderIdState(id);
     setCurrentScreen('track');
-    setActiveNavTab('track');
   };
 
   const createNewOrder = async (params: {
+    productName?: string;
     liters: number;
     address: Address;
-    deliveryType: 'one-time' | 'subscription';
-    vehicleType: string;
+    deliveryType?: 'one-time' | 'subscription';
+    vehicleType?: string;
+    selectedAssetId?: string;
+    selectedAssetName?: string;
     slot: string;
+    deliveryDate?: string;
+    customerNotes?: string;
+    poNumber?: string;
+    proformaUrl?: string;
     paymentMethod: string;
+    paymentTransactionId?: string;
   }) => {
     const newOrder = await api.createOrder(params);
     refreshData();
@@ -170,16 +186,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCurrentScreen(screen);
     if (screen === 'home') setActiveNavTab('home');
     else if (screen === 'orders') setActiveNavTab('orders');
-    else if (screen === 'track') setActiveNavTab('track');
-    else if (screen === 'profile') setActiveNavTab('profile');
+    else if (screen === 'invoices') setActiveNavTab('payments');
+    else if (screen === 'b2b') setActiveNavTab('cube');
+    else if (screen === 'manager') setActiveNavTab('analytics');
   };
 
   const handleSetActiveNavTab = (tab: NavTab) => {
     setActiveNavTab(tab);
     if (tab === 'home') setCurrentScreen('home');
     else if (tab === 'orders') setCurrentScreen('orders');
-    else if (tab === 'track') setCurrentScreen('track');
-    else if (tab === 'profile') setCurrentScreen('profile');
+    else if (tab === 'payments') setCurrentScreen('invoices');
+    else if (tab === 'cube') setCurrentScreen('b2b');
+    else if (tab === 'analytics') setCurrentScreen('manager');
   };
 
   return (
