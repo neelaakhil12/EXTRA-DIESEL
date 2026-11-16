@@ -1,7 +1,32 @@
 import { storage } from './storage';
 import { User, Address, Order, Subscription, Invoice, OrderStatus } from '../types';
 
+const BACKEND_URL = import.meta.env.VITE_API_URL || '';
+
 export const api = {
+  // S3 File Upload helper (Invoices, KYB Docs, Driver Verification)
+  uploadDocumentToS3: async (file: File): Promise<{ success: boolean; fileUrl: string }> => {
+    if (BACKEND_URL) {
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch(`${BACKEND_URL}/upload`, {
+          method: 'POST',
+          body: formData
+        });
+        if (res.ok) {
+          return await res.json();
+        }
+      } catch (e) {
+        console.warn('Backend S3 upload failed, falling back to local storage URL', e);
+      }
+    }
+    return {
+      success: true,
+      fileUrl: URL.createObjectURL(file)
+    };
+  },
+
   // Auth
   sendOtp: async (phone: string): Promise<{ success: boolean; message: string; otp?: string }> => {
     // Simulate real SMS gateway call
