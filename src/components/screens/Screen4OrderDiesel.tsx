@@ -16,10 +16,13 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
+import { api } from '../../services/api';
 import { AppHeader } from '../common/AppHeader';
 import { Address } from '../../types';
 
 export const Screen4OrderDiesel: React.FC = () => {
+  const { user } = useAuth();
   const {
     setCurrentScreen,
     addresses,
@@ -70,27 +73,61 @@ export const Screen4OrderDiesel: React.FC = () => {
   const handlePlaceOrder = async () => {
     setIsSubmitting(true);
     try {
-      const order = await createNewOrder({
-        liters: quantity,
-        address: selectedAddress,
-        deliveryType,
-        vehicleType,
-        slot,
-        paymentMethod
-      });
+      if (paymentMethod.includes('Cash') || paymentMethod.includes('Credit Line')) {
+        await createNewOrder({
+          liters: quantity,
+          address: selectedAddress,
+          deliveryType,
+          vehicleType,
+          slot,
+          paymentMethod
+        });
 
-      // Fire celebratory confetti
-      confetti({
-        particleCount: 80,
-        spread: 60,
-        origin: { y: 0.6 }
-      });
+        confetti({
+          particleCount: 80,
+          spread: 60,
+          origin: { y: 0.6 }
+        });
 
-      setIsConfirmModalOpen(false);
-      setCurrentScreen('track');
+        setIsConfirmModalOpen(false);
+        setIsSubmitting(false);
+        setCurrentScreen('track');
+      } else {
+        // Open Official Razorpay Checkout Modal
+        api.initiateRazorpayPayment({
+          amount: totalAmount,
+          customerName: user?.name || 'Customer',
+          customerPhone: user?.phone || '9876543210',
+          customerEmail: user?.email || 'customer@extradiesel.com',
+          onSuccess: async (paymentId: string) => {
+            await createNewOrder({
+              liters: quantity,
+              address: selectedAddress,
+              deliveryType,
+              vehicleType,
+              slot,
+              paymentMethod: `Razorpay UPI/Cards (${paymentId})`
+            });
+
+            confetti({
+              particleCount: 100,
+              spread: 70,
+              origin: { y: 0.6 }
+            });
+
+            setIsConfirmModalOpen(false);
+            setIsSubmitting(false);
+            setCurrentScreen('track');
+          },
+          onFailure: (err: any) => {
+            console.error('Razorpay Error:', err);
+            setIsSubmitting(false);
+            alert(`Payment: ${err.message || 'Cancelled'}`);
+          }
+        });
+      }
     } catch (err) {
       console.error(err);
-    } finally {
       setIsSubmitting(false);
     }
   };

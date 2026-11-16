@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import multer from 'multer';
+import crypto from 'crypto';
+import Razorpay from 'razorpay';
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
@@ -10,43 +12,111 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Enable CORS for frontend domain (Vercel or localhost)
+// Enable CORS for frontend domains
 app.use(cors({
-  origin: '*', // Adjust to specific frontend domains in production: ['https://extra-diesel.vercel.app', 'http://localhost:3000']
+  origin: '*',
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(express.json());
 
-// S3 Client Configuration (uses IAM Role on EC2 or ENV credentials)
+// 1. AWS S3 Client Configuration (using provided IAM User or EC2 Role)
 const s3Client = new S3Client({
   region: process.env.AWS_REGION || 'ap-south-1',
   credentials: process.env.AWS_ACCESS_KEY_ID ? {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
-  } : undefined // If undefined, AWS SDK automatically picks up the EC2 IAM Instance Role!
+  } : undefined
 });
 
-const S3_BUCKET = process.env.AWS_S3_BUCKET || 'extra-diesel-storage-ap-south-1';
+const S3_BUCKET = process.env.AWS_S3_BUCKET || 'extra-diesel-storage-2094';
 
 // Multer memory storage for in-memory file streaming to S3
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 } // 10 MB limit
+  limits: { fileSize: 15 * 1024 * 1024 } // 15 MB limit
 });
 
-// 1. Health check endpoint (for Load Balancer and EC2 verification)
+// 2. Razorpay Client Initialization
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_U0oP5sFk81MJMT',
+  key_secret: process.env.RAZORPAY_KEY_SECRET || 'Sw1OWQ5NAUFIIzoIMKZf2NgQ'
+});
+
+// --- API ROUTES ---
+
+// Health Check Endpoint
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'online',
-    service: 'Extra Diesel Backend',
+    service: 'Extra Diesel AWS EC2 Backend',
     region: process.env.AWS_REGION || 'ap-south-1',
+    s3Bucket: S3_BUCKET,
+    razorpayConfigured: !!process.env.RAZORPAY_KEY_ID,
     timestamp: new Date().toISOString()
   });
 });
 
-// 2. S3 Document & Invoice Upload Endpoint
+// Razorpay 1: Create Order Endpoint
+app.post('/api/payment/create-order', async (req, res) => {
+  try {
+    const { amount, receipt } = req.body;
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ error: 'Valid amount is required' });
+    }
+
+    const options = {
+      amount: Math.round(Number(amount) * 100), // amount in paise
+      currency: 'INR',
+      receipt: receipt || `rcpt_${Date.now()}`
+    };
+
+    const order = await razorpay.orders.create(options);
+    res.json({
+      success: true,
+      orderId: order.id,
+      amount: order.amount,
+      currency: order.currency,
+      keyId: process.env.RAZORPAY_KEY_ID || 'rzp_test_U0oP5sFk81MJMT'
+    });
+  } catch (error) {
+    console.error('Razorpay Create Order Error:', error);
+    res.status(500).json({ error: 'Failed to create Razorpay order', details: error.message });
+  }
+});
+
+// Razorpay 2: Verify Payment Signature
+app.post('/api/payment/verify', (req, res) => {
+  try {
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+
+    const secret = process.env.RAZORPAY_KEY_SECRET || 'Sw1OWQ5NAUFIIzoIMKZf2NgQ';
+    const body = `${razorpay_order_id}|${razorpay_payment_id}`;
+
+    const expectedSignature = crypto
+      .createHmac('sha256', secret)
+      .update(body.toString())
+      .digest('hex');
+
+    const isValid = expectedSignature === razorpay_signature;
+
+    if (isValid) {
+      res.json({
+        success: true,
+        message: 'Payment verified successfully',
+        paymentId: razorpay_payment_id
+      });
+    } else {
+      res.status(400).json({ success: false, error: 'Invalid payment signature' });
+    }
+  } catch (error) {
+    console.error('Razorpay Verification Error:', error);
+    res.status(500).json({ error: 'Payment verification failed', details: error.message });
+  }
+});
+
+// S3 Upload Endpoint (Invoices, Receipts & KYB Documents)
 app.post('/api/upload', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
@@ -77,7 +147,7 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
   }
 });
 
-// 3. Get Presigned Download URL for S3 files
+// S3 Presigned URL Download Endpoint
 app.get('/api/files/signed-url', async (req, res) => {
   try {
     const { key } = req.query;
@@ -96,7 +166,7 @@ app.get('/api/files/signed-url', async (req, res) => {
   }
 });
 
-// 4. Diesel Fuel Rate API
+// Fuel Rate API
 app.get('/api/fuel-rate', (req, res) => {
   res.json({
     rate: 94.50,
@@ -107,34 +177,8 @@ app.get('/api/fuel-rate', (req, res) => {
   });
 });
 
-// 5. Orders API
-let orders = [];
-
-app.get('/api/orders', (req, res) => {
-  res.json(orders);
-});
-
-app.post('/api/orders', (req, res) => {
-  const newOrder = {
-    id: `ED${new Date().getFullYear()}${String(Date.now()).slice(-4)}`,
-    createdAt: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
-    status: 'placed',
-    ...req.body
-  };
-  orders.unshift(newOrder);
-  res.status(201).json(newOrder);
-});
-
-app.patch('/api/orders/:id/status', (req, res) => {
-  const { id } = req.params;
-  const { status } = req.body;
-  const order = orders.find(o => o.id === id);
-  if (!order) return res.status(404).json({ error: 'Order not found' });
-  order.status = status;
-  res.json(order);
-});
-
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Extra Diesel AWS Backend running on port ${PORT}`);
-  console.log(`📍 Region: ${process.env.AWS_REGION || 'ap-south-1'}`);
+  console.log(`📍 S3 Bucket: ${S3_BUCKET} (${process.env.AWS_REGION || 'ap-south-1'})`);
+  console.log(`💳 Razorpay Key ID: ${process.env.RAZORPAY_KEY_ID ? 'Configured' : 'Not Set'}`);
 });
