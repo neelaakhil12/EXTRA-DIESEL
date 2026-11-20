@@ -40,3 +40,4 @@ mobile-app/.env.*
 *.zip
 *.jpeg
 image copy*.png
+image-removebg*.png

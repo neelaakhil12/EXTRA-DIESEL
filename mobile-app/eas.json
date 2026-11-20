@@ -9,13 +9,16 @@
     },
     "preview": {
       "distribution": "internal",
+      "credentialsSource": "local",
       "android": {
         "buildType": "apk"
       }
     },
     "production": {
+      "distribution": "internal",
+      "credentialsSource": "local",
       "android": {
-        "buildType": "app-bundle"
+        "buildType": "apk"
       }
     }
   },
