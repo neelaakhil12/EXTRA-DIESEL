@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
+import { APP_CONFIG } from '../constants/config';
 
 interface UserData {
   name: string;
@@ -43,6 +44,52 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
       setIsFormReady(true);
     }, 300);
     return () => clearTimeout(timer);
+  }, []);
+
+  // Dynamically load Google Identity Services (GIS) on mount to fetch real device Google accounts
+  React.useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const scriptId = 'google-gsi-client';
+      if (!document.getElementById(scriptId)) {
+        const script = document.createElement('script');
+        script.id = scriptId;
+        script.src = 'https://accounts.google.com/gsi/client';
+        script.async = true;
+        script.defer = true;
+        script.onload = () => {
+          try {
+            if ((window as any).google?.accounts?.id) {
+              (window as any).google.accounts.id.initialize({
+                client_id: APP_CONFIG.GOOGLE_CLIENT_ID,
+                callback: (res: any) => {
+                  if (res?.credential) {
+                    try {
+                      const payload = JSON.parse(
+                        decodeURIComponent(
+                          atob(res.credential.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))
+                            .split('')
+                            .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+                            .join('')
+                        )
+                      );
+                      if (payload?.email) {
+                        handleSelectGoogleAccount({
+                          name: payload.name || payload.email.split('@')[0],
+                          email: payload.email,
+                        });
+                      }
+                    } catch (e) {}
+                  }
+                },
+                auto_select: false,
+                cancel_on_tap_outside: true,
+              });
+            }
+          } catch (e) {}
+        };
+        document.head.appendChild(script);
+      }
+    }
   }, []);
 
   // Google Auth Bridge Modal state
@@ -106,8 +153,64 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
     });
   };
 
-  // 2. Open Native In-App Google Sign-In Sheet (No Browser Redirect)
+  // 2. Open Official Google Device Accounts Chooser (or In-App Sheet Fallback)
   const handleGoogleSignIn = () => {
+    // 1. If Google Identity Services (GIS) OAuth2 client is available, trigger real Google Device Account Chooser
+    if (
+      Platform.OS === 'web' &&
+      typeof window !== 'undefined' &&
+      (window as any).google?.accounts?.oauth2
+    ) {
+      try {
+        const tokenClient = (window as any).google.accounts.oauth2.initTokenClient({
+          client_id: APP_CONFIG.GOOGLE_CLIENT_ID,
+          scope: 'email profile openid',
+          prompt: 'select_account', // Forces Google to show all logged in device accounts
+          callback: async (tokenResponse: any) => {
+            if (tokenResponse?.access_token) {
+              try {
+                // Fetch real user info from Google's verified UserInfo endpoint
+                const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                  headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
+                });
+                const userInfo = await res.json();
+                if (userInfo?.email) {
+                  await handleSelectGoogleAccount({
+                    name: userInfo.name || userInfo.email.split('@')[0],
+                    email: userInfo.email,
+                  });
+                  return;
+                }
+              } catch (err) {
+                console.error('Error fetching Google UserInfo:', err);
+              }
+            }
+          },
+        });
+        tokenClient.requestAccessToken();
+        return;
+      } catch (err) {
+        console.warn('Google oauth2 popup failed, using in-app sheet:', err);
+      }
+    }
+
+    // 2. If Google One Tap is ready, prompt it
+    if (
+      Platform.OS === 'web' &&
+      typeof window !== 'undefined' &&
+      (window as any).google?.accounts?.id
+    ) {
+      try {
+        (window as any).google.accounts.id.prompt((notification: any) => {
+          if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+            setShowGoogleModal(true);
+          }
+        });
+        return;
+      } catch (e) {}
+    }
+
+    // 3. Fallback: Native In-App Account Picker Sheet
     setShowGoogleModal(true);
     setShowCustomEmailInput(false);
     setSelectedGoogleEmail(null);
