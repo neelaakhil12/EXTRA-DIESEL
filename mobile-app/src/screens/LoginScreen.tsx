@@ -11,6 +11,7 @@ import {
   Alert,
   Modal,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
@@ -451,15 +452,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
       <View style={styles.topSafeAreaBar} />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* App Logo & Header */}
+        {/* App Logo */}
         <View style={styles.header}>
-          <View style={styles.iconCircle}>
-            <Ionicons name="flame" size={32} color={COLORS.primary} />
-          </View>
-          <Text style={styles.title}>
-            EXTRA <Text style={{ color: COLORS.secondary }}>DIESEL</Text>
-          </Text>
-          <Text style={styles.subtitle}>Doorstep Diesel Delivery Platform</Text>
+          <Image
+            source={require('../../assets/images/logo.png')}
+            style={styles.headerLogo}
+            resizeMode="contain"
+          />
         </View>
 
         {authMode === 'login' ? (
@@ -941,33 +940,16 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    paddingTop: 10,
-    paddingBottom: 24,
+    paddingTop: 8,
+    paddingBottom: 40,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
-  iconCircle: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#FEE2E2',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: COLORS.primary,
-    letterSpacing: 0.5,
-  },
-  subtitle: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-    fontWeight: '500',
+  headerLogo: {
+    width: 220,
+    height: 75,
   },
   // Card
   card: {

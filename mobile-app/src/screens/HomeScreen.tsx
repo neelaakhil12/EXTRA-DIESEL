@@ -164,7 +164,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
-    paddingBottom: 24,
+    paddingBottom: Platform.OS === 'android' ? 95 : 85,
   },
   rateCard: {
     backgroundColor: COLORS.primary,

@@ -1,5 +1,13 @@
-import React, { useState } from 'react';
-import { StyleSheet, View, SafeAreaView, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import {
+  StyleSheet,
+  View,
+  SafeAreaView,
+  Alert,
+  BackHandler,
+  Platform,
+  StatusBar as RNStatusBar,
+} from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { COLORS } from './src/constants/theme';
 import { ScreenName } from './src/types';
@@ -16,7 +24,10 @@ import { SubscriptionScreen } from './src/screens/SubscriptionScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 
 export default function App() {
-  const [currentScreen, setCurrentScreen] = useState<ScreenName>('splash');
+  // Navigation stack state for seamless back button & gesture navigation history
+  const [screenStack, setScreenStack] = useState<ScreenName[]>(['splash']);
+  const currentScreen = screenStack[screenStack.length - 1];
+
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [activeTrackingOrderId, setActiveTrackingOrderId] = useState<string>('ED20261116-8941');
   const [currentUser, setCurrentUser] = useState({
@@ -25,12 +36,76 @@ export default function App() {
     phone: '+91 98765 43210',
   });
 
-  // Handle splash completion
+  // Navigate forward with history tracking
+  const navigateTo = (screen: ScreenName) => {
+    setScreenStack((prev) => {
+      // Do not duplicate the current screen on top of the stack
+      if (prev[prev.length - 1] === screen) {
+        return prev;
+      }
+      // When entering home from splash or login, reset stack to ['home']
+      if (screen === 'home' && (prev.includes('splash') || prev.includes('login'))) {
+        return ['home'];
+      }
+      return [...prev, screen];
+    });
+  };
+
+  // Navigate back one step in history stack
+  const goBack = (): boolean => {
+    if (screenStack.length > 1) {
+      setScreenStack((prev) => {
+        if (prev.length > 1) {
+          return prev.slice(0, -1);
+        }
+        return prev;
+      });
+      return true;
+    }
+    return false;
+  };
+
+  // Android Hardware Back Button & Gesture Navigation Handler
+  useEffect(() => {
+    const handleBackPress = () => {
+      if (screenStack.length > 1) {
+        // If at root 'home' screen, don't trap; let system handle exit
+        if (currentScreen === 'home') {
+          return false;
+        }
+        goBack();
+        return true; // handled
+      }
+      return false; // let Android default exit behavior happen
+    };
+
+    const backSubscription = BackHandler.addEventListener(
+      'hardwareBackPress',
+      handleBackPress
+    );
+
+    return () => backSubscription.remove();
+  }, [screenStack, currentScreen]);
+
+  // Web Browser Back Button Compatibility
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const handlePopState = () => {
+        if (screenStack.length > 1) {
+          setScreenStack((prev) => (prev.length > 1 ? prev.slice(0, -1) : prev));
+        }
+      };
+      window.addEventListener('popstate', handlePopState);
+      return () => window.removeEventListener('popstate', handlePopState);
+    }
+  }, [screenStack]);
+
+  // Handle splash completion (revealed Login button pressed)
   const handleGetStarted = () => {
     if (isLoggedIn) {
-      setCurrentScreen('home');
+      navigateTo('home');
     } else {
-      setCurrentScreen('login');
+      navigateTo('login');
     }
   };
 
@@ -38,18 +113,18 @@ export default function App() {
   const handleLoginSuccess = (userData: { name: string; email: string; phone: string }) => {
     setCurrentUser(userData);
     setIsLoggedIn(true);
-    setCurrentScreen('home');
+    setScreenStack(['home']);
   };
 
   // Handle guest mode / skip login
   const handleSkipLogin = () => {
-    setCurrentScreen('home');
+    setScreenStack(['home']);
   };
 
   // Handle order placed
   const handleOrderSuccess = (orderId: string) => {
     setActiveTrackingOrderId(orderId);
-    setCurrentScreen('track');
+    navigateTo('track');
   };
 
   // Handle logout
@@ -61,7 +136,7 @@ export default function App() {
         style: 'destructive',
         onPress: () => {
           setIsLoggedIn(false);
-          setCurrentScreen('login');
+          setScreenStack(['login']);
         },
       },
     ]);
@@ -80,31 +155,33 @@ export default function App() {
       case 'profile':
         return 'My Account';
       default:
-        return undefined; // shows brand logo
+        return undefined; // shows brand home bar
     }
   };
 
   const showHeader = currentScreen !== 'splash' && currentScreen !== 'login';
   const showBottomNav = currentScreen !== 'splash' && currentScreen !== 'login';
+  // Show header back button whenever there is a previous screen to go back to and we are not on root home
+  const showBackBtn = screenStack.length > 1 && currentScreen !== 'home';
 
   return (
     <DeviceFrame>
       <SafeAreaView style={styles.container}>
-        <StatusBar style="light" />
+        <StatusBar style={currentScreen === 'splash' ? 'dark' : 'light'} />
 
         {/* Header */}
         {showHeader && (
           <Header
             title={getHeaderTitle()}
-            showBack={currentScreen === 'order'}
-            onBack={() => setCurrentScreen('home')}
+            showBack={showBackBtn}
+            onBack={goBack}
             onNotificationPress={() =>
               Alert.alert(
                 'Notifications',
                 '• Today\'s rate updated: ₹94.50/L\n• Delivery #ED20261116-8941 is out for delivery\n• Scheduled refill arriving Thursday'
               )
             }
-            onProfilePress={() => setCurrentScreen('profile')}
+            onProfilePress={() => navigateTo('profile')}
           />
         )}
 
@@ -122,39 +199,42 @@ export default function App() {
           )}
 
           {currentScreen === 'home' && (
-            <HomeScreen onNavigate={(screen) => setCurrentScreen(screen)} />
+            <HomeScreen onNavigate={(screen) => navigateTo(screen)} />
           )}
 
           {currentScreen === 'order' && (
             <OrderDieselScreen
               onOrderSuccess={handleOrderSuccess}
-              onNavigate={(screen) => setCurrentScreen(screen)}
+              onNavigate={(screen) => navigateTo(screen)}
             />
           )}
 
           {currentScreen === 'track' && (
             <TrackOrderScreen
               orderId={activeTrackingOrderId}
-              onNavigate={(screen) => setCurrentScreen(screen)}
+              onNavigate={(screen) => navigateTo(screen)}
             />
           )}
 
           {currentScreen === 'orders' && (
             <MyOrdersScreen
-              onNavigate={(screen) => setCurrentScreen(screen)}
-              onSelectOrder={(id) => setActiveTrackingOrderId(id)}
+              onNavigate={(screen) => navigateTo(screen)}
+              onSelectOrder={(id) => {
+                setActiveTrackingOrderId(id);
+                navigateTo('track');
+              }}
             />
           )}
 
           {currentScreen === 'subscription' && (
-            <SubscriptionScreen onNavigate={(screen) => setCurrentScreen(screen)} />
+            <SubscriptionScreen onNavigate={(screen) => navigateTo(screen)} />
           )}
 
           {currentScreen === 'profile' && (
             <ProfileScreen
               user={currentUser}
               onLogout={handleLogout}
-              onNavigate={(screen) => setCurrentScreen(screen)}
+              onNavigate={(screen) => navigateTo(screen)}
             />
           )}
         </View>
@@ -163,7 +243,7 @@ export default function App() {
         {showBottomNav && (
           <BottomNav
             currentScreen={currentScreen}
-            onNavigate={(screen) => setCurrentScreen(screen)}
+            onNavigate={(screen) => navigateTo(screen)}
           />
         )}
       </SafeAreaView>
@@ -175,6 +255,8 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.primary,
+    // Android safe top padding to prevent notch & status bar clipping
+    paddingTop: Platform.OS === 'android' ? (RNStatusBar.currentHeight || 0) : 0,
   },
   screenContent: {
     flex: 1,

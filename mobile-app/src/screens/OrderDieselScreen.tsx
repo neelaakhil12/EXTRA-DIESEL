@@ -206,7 +206,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
-    paddingBottom: 30,
+    paddingBottom: Platform.OS === 'android' ? 100 : 85,
   },
   card: {
     backgroundColor: COLORS.white,

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 import { ScreenName } from '../types';
@@ -49,8 +49,8 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     backgroundColor: COLORS.white,
-    paddingVertical: 8,
-    paddingBottom: 14,
+    paddingVertical: 10,
+    paddingBottom: Platform.OS === 'android' ? 22 : 16,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
     elevation: 8,
