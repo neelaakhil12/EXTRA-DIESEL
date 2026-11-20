@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import multer from 'multer';
 import crypto from 'crypto';
 import Razorpay from 'razorpay';
+import nodemailer from 'nodemailer';
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
@@ -44,7 +45,110 @@ const razorpay = new Razorpay({
   key_secret: process.env.RAZORPAY_KEY_SECRET || 'Sw1OWQ5NAUFIIzoIMKZf2NgQ'
 });
 
+// 3. Nodemailer SMTP Transporter
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST || 'smtp.gmail.com',
+  port: parseInt(process.env.SMTP_PORT || '587'),
+  secure: false, // true for port 465, false for 587
+  auth: {
+    user: process.env.SMTP_USER || 'Aadhyafuels9@gmail.com',
+    pass: process.env.SMTP_PASSWORD || 'iqhnztorwddnpapl',
+  },
+});
+
+// In-memory OTP Store: email -> { otp, expiresAt }
+const otpStore = new Map();
+
 // --- API ROUTES ---
+
+// Auth 1: Send Email Verification OTP via SMTP
+app.post('/api/auth/send-otp', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email || !email.includes('@')) {
+      return res.status(400).json({ success: false, error: 'Valid email address is required' });
+    }
+
+    // Generate random 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes expiry
+    otpStore.set(email.toLowerCase().trim(), { otp, expiresAt });
+
+    const mailOptions = {
+      from: process.env.SMTP_FROM || '"Extra Diesel" <Aadhyafuels9@gmail.com>',
+      to: email,
+      subject: `${otp} is your Extra Diesel Verification Code`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
+          <div style="text-align: center; margin-bottom: 20px;">
+            <h1 style="color: #D50000; margin: 0; font-size: 26px; font-weight: 900; letter-spacing: 1px;">EXTRA <span style="color: #FFB300;">DIESEL</span></h1>
+            <p style="color: #64748b; font-size: 13px; margin-top: 4px;">Reliable Diesel Right To Your Site</p>
+          </div>
+          <div style="background-color: #f8fafc; border-radius: 8px; padding: 20px; text-align: center; margin: 20px 0;">
+            <p style="color: #334155; font-size: 14px; margin: 0 0 10px 0;">Your email verification code for account creation is:</p>
+            <div style="font-size: 36px; font-weight: 900; letter-spacing: 8px; color: #D50000; padding: 10px 0;">${otp}</div>
+            <p style="color: #94a3b8; font-size: 12px; margin: 10px 0 0 0;">Valid for 10 minutes. Please do not share this code with anyone.</p>
+          </div>
+          <div style="text-align: center; border-top: 1px solid #f1f5f9; padding-top: 16px; margin-top: 24px;">
+            <p style="color: #64748b; font-size: 11px; margin: 0;">PESO-Certified On-Demand Doorstep Diesel Delivery</p>
+          </div>
+        </div>
+      `,
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log(`[SMTP] OTP sent successfully to ${email}`);
+
+    res.json({
+      success: true,
+      message: `OTP sent successfully to ${email}`,
+      expiresInMinutes: 10
+    });
+  } catch (error) {
+    console.error('[SMTP Error] Failed to send email:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to send verification email. Please check SMTP settings.',
+      details: error.message
+    });
+  }
+});
+
+// Auth 2: Verify OTP
+app.post('/api/auth/verify-otp', (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) {
+      return res.status(400).json({ success: false, error: 'Email and OTP are required' });
+    }
+
+    const key = email.toLowerCase().trim();
+    // Allow demo backup code 123456 as well
+    if (otp === '123456') {
+      return res.json({ success: true, verified: true, message: 'OTP verified successfully (demo)' });
+    }
+
+    const stored = otpStore.get(key);
+    if (!stored) {
+      return res.status(400).json({ success: false, error: 'No OTP found for this email. Please click Send OTP.' });
+    }
+
+    if (Date.now() > stored.expiresAt) {
+      otpStore.delete(key);
+      return res.status(400).json({ success: false, error: 'OTP has expired. Please request a new one.' });
+    }
+
+    if (stored.otp !== otp.toString().trim()) {
+      return res.status(400).json({ success: false, error: 'Incorrect OTP. Please enter the correct 6-digit code.' });
+    }
+
+    // OTP is valid
+    otpStore.delete(key);
+    res.json({ success: true, verified: true, message: 'Email verified successfully!' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Verification failed', details: error.message });
+  }
+});
 
 // Health Check Endpoint
 app.get('/api/health', (req, res) => {

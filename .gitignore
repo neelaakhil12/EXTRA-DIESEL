@@ -34,3 +34,6 @@ server/.env.*
 # Private Keys & CSVs
 *.pem
 *.csv
+*.zip
+*.jpeg
+image copy*.png
