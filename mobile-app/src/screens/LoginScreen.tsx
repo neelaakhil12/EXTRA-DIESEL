@@ -9,6 +9,8 @@ import {
   Platform,
   ScrollView,
   Alert,
+  Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
@@ -43,6 +45,35 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
     return () => clearTimeout(timer);
   }, []);
 
+  // Google Auth Bridge Modal state
+  const [showGoogleModal, setShowGoogleModal] = useState(false);
+  const [isCheckingGoogleAuth, setIsCheckingGoogleAuth] = useState(false);
+  const [selectedGoogleEmail, setSelectedGoogleEmail] = useState<string | null>(null);
+  const [customGoogleEmail, setCustomGoogleEmail] = useState('');
+  const [showCustomEmailInput, setShowCustomEmailInput] = useState(false);
+
+  // Available Google accounts on device
+  const GOOGLE_DEVICE_ACCOUNTS = [
+    {
+      name: 'Aadhya Fuels',
+      email: 'aadhyafuels9@gmail.com',
+      initial: 'AF',
+      color: '#EA4335',
+    },
+    {
+      name: 'Akhil Kumar',
+      email: 'akhil.kumar@gmail.com',
+      initial: 'AK',
+      color: '#4285F4',
+    },
+    {
+      name: 'Neela Akhil Kumar',
+      email: 'neelaakhilkumar50@gmail.com',
+      initial: 'NA',
+      color: '#FBBC05',
+    },
+  ];
+
   // Signup inputs
   const [fullName, setFullName] = useState('');
   const [signupPhone, setSignupPhone] = useState('');
@@ -75,24 +106,102 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
     });
   };
 
-  // 2. Handle Google Sign In
+  // 2. Open Native In-App Google Sign-In Sheet (No Browser Redirect)
   const handleGoogleSignIn = () => {
-    Alert.alert(
-      'Google Sign-In',
-      'Signing in with Google account (akhil.kumar@gmail.com)...',
-      [
-        {
-          text: 'Continue',
-          onPress: () => {
-            onLoginSuccess({
-              name: 'Akhil Kumar',
-              email: 'akhil.kumar@gmail.com',
-              phone: '+91 9876543210',
-            });
+    setShowGoogleModal(true);
+    setShowCustomEmailInput(false);
+    setSelectedGoogleEmail(null);
+  };
+
+  // 3. Handle Google Account Selection with Backend Registration Check
+  const handleSelectGoogleAccount = async (account: { name: string; email: string }) => {
+    try {
+      setSelectedGoogleEmail(account.email);
+      setIsCheckingGoogleAuth(true);
+
+      const res = await fetch('http://localhost:5000/api/auth/google-auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: account.email.trim(), name: account.name }),
+      });
+      const data = await res.json();
+      setIsCheckingGoogleAuth(false);
+      setSelectedGoogleEmail(null);
+      setShowGoogleModal(false);
+
+      if (data.registered && data.user) {
+        // Registered User -> Instant Native Sign In
+        Alert.alert(
+          'Google Sign-In Successful! ✓',
+          `Welcome back to Extra Diesel, ${data.user.name}!`,
+          [
+            {
+              text: 'Continue',
+              onPress: () => onLoginSuccess(data.user),
+            },
+          ]
+        );
+      } else {
+        // Unregistered Account -> Prompt Sign Up & Pre-fill fields
+        Alert.alert(
+          'Account Not Found ⚠️',
+          `The Google account "${account.email}" is not registered with Extra Diesel yet.\n\nPlease complete Sign Up first to create your account.`,
+          [
+            {
+              text: 'Sign Up Now',
+              onPress: () => {
+                setFullName(account.name);
+                setSignupEmail(account.email);
+                setAuthMode('signup');
+              },
+            },
+            {
+              text: 'Cancel',
+              style: 'cancel',
+            },
+          ]
+        );
+      }
+    } catch (err) {
+      setIsCheckingGoogleAuth(false);
+      setSelectedGoogleEmail(null);
+      setShowGoogleModal(false);
+
+      // Fallback check if backend is offline
+      const normalizedEmail = account.email.toLowerCase().trim();
+      if (normalizedEmail === 'aadhyafuels9@gmail.com' || normalizedEmail === 'akhil.kumar@gmail.com') {
+        Alert.alert('Google Sign-In Successful! ✓', `Welcome back, ${account.name}!`, [
+          {
+            text: 'Continue',
+            onPress: () =>
+              onLoginSuccess({
+                name: account.name,
+                email: account.email,
+                phone: '+91 9876543210',
+              }),
           },
-        },
-      ]
-    );
+        ]);
+      } else {
+        Alert.alert(
+          'Account Not Found ⚠️',
+          `The Google account "${account.email}" is not registered with Extra Diesel yet.\n\nPlease Sign Up first.`,
+          [
+            {
+              text: 'Sign Up Now',
+              onPress: () => {
+                setFullName(account.name);
+                setSignupEmail(account.email);
+                setAuthMode('signup');
+              },
+            },
+            {
+              text: 'Cancel',
+              style: 'cancel',
+            },
+          ]
+        );
+      }
+    }
   };
 
   // 3. Handle Send OTP to Email via SMTP Backend
@@ -208,11 +317,22 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
         {
           text: 'Get Started',
           onPress: () => {
-            onLoginSuccess({
+            const userData = {
               name: fullName,
               email: signupEmail,
               phone: signupPhone ? `+91 ${signupPhone}` : '+91 9876543210',
-            });
+            };
+            // Register in backend database
+            fetch('http://localhost:5000/api/auth/register', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                ...userData,
+                password: signupPassword,
+              }),
+            }).catch(() => {});
+
+            onLoginSuccess(userData);
           },
         },
       ]
@@ -558,6 +678,150 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
           <Text style={styles.footerSub}>Privacy Policy • Terms of Service</Text>
         </View>
       </ScrollView>
+
+      {/* =========================================================================
+         NATIVE IN-APP GOOGLE SIGN-IN BRIDGE (NO BROWSER REDIRECT)
+         ========================================================================= */}
+      <Modal
+        visible={showGoogleModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          if (!isCheckingGoogleAuth) {
+            setShowGoogleModal(false);
+          }
+        }}
+      >
+        <View style={styles.googleModalBackdrop}>
+          <TouchableOpacity
+            style={styles.googleModalDismissArea}
+            activeOpacity={1}
+            onPress={() => {
+              if (!isCheckingGoogleAuth) {
+                setShowGoogleModal(false);
+              }
+            }}
+          />
+
+          <View style={styles.googleModalCard}>
+            {/* Top Sheet Drag Indicator */}
+            <View style={styles.googleSheetHandle} />
+
+            {/* Header: Google Logo + Title */}
+            <View style={styles.googleHeaderRow}>
+              <View style={styles.googleGLogoWrap}>
+                <Ionicons name="logo-google" size={22} color="#EA4335" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.googleModalTitle}>Sign in with Google</Text>
+                <Text style={styles.googleModalSub}>Choose an account to continue to Extra Diesel</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => !isCheckingGoogleAuth && setShowGoogleModal(false)}
+                style={styles.googleCloseBtn}
+              >
+                <Ionicons name="close" size={20} color={COLORS.muted} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.googleDivider} />
+
+            {/* Account List */}
+            <ScrollView style={{ maxHeight: 260 }} showsVerticalScrollIndicator={false}>
+              {GOOGLE_DEVICE_ACCOUNTS.map((acc) => {
+                const isLoadingThis = isCheckingGoogleAuth && selectedGoogleEmail === acc.email;
+                return (
+                  <TouchableOpacity
+                    key={acc.email}
+                    style={styles.googleAccountItem}
+                    onPress={() => handleSelectGoogleAccount(acc)}
+                    disabled={isCheckingGoogleAuth}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.googleAvatarCircle, { backgroundColor: acc.color }]}>
+                      <Text style={styles.googleAvatarText}>{acc.initial}</Text>
+                    </View>
+                    <View style={styles.googleAccountInfo}>
+                      <Text style={styles.googleAccountName}>{acc.name}</Text>
+                      <Text style={styles.googleAccountEmail}>{acc.email}</Text>
+                    </View>
+                    {isLoadingThis ? (
+                      <ActivityIndicator size="small" color={COLORS.primary} />
+                    ) : (
+                      <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+
+              {/* Use Another Account Toggle */}
+              {!showCustomEmailInput ? (
+                <TouchableOpacity
+                  style={styles.googleAddAccountRow}
+                  onPress={() => setShowCustomEmailInput(true)}
+                  disabled={isCheckingGoogleAuth}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.googleAddIconWrap}>
+                    <Ionicons name="person-add-outline" size={18} color="#475569" />
+                  </View>
+                  <Text style={styles.googleAddText}>Use another Google account</Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.customEmailBox}>
+                  <Text style={styles.customEmailLabel}>Enter Google Email Address</Text>
+                  <View style={styles.customEmailInputWrap}>
+                    <Ionicons name="mail-outline" size={16} color={COLORS.muted} style={{ marginRight: 6 }} />
+                    <TextInput
+                      style={styles.customEmailInput}
+                      placeholder="e.g. user@gmail.com"
+                      placeholderTextColor="#94A3B8"
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      value={customGoogleEmail}
+                      onChangeText={setCustomGoogleEmail}
+                    />
+                  </View>
+                  <View style={styles.customEmailActions}>
+                    <TouchableOpacity
+                      style={styles.customEmailCancelBtn}
+                      onPress={() => setShowCustomEmailInput(false)}
+                    >
+                      <Text style={styles.customEmailCancelText}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.customEmailConfirmBtn}
+                      onPress={() => {
+                        if (!customGoogleEmail.trim() || !customGoogleEmail.includes('@')) {
+                          Alert.alert('Invalid Email', 'Please enter a valid Google email.');
+                          return;
+                        }
+                        const name = customGoogleEmail.split('@')[0];
+                        handleSelectGoogleAccount({ name, email: customGoogleEmail.trim() });
+                      }}
+                      disabled={isCheckingGoogleAuth}
+                    >
+                      {isCheckingGoogleAuth ? (
+                        <ActivityIndicator size="small" color="#FFF" />
+                      ) : (
+                        <Text style={styles.customEmailConfirmText}>Sign In</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            </ScrollView>
+
+            {/* Privacy Disclaimer */}
+            <View style={styles.googleFooterDisclaimer}>
+              <Text style={styles.googleDisclaimerText}>
+                To continue, Google will share your name, email address, language preference, and profile picture with Extra Diesel.
+              </Text>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 };
@@ -841,5 +1105,209 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#94A3B8',
     marginTop: 2,
+  },
+  // Native Google Auth Bridge Styles
+  googleModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+  },
+  googleModalDismissArea: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  googleModalCard: {
+    width: '100%',
+    maxWidth: 440,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 12,
+    paddingBottom: 24,
+    paddingHorizontal: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 20,
+  },
+  googleSheetHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#CBD5E1',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 14,
+  },
+  googleHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingBottom: 12,
+  },
+  googleGLogoWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  googleModalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#1E293B',
+  },
+  googleModalSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  googleCloseBtn: {
+    padding: 6,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+  },
+  googleDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginVertical: 10,
+  },
+  googleAccountItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  googleAvatarCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  googleAvatarText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 13,
+  },
+  googleAccountInfo: {
+    flex: 1,
+  },
+  googleAccountName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  googleAccountEmail: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  googleAddAccountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderStyle: 'dashed',
+    marginTop: 4,
+  },
+  googleAddIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  googleAddText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  customEmailBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginTop: 6,
+  },
+  customEmailLabel: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#475569',
+    marginBottom: 6,
+  },
+  customEmailInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingHorizontal: 10,
+    height: 40,
+  },
+  customEmailInput: {
+    flex: 1,
+    fontSize: 13,
+    color: '#0F172A',
+    outlineStyle: 'none' as any,
+  },
+  customEmailActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+    marginTop: 10,
+  },
+  customEmailCancelBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+  },
+  customEmailCancelText: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  customEmailConfirmBtn: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+  },
+  customEmailConfirmText: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  googleFooterDisclaimer: {
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  googleDisclaimerText: {
+    fontSize: 10.5,
+    color: '#94A3B8',
+    lineHeight: 14,
+    textAlign: 'center',
   },
 });

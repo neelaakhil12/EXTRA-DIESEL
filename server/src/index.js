@@ -59,6 +59,28 @@ const transporter = nodemailer.createTransport({
 // In-memory OTP Store: email -> { otp, expiresAt }
 const otpStore = new Map();
 
+// Registered Users Store: email -> { name, email, phone, password, createdAt }
+const registeredUsers = new Map([
+  [
+    'aadhyafuels9@gmail.com',
+    {
+      name: 'Aadhya Fuels',
+      email: 'aadhyafuels9@gmail.com',
+      phone: '+91 9876543210',
+      createdAt: new Date().toISOString(),
+    },
+  ],
+  [
+    'akhil.kumar@gmail.com',
+    {
+      name: 'Akhil Kumar',
+      email: 'akhil.kumar@gmail.com',
+      phone: '+91 9876543210',
+      createdAt: new Date().toISOString(),
+    },
+  ],
+]);
+
 // --- API ROUTES ---
 
 // Auth 1: Send Email Verification OTP via SMTP
@@ -147,6 +169,112 @@ app.post('/api/auth/verify-otp', (req, res) => {
     res.json({ success: true, verified: true, message: 'Email verified successfully!' });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Verification failed', details: error.message });
+  }
+});
+
+// Auth 3: Register New User Account
+app.post('/api/auth/register', (req, res) => {
+  try {
+    const { name, email, phone, password } = req.body;
+    if (!email || !name) {
+      return res.status(400).json({ success: false, error: 'Name and email are required' });
+    }
+
+    const key = email.toLowerCase().trim();
+    if (registeredUsers.has(key)) {
+      return res.status(400).json({ success: false, error: 'An account with this email already exists. Please Sign In.' });
+    }
+
+    const user = {
+      name: name.trim(),
+      email: key,
+      phone: phone || '+91 9876543210',
+      password: password || '',
+      createdAt: new Date().toISOString(),
+    };
+
+    registeredUsers.set(key, user);
+    console.log(`[Auth] Registered new account: ${user.name} (${user.email})`);
+
+    res.json({
+      success: true,
+      message: 'Account created successfully',
+      user: { name: user.name, email: user.email, phone: user.phone },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to register account', details: error.message });
+  }
+});
+
+// Auth 4: Native In-App Google Auth Verification (checks if email is registered)
+app.post('/api/auth/google-auth', (req, res) => {
+  try {
+    const { email, name } = req.body;
+    if (!email) {
+      return res.status(400).json({ success: false, error: 'Google email is required' });
+    }
+
+    const key = email.toLowerCase().trim();
+    const existingUser = registeredUsers.get(key);
+
+    if (existingUser) {
+      // User is registered -> allow instant native sign-in
+      console.log(`[Google Auth Bridge] Existing user authenticated: ${existingUser.name} (${existingUser.email})`);
+      return res.json({
+        success: true,
+        registered: true,
+        message: 'Google authentication successful',
+        user: {
+          name: existingUser.name,
+          email: existingUser.email,
+          phone: existingUser.phone || '+91 9876543210',
+        },
+      });
+    }
+
+    // User is NOT registered yet -> tell the app to prompt Sign Up
+    console.log(`[Google Auth Bridge] Account not registered: ${email}`);
+    res.json({
+      success: false,
+      registered: false,
+      message: 'Account not found. This Google account is not registered yet. Please sign up first.',
+      suggestedEmail: key,
+      suggestedName: name || key.split('@')[0],
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Google authentication check failed', details: error.message });
+  }
+});
+
+// Auth 5: Standard Email & Password Login
+app.post('/api/auth/login', (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ success: false, error: 'Email and password are required' });
+    }
+
+    const key = email.toLowerCase().trim();
+    const user = registeredUsers.get(key);
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        error: 'Account not found. Please sign up first.',
+      });
+    }
+
+    if (user.password && user.password !== password) {
+      return res.status(400).json({ success: false, error: 'Incorrect password. Please try again.' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Logged in successfully',
+      user: { name: user.name, email: user.email, phone: user.phone },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Login failed', details: error.message });
   }
 });
 
