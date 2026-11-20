@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Linking, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 import { ScreenName } from '../types';
+import { APP_CONFIG } from '../constants/config';
 
 interface TrackOrderScreenProps {
   orderId?: string;
@@ -16,6 +17,10 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
   const driverName = 'Ramesh Kumar';
   const driverPhone = '+919876543210';
   const bowserNo = 'TS 09 ED 7721';
+  const [mapError, setMapError] = useState(false);
+
+  // Mapbox Live Tracking Static & Navigation Route Map (Hyderabad / HiTech City coordinates)
+  const mapboxMapUri = `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/pin-s-fuel+D50000(78.385,17.447),pin-s-building+0F172A(78.372,17.453)/78.378,17.450,13.5,0/600x320@2x?access_token=${APP_CONFIG.MAPBOX_ACCESS_TOKEN}`;
 
   const handleCallDriver = () => {
     Linking.openURL(`tel:${driverPhone}`);
@@ -36,16 +41,21 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
         <Text style={styles.etaText}>Estimated Arrival: In 25 Mins</Text>
       </View>
 
-      {/* Map Preview Card */}
+      {/* Mapbox Live Bowser Tracking Card */}
       <View style={styles.mapCard}>
         <Image
-          source={require('../../assets/images/map-track.png')}
+          source={!mapError && APP_CONFIG.MAPBOX_ACCESS_TOKEN ? { uri: mapboxMapUri } : require('../../assets/images/map-track.png')}
           style={styles.mapImage}
           resizeMode="cover"
+          onError={() => setMapError(true)}
         />
         <View style={styles.mapOverlayPill}>
           <Ionicons name="speedometer" size={16} color={COLORS.primary} />
-          <Text style={styles.mapOverlayText}>Bowser 3.4 km away</Text>
+          <Text style={styles.mapOverlayText}>Bowser 3.4 km away • 35 km/h</Text>
+        </View>
+        <View style={styles.mapboxPoweredBadge}>
+          <Ionicons name="navigate" size={12} color="#0284C7" />
+          <Text style={styles.mapboxPoweredText}>Mapbox Live GPS</Text>
         </View>
       </View>
 
@@ -201,6 +211,25 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: COLORS.dark,
+  },
+  mapboxPoweredBadge: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    backgroundColor: '#F0F9FF',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  mapboxPoweredText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#0369A1',
   },
   driverCard: {
     backgroundColor: COLORS.white,

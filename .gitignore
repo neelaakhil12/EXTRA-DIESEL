@@ -28,8 +28,11 @@ dist-ssr
 .env.*
 server/.env
 server/.env.*
+mobile-app/.env
+mobile-app/.env.*
 !.env.example
 !server/.env.example
+!mobile-app/.env.example
 
 # Private Keys & CSVs
 *.pem
