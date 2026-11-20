@@ -17,6 +17,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 import { APP_CONFIG } from '../constants/config';
 
+const API_BASE = APP_CONFIG.LIVE_API_BASE_URL || APP_CONFIG.API_BASE_URL || 'http://15.206.165.210';
+
 interface UserData {
   name: string;
   email: string;
@@ -96,31 +98,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
   // Google Auth Bridge Modal state
   const [showGoogleModal, setShowGoogleModal] = useState(false);
   const [isCheckingGoogleAuth, setIsCheckingGoogleAuth] = useState(false);
-  const [selectedGoogleEmail, setSelectedGoogleEmail] = useState<string | null>(null);
   const [customGoogleEmail, setCustomGoogleEmail] = useState('');
-  const [showCustomEmailInput, setShowCustomEmailInput] = useState(false);
-
-  // Available Google accounts on device
-  const GOOGLE_DEVICE_ACCOUNTS = [
-    {
-      name: 'Aadhya Fuels',
-      email: 'aadhyafuels9@gmail.com',
-      initial: 'AF',
-      color: '#EA4335',
-    },
-    {
-      name: 'Akhil Kumar',
-      email: 'akhil.kumar@gmail.com',
-      initial: 'AK',
-      color: '#4285F4',
-    },
-    {
-      name: 'Neela Akhil Kumar',
-      email: 'neelaakhilkumar50@gmail.com',
-      initial: 'NA',
-      color: '#FBBC05',
-    },
-  ];
 
   // Signup inputs
   const [fullName, setFullName] = useState('');
@@ -211,26 +189,23 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
       } catch (e) {}
     }
 
-    // 3. Fallback: Native In-App Account Picker Sheet
+    // 3. Fallback: In-App Google Sign-In Sheet
     setShowGoogleModal(true);
-    setShowCustomEmailInput(false);
-    setSelectedGoogleEmail(null);
+    setCustomGoogleEmail('');
   };
 
   // 3. Handle Google Account Selection with Backend Registration Check
   const handleSelectGoogleAccount = async (account: { name: string; email: string }) => {
     try {
-      setSelectedGoogleEmail(account.email);
       setIsCheckingGoogleAuth(true);
 
-      const res = await fetch('http://localhost:5000/api/auth/google-auth', {
+      const res = await fetch(`${API_BASE}/api/auth/google-auth`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: account.email.trim(), name: account.name }),
       });
       const data = await res.json();
       setIsCheckingGoogleAuth(false);
-      setSelectedGoogleEmail(null);
       setShowGoogleModal(false);
 
       if (data.registered && data.user) {
@@ -268,43 +243,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
       }
     } catch (err) {
       setIsCheckingGoogleAuth(false);
-      setSelectedGoogleEmail(null);
       setShowGoogleModal(false);
-
-      // Fallback check if backend is offline
-      const normalizedEmail = account.email.toLowerCase().trim();
-      if (normalizedEmail === 'aadhyafuels9@gmail.com' || normalizedEmail === 'akhil.kumar@gmail.com') {
-        Alert.alert('Google Sign-In Successful! ✓', `Welcome back, ${account.name}!`, [
-          {
-            text: 'Continue',
-            onPress: () =>
-              onLoginSuccess({
-                name: account.name,
-                email: account.email,
-                phone: '+91 9876543210',
-              }),
-          },
-        ]);
-      } else {
-        Alert.alert(
-          'Account Not Found ⚠️',
-          `The Google account "${account.email}" is not registered with Extra Diesel yet.\n\nPlease Sign Up first.`,
-          [
-            {
-              text: 'Sign Up Now',
-              onPress: () => {
-                setFullName(account.name);
-                setSignupEmail(account.email);
-                setAuthMode('signup');
-              },
-            },
-            {
-              text: 'Cancel',
-              style: 'cancel',
-            },
-          ]
-        );
-      }
+      Alert.alert(
+        'Connection Error',
+        'Unable to reach authentication server. Please check your internet connection.'
+      );
     }
   };
 
@@ -317,7 +260,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
 
     try {
       setIsSendingOtp(true);
-      const res = await fetch('http://localhost:5000/api/auth/send-otp', {
+      const res = await fetch(`${API_BASE}/api/auth/send-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: signupEmail.trim() }),
@@ -328,37 +271,34 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
       if (data.success) {
         setOtpSent(true);
         setIsEmailVerified(false);
+        setEmailOtp('');
         Alert.alert(
           'OTP Sent to Email! 📧',
-          `A 6-digit verification code has been sent from Aadhyafuels9@gmail.com to ${signupEmail}.\n\nPlease check your inbox (and spam folder).`,
+          `A 6-digit verification code has been sent from Aadhyafuels9@gmail.com to ${signupEmail}.\n\nPlease check your inbox and spam folder, then enter the OTP below.`,
           [{ text: 'OK' }]
         );
       } else {
-        throw new Error(data.error || 'Failed to send OTP email');
+        Alert.alert('Failed to Send OTP', data.error || 'Could not send verification email. Please try again.');
       }
     } catch (err) {
       setIsSendingOtp(false);
-      // Fallback notification with demo OTP
-      setOtpSent(true);
-      setIsEmailVerified(false);
-      setEmailOtp('');
       Alert.alert(
-        'OTP Sent! 📧',
-        `Verification code sent to ${signupEmail}.\n\n(Demo Code: 123456)`
+        'Connection Error',
+        'Unable to connect to the server to send OTP. Please check your internet connection and try again.'
       );
     }
   };
 
   // 4. Handle Verify Inline OTP via Backend
   const handleVerifyInlineOtp = async () => {
-    if (!emailOtp || emailOtp.length < 6) {
-      Alert.alert('Enter OTP', 'Please enter the 6-digit OTP sent to your email.');
+    if (!emailOtp || emailOtp.trim().length !== 6) {
+      Alert.alert('Enter OTP', 'Please enter the 6-digit OTP code sent to your email.');
       return;
     }
 
     try {
       setIsVerifyingOtp(true);
-      const res = await fetch('http://localhost:5000/api/auth/verify-otp', {
+      const res = await fetch(`${API_BASE}/api/auth/verify-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: signupEmail.trim(), otp: emailOtp.trim() }),
@@ -370,16 +310,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
         setIsEmailVerified(true);
         Alert.alert('Email Verified! ✓', `${signupEmail} has been successfully verified.`);
       } else {
-        Alert.alert('Verification Failed', data.error || 'Incorrect OTP code.');
+        Alert.alert('Verification Failed', data.error || 'Incorrect OTP code. Please check your email.');
       }
     } catch (err) {
       setIsVerifyingOtp(false);
-      if (emailOtp === '123456' || emailOtp.length === 6) {
-        setIsEmailVerified(true);
-        Alert.alert('Email Verified! ✓', `${signupEmail} has been successfully verified.`);
-      } else {
-        Alert.alert('Verification Failed', 'Unable to verify OTP. Please try again.');
-      }
+      Alert.alert('Verification Failed', 'Unable to verify OTP with server. Please check your internet connection.');
     }
   };
 
@@ -398,12 +333,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
       return;
     }
     if (!isEmailVerified) {
-      if (emailOtp === '123456' || emailOtp.length === 6) {
-        setIsEmailVerified(true);
-      } else {
-        Alert.alert('OTP Verification', 'Please enter the 6-digit OTP and click "Verify".');
-        return;
-      }
+      Alert.alert(
+        'Email Verification Required',
+        'Please enter the 6-digit OTP sent to your email and click "Verify" before proceeding.'
+      );
+      return;
     }
     if (!signupPassword || signupPassword.length < 6) {
       Alert.alert('Password Required', 'Password must be at least 6 characters.');
@@ -414,30 +348,29 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
       return;
     }
 
+    const userData = {
+      name: fullName,
+      email: signupEmail,
+      phone: signupPhone ? `+91 ${signupPhone}` : '+91 9876543210',
+    };
+
+    // Register in backend database
+    fetch(`${API_BASE}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...userData,
+        password: signupPassword,
+      }),
+    }).catch(() => {});
+
     Alert.alert(
       'Account Created! 🎉',
       `Welcome to Extra Diesel, ${fullName}! Your account has been created and verified.`,
       [
         {
           text: 'Get Started',
-          onPress: () => {
-            const userData = {
-              name: fullName,
-              email: signupEmail,
-              phone: signupPhone ? `+91 ${signupPhone}` : '+91 9876543210',
-            };
-            // Register in backend database
-            fetch('http://localhost:5000/api/auth/register', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                ...userData,
-                password: signupPassword,
-              }),
-            }).catch(() => {});
-
-            onLoginSuccess(userData);
-          },
+          onPress: () => onLoginSuccess(userData),
         },
       ]
     );
@@ -451,7 +384,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
       {/* Top Safe Area Header to prevent scrolled content from overlapping the notch */}
       <View style={styles.topSafeAreaBar} />
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={true}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets={true}
+        keyboardDismissMode="on-drag"
+      >
         {/* App Logo */}
         <View style={styles.header}>
           <Image
@@ -665,13 +604,17 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
               <View style={styles.otpCardBox}>
                 <View style={styles.otpHeaderRow}>
                   <Text style={styles.otpCardLabel}>Enter 6-Digit Email OTP</Text>
-                  <Text style={styles.demoOtpBadge}>Demo: 123456</Text>
+                  {isEmailVerified ? (
+                    <Text style={styles.otpVerifiedStatusText}>Verified ✓</Text>
+                  ) : (
+                    <Text style={styles.otpHintText}>Check your inbox / spam</Text>
+                  )}
                 </View>
                 <View style={[styles.inputWrap, styles.inputWrapRow, { marginBottom: 0, backgroundColor: COLORS.white }]}>
                   <Ionicons name="key-outline" size={18} color={COLORS.primary} style={styles.inputIcon} />
                   <TextInput
                     style={[styles.textInput, { fontWeight: '700', letterSpacing: 3 }]}
-                    placeholder="123456"
+                    placeholder="Enter 6-digit OTP"
                     placeholderTextColor="#94A3B8"
                     keyboardType="number-pad"
                     maxLength={6}
@@ -816,7 +759,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.googleModalTitle}>Sign in with Google</Text>
-                <Text style={styles.googleModalSub}>Choose an account to continue to Extra Diesel</Text>
+                <Text style={styles.googleModalSub}>Enter your Google account email to continue</Text>
               </View>
               <TouchableOpacity
                 onPress={() => !isCheckingGoogleAuth && setShowGoogleModal(false)}
@@ -828,97 +771,50 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
 
             <View style={styles.googleDivider} />
 
-            {/* Account List */}
-            <ScrollView style={{ maxHeight: 260 }} showsVerticalScrollIndicator={false}>
-              {GOOGLE_DEVICE_ACCOUNTS.map((acc) => {
-                const isLoadingThis = isCheckingGoogleAuth && selectedGoogleEmail === acc.email;
-                return (
-                  <TouchableOpacity
-                    key={acc.email}
-                    style={styles.googleAccountItem}
-                    onPress={() => handleSelectGoogleAccount(acc)}
-                    disabled={isCheckingGoogleAuth}
-                    activeOpacity={0.7}
-                  >
-                    <View style={[styles.googleAvatarCircle, { backgroundColor: acc.color }]}>
-                      <Text style={styles.googleAvatarText}>{acc.initial}</Text>
-                    </View>
-                    <View style={styles.googleAccountInfo}>
-                      <Text style={styles.googleAccountName}>{acc.name}</Text>
-                      <Text style={styles.googleAccountEmail}>{acc.email}</Text>
-                    </View>
-                    {isLoadingThis ? (
-                      <ActivityIndicator size="small" color={COLORS.primary} />
-                    ) : (
-                      <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
+            <View style={{ paddingVertical: 12 }}>
+              <Text style={styles.inputLabel}>Google Email Address</Text>
+              <View style={styles.inputWrap}>
+                <Ionicons name="mail-outline" size={18} color={COLORS.muted} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="name@gmail.com"
+                  placeholderTextColor="#94A3B8"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  value={customGoogleEmail}
+                  onChangeText={setCustomGoogleEmail}
+                />
+              </View>
 
-              {/* Use Another Account Toggle */}
-              {!showCustomEmailInput ? (
-                <TouchableOpacity
-                  style={styles.googleAddAccountRow}
-                  onPress={() => setShowCustomEmailInput(true)}
-                  disabled={isCheckingGoogleAuth}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.googleAddIconWrap}>
-                    <Ionicons name="person-add-outline" size={18} color="#475569" />
-                  </View>
-                  <Text style={styles.googleAddText}>Use another Google account</Text>
-                </TouchableOpacity>
-              ) : (
-                <View style={styles.customEmailBox}>
-                  <Text style={styles.customEmailLabel}>Enter Google Email Address</Text>
-                  <View style={styles.customEmailInputWrap}>
-                    <Ionicons name="mail-outline" size={16} color={COLORS.muted} style={{ marginRight: 6 }} />
-                    <TextInput
-                      style={styles.customEmailInput}
-                      placeholder="e.g. user@gmail.com"
-                      placeholderTextColor="#94A3B8"
-                      keyboardType="email-address"
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      value={customGoogleEmail}
-                      onChangeText={setCustomGoogleEmail}
-                    />
-                  </View>
-                  <View style={styles.customEmailActions}>
-                    <TouchableOpacity
-                      style={styles.customEmailCancelBtn}
-                      onPress={() => setShowCustomEmailInput(false)}
-                    >
-                      <Text style={styles.customEmailCancelText}>Cancel</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.customEmailConfirmBtn}
-                      onPress={() => {
-                        if (!customGoogleEmail.trim() || !customGoogleEmail.includes('@')) {
-                          Alert.alert('Invalid Email', 'Please enter a valid Google email.');
-                          return;
-                        }
-                        const name = customGoogleEmail.split('@')[0];
-                        handleSelectGoogleAccount({ name, email: customGoogleEmail.trim() });
-                      }}
-                      disabled={isCheckingGoogleAuth}
-                    >
-                      {isCheckingGoogleAuth ? (
-                        <ActivityIndicator size="small" color="#FFF" />
-                      ) : (
-                        <Text style={styles.customEmailConfirmText}>Sign In</Text>
-                      )}
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )}
-            </ScrollView>
+              <TouchableOpacity
+                style={[styles.primaryButton, { marginTop: 14 }]}
+                onPress={() => {
+                  if (!customGoogleEmail.trim() || !customGoogleEmail.includes('@')) {
+                    Alert.alert('Invalid Email', 'Please enter a valid Google email address.');
+                    return;
+                  }
+                  const name = customGoogleEmail.split('@')[0];
+                  handleSelectGoogleAccount({ name, email: customGoogleEmail.trim() });
+                }}
+                disabled={isCheckingGoogleAuth}
+                activeOpacity={0.85}
+              >
+                {isCheckingGoogleAuth ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <>
+                    <Ionicons name="logo-google" size={18} color="#FFF" />
+                    <Text style={styles.primaryButtonText}>Continue with Google</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
 
             {/* Privacy Disclaimer */}
             <View style={styles.googleFooterDisclaimer}>
               <Text style={styles.googleDisclaimerText}>
-                To continue, Google will share your name, email address, language preference, and profile picture with Extra Diesel.
+                By signing in, Google credentials verify your registered account with Extra Diesel.
               </Text>
             </View>
           </View>
@@ -939,9 +835,10 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   scrollContent: {
+    flexGrow: 1,
     padding: 16,
     paddingTop: 8,
-    paddingBottom: 40,
+    paddingBottom: Platform.OS === 'android' ? 360 : 160,
   },
   header: {
     alignItems: 'center',
@@ -1060,14 +957,15 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.primary,
   },
-  demoOtpBadge: {
+  otpVerifiedStatusText: {
     fontSize: 10,
     fontWeight: '700',
-    color: COLORS.primaryDark,
-    backgroundColor: 'rgba(213,0,0,0.1)',
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 4,
+    color: '#059669',
+  },
+  otpHintText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: COLORS.muted,
   },
   verifyInlineBtn: {
     backgroundColor: COLORS.dark,

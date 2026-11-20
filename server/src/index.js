@@ -145,11 +145,6 @@ app.post('/api/auth/verify-otp', (req, res) => {
     }
 
     const key = email.toLowerCase().trim();
-    // Allow demo backup code 123456 as well
-    if (otp === '123456') {
-      return res.json({ success: true, verified: true, message: 'OTP verified successfully (demo)' });
-    }
-
     const stored = otpStore.get(key);
     if (!stored) {
       return res.status(400).json({ success: false, error: 'No OTP found for this email. Please click Send OTP.' });

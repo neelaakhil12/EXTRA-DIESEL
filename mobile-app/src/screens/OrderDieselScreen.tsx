@@ -22,7 +22,7 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({ onOrderSuc
   useEffect(() => {
     const fetchRate = async () => {
       try {
-        const baseUrl = Platform.OS === 'web' ? 'http://localhost:5000' : APP_CONFIG.LIVE_API_BASE_URL;
+        const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'http://15.206.165.210';
         const res = await fetch(`${baseUrl}/api/fuel-rate`);
         const data = await res.json();
         if (data.rate && !isNaN(Number(data.rate))) {
