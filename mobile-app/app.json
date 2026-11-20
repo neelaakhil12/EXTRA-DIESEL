@@ -23,6 +23,12 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "d3cb3bba-c598-4a2c-ac0b-c75fb250bdb8"
+      }
+    },
+    "owner": "student16"
   }
 }
