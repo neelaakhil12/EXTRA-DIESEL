@@ -14,6 +14,7 @@ import {
   Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import { COLORS } from '../constants/theme';
 import { APP_CONFIG } from '../constants/config';
 
@@ -47,6 +48,21 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
       setIsFormReady(true);
     }, 300);
     return () => clearTimeout(timer);
+  }, []);
+
+  // Configure Native Google Play Services Sign-In on mount
+  React.useEffect(() => {
+    if (Platform.OS !== 'web') {
+      try {
+        GoogleSignin.configure({
+          webClientId: APP_CONFIG.GOOGLE_CLIENT_ID,
+          offlineAccess: true,
+          scopes: ['profile', 'email'],
+        });
+      } catch (e) {
+        console.warn('GoogleSignin configure error:', e);
+      }
+    }
   }, []);
 
   // Dynamically load Google Identity Services (GIS) on mount to fetch real device Google accounts
@@ -132,66 +148,83 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
     });
   };
 
-  // 2. Open Official Google Device Accounts Chooser (or In-App Sheet Fallback)
-  const handleGoogleSignIn = () => {
-    // 1. If Google Identity Services (GIS) OAuth2 client is available, trigger real Google Device Account Chooser
-    if (
-      Platform.OS === 'web' &&
-      typeof window !== 'undefined' &&
-      (window as any).google?.accounts?.oauth2
-    ) {
-      try {
-        const tokenClient = (window as any).google.accounts.oauth2.initTokenClient({
-          client_id: APP_CONFIG.GOOGLE_CLIENT_ID,
-          scope: 'email profile openid',
-          prompt: 'select_account', // Forces Google to show all logged in device accounts
-          callback: async (tokenResponse: any) => {
-            if (tokenResponse?.access_token) {
-              try {
-                // Fetch real user info from Google's verified UserInfo endpoint
-                const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-                  headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
-                });
-                const userInfo = await res.json();
-                if (userInfo?.email) {
-                  await handleSelectGoogleAccount({
-                    name: userInfo.name || userInfo.email.split('@')[0],
-                    email: userInfo.email,
+  // 2. Open Official Google Native Account Chooser (Google Play Services)
+  const handleGoogleSignIn = async () => {
+    // 1. Web Platform handler (Google Identity Services GIS)
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && (window as any).google?.accounts?.oauth2) {
+        try {
+          const tokenClient = (window as any).google.accounts.oauth2.initTokenClient({
+            client_id: APP_CONFIG.GOOGLE_CLIENT_ID,
+            scope: 'email profile openid',
+            prompt: 'select_account',
+            callback: async (tokenResponse: any) => {
+              if (tokenResponse?.access_token) {
+                try {
+                  const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                    headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
                   });
-                  return;
-                }
-              } catch (err) {
-                console.error('Error fetching Google UserInfo:', err);
+                  const userInfo = await res.json();
+                  if (userInfo?.email) {
+                    await handleSelectGoogleAccount({
+                      name: userInfo.name || userInfo.email.split('@')[0],
+                      email: userInfo.email,
+                    });
+                    return;
+                  }
+                } catch (err) {}
               }
-            }
-          },
-        });
-        tokenClient.requestAccessToken();
+            },
+          });
+          tokenClient.requestAccessToken();
+          return;
+        } catch (err) {}
+      }
+
+      setShowGoogleModal(true);
+      setCustomGoogleEmail('');
+      return;
+    }
+
+    // 2. Native Android / iOS: Official Google Play Services Account Chooser
+    try {
+      setIsCheckingGoogleAuth(true);
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      const response = await GoogleSignin.signIn();
+      setIsCheckingGoogleAuth(false);
+
+      if (response && response.type === 'success' && response.data?.user) {
+        const { user } = response.data;
+        if (user.email) {
+          await handleSelectGoogleAccount({
+            name: user.name || user.email.split('@')[0],
+            email: user.email,
+          });
+        }
+      } else if ((response as any)?.user) {
+        const user = (response as any).user;
+        if (user.email) {
+          await handleSelectGoogleAccount({
+            name: user.name || user.email.split('@')[0],
+            email: user.email,
+          });
+        }
+      }
+    } catch (error: any) {
+      setIsCheckingGoogleAuth(false);
+      if (error?.code === statusCodes.SIGN_IN_CANCELLED) {
+        // User dismissed the Google dialog
         return;
-      } catch (err) {
-        console.warn('Google oauth2 popup failed, using in-app sheet:', err);
+      } else if (error?.code === statusCodes.IN_PROGRESS) {
+        return;
+      } else if (error?.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        Alert.alert('Play Services Unavailable', 'Google Play Services is not available or outdated.');
+      } else {
+        console.warn('Native Google Sign-In error:', error);
+        setShowGoogleModal(true);
+        setCustomGoogleEmail('');
       }
     }
-
-    // 2. If Google One Tap is ready, prompt it
-    if (
-      Platform.OS === 'web' &&
-      typeof window !== 'undefined' &&
-      (window as any).google?.accounts?.id
-    ) {
-      try {
-        (window as any).google.accounts.id.prompt((notification: any) => {
-          if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-            setShowGoogleModal(true);
-          }
-        });
-        return;
-      } catch (e) {}
-    }
-
-    // 3. Fallback: In-App Google Sign-In Sheet
-    setShowGoogleModal(true);
-    setCustomGoogleEmail('');
   };
 
   // 3. Handle Google Account Selection with Backend Registration Check
