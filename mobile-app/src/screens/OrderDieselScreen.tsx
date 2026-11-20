@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 import { ScreenName } from '../types';
+import { APP_CONFIG } from '../constants/config';
 
 interface OrderDieselScreenProps {
   onOrderSuccess: (orderId: string) => void;
@@ -15,8 +16,23 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({ onOrderSuc
   const [deliveryType, setDeliveryType] = useState<'one-time' | 'subscription'>('one-time');
   const [selectedSlot, setSelectedSlot] = useState<string>('08:00 AM - 12:00 PM');
   const [selectedAddress, setSelectedAddress] = useState<string>('Plot 42, Hitech City, Phase 2, Hyderabad');
+  const [ratePerLiter, setRatePerLiter] = useState<number>(94.50);
 
-  const ratePerLiter = 94.50;
+  // Fetch live dynamic diesel rate from backend
+  useEffect(() => {
+    const fetchRate = async () => {
+      try {
+        const baseUrl = Platform.OS === 'web' ? 'http://localhost:5000' : APP_CONFIG.LIVE_API_BASE_URL;
+        const res = await fetch(`${baseUrl}/api/fuel-rate`);
+        const data = await res.json();
+        if (data.rate && !isNaN(Number(data.rate))) {
+          setRatePerLiter(Number(data.rate));
+        }
+      } catch (err) {}
+    };
+    fetchRate();
+  }, []);
+
   const subtotal = liters * ratePerLiter;
   const deliveryFee = liters >= 200 ? 0 : 250;
   const gstRate = 0.05; // 5%
@@ -151,7 +167,7 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({ onOrderSuc
       <View style={styles.billCard}>
         <Text style={styles.billTitle}>Bill Summary</Text>
         <View style={styles.billRow}>
-          <Text style={styles.billLabel}>Base Diesel ({liters}L @ ₹{ratePerLiter})</Text>
+          <Text style={styles.billLabel}>Base Diesel ({liters}L @ ₹{ratePerLiter.toFixed(2)})</Text>
           <Text style={styles.billValue}>₹{subtotal.toFixed(2)}</Text>
         </View>
         <View style={styles.billRow}>

@@ -398,15 +398,60 @@ app.get('/api/files/signed-url', async (req, res) => {
   }
 });
 
-// Fuel Rate API
+// In-memory Dynamic Fuel Rate (BS-VI High Speed Diesel)
+let currentFuelRate = {
+  rate: 94.50,
+  currency: 'INR',
+  unit: 'Liter',
+  fuelType: 'BS-VI High Speed Diesel',
+  city: 'Hyderabad',
+  updatedAt: new Date().toISOString(),
+};
+
+// 1. Get Live Fuel Rate API
 app.get('/api/fuel-rate', (req, res) => {
   res.json({
-    rate: 94.50,
-    currency: 'INR',
-    unit: 'Liter',
-    city: 'Hyderabad',
-    updatedAt: new Date().toISOString()
+    success: true,
+    rate: currentFuelRate.rate,
+    formattedRate: `₹${currentFuelRate.rate.toFixed(2)}`,
+    currency: currentFuelRate.currency,
+    unit: currentFuelRate.unit,
+    fuelType: currentFuelRate.fuelType,
+    city: currentFuelRate.city,
+    updatedAt: currentFuelRate.updatedAt,
   });
+});
+
+// 2. Admin / Daily Update Fuel Rate API (Increases or Decreases price)
+app.post('/api/fuel-rate', (req, res) => {
+  try {
+    const { rate, city } = req.body;
+    if (!rate || isNaN(Number(rate)) || Number(rate) <= 0) {
+      return res.status(400).json({ success: false, error: 'A valid positive diesel rate is required' });
+    }
+
+    const previousRate = currentFuelRate.rate;
+    currentFuelRate.rate = parseFloat(Number(rate).toFixed(2));
+    if (city) currentFuelRate.city = city;
+    currentFuelRate.updatedAt = new Date().toISOString();
+
+    const change = currentFuelRate.rate - previousRate;
+    const changeText = change === 0 ? 'unchanged' : change > 0 ? `increased by ₹${change.toFixed(2)}` : `decreased by ₹${Math.abs(change).toFixed(2)}`;
+
+    console.log(`[Fuel Rate] Updated: ₹${currentFuelRate.rate}/L (${changeText}) for ${currentFuelRate.city}`);
+
+    res.json({
+      success: true,
+      message: `Diesel price updated successfully (${changeText})`,
+      rate: currentFuelRate.rate,
+      formattedRate: `₹${currentFuelRate.rate.toFixed(2)}`,
+      previousRate,
+      changeText,
+      updatedAt: currentFuelRate.updatedAt,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to update fuel rate', details: error.message });
+  }
 });
 
 app.listen(PORT, '0.0.0.0', () => {

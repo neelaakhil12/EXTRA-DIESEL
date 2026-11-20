@@ -1,14 +1,37 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 import { ScreenName } from '../types';
+import { APP_CONFIG } from '../constants/config';
 
 interface HomeScreenProps {
   onNavigate: (screen: ScreenName) => void;
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
+  const [fuelRate, setFuelRate] = useState<number>(94.50);
+  const [rateCity, setRateCity] = useState<string>('Hyderabad');
+
+  // Fetch real-time dynamic diesel price from live backend
+  useEffect(() => {
+    const fetchRate = async () => {
+      try {
+        const baseUrl = Platform.OS === 'web' ? 'http://localhost:5000' : APP_CONFIG.LIVE_API_BASE_URL;
+        const res = await fetch(`${baseUrl}/api/fuel-rate`);
+        const data = await res.json();
+        if (data.rate && !isNaN(Number(data.rate))) {
+          setFuelRate(Number(data.rate));
+          if (data.city) setRateCity(data.city);
+        }
+      } catch (err) {
+        // Fallback default
+      }
+    };
+
+    fetchRate();
+  }, []);
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {/* Live Rate Ticker */}
@@ -23,7 +46,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
           </View>
         </View>
         <View style={styles.rateRight}>
-          <Text style={styles.rateValue}>₹94.50</Text>
+          <Text style={styles.rateValue}>₹{fuelRate.toFixed(2)}</Text>
           <Text style={styles.rateUnit}>per Liter</Text>
         </View>
       </View>
