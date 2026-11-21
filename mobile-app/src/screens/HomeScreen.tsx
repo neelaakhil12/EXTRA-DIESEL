@@ -17,7 +17,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
   useEffect(() => {
     const fetchRate = async () => {
       try {
-        const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'http://15.206.165.210';
+        const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'https://gtmining.xyz';
         const res = await fetch(`${baseUrl}/api/fuel-rate`);
         const data = await res.json();
         if (data.rate && !isNaN(Number(data.rate))) {

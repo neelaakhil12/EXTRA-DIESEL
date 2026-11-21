@@ -18,7 +18,7 @@ import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-si
 import { COLORS } from '../constants/theme';
 import { APP_CONFIG } from '../constants/config';
 
-const API_BASE = APP_CONFIG.LIVE_API_BASE_URL || APP_CONFIG.API_BASE_URL || 'http://15.206.165.210';
+const API_BASE = APP_CONFIG.LIVE_API_BASE_URL || APP_CONFIG.API_BASE_URL || 'https://gtmining.xyz';
 
 interface UserData {
   name: string;
