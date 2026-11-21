@@ -89,6 +89,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onGetStarted }) => {
 
       {/* Bottom Section: Login Button Pops Up from Bottom */}
       <Animated.View
+        pointerEvents="box-none"
         style={[
           styles.bottomSection,
           {
@@ -99,8 +100,10 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onGetStarted }) => {
       >
         <TouchableOpacity
           style={styles.loginButton}
-          onPress={onGetStarted}
-          activeOpacity={0.88}
+          onPress={() => onGetStarted()}
+          activeOpacity={0.75}
+          delayPressIn={0}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
           <Text style={styles.loginButtonText}>Login</Text>
           <Ionicons name="arrow-forward" size={19} color={COLORS.white} />

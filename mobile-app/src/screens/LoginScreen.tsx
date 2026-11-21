@@ -279,12 +279,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
           ]
         );
       }
-    } catch (err) {
+    } catch (err: any) {
       setIsCheckingGoogleAuth(false);
       setShowGoogleModal(false);
       Alert.alert(
         'Connection Error',
-        'Unable to reach authentication server. Please check your internet connection.'
+        `Unable to reach authentication server (${err?.message || 'Network error'}). Please check your internet connection.`
       );
     }
   };
@@ -318,11 +318,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
       } else {
         Alert.alert('Failed to Send OTP', data.error || 'Could not send verification email. Please try again.');
       }
-    } catch (err) {
+    } catch (err: any) {
       setIsSendingOtp(false);
       Alert.alert(
         'Connection Error',
-        'Unable to connect to the server to send OTP. Please check your internet connection and try again.'
+        `Unable to connect to the server to send OTP (${err?.message || 'Network request failed'}). Please check your internet connection and try again.`
       );
     }
   };

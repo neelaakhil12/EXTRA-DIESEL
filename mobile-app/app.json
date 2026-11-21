@@ -27,6 +27,7 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "./plugins/withCleartextTraffic",
       [
         "@react-native-google-signin/google-signin",
         {
