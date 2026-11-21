@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, StatusBar } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, StatusBar, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 
@@ -114,7 +114,7 @@ export const Header: React.FC<HeaderProps> = ({
 const styles = StyleSheet.create({
   container: {
     backgroundColor: COLORS.white,
-    paddingTop: 48, // Generous space so Dynamic Island / Notch never overlaps
+    paddingTop: Platform.OS === 'android' ? 8 : 12,
     paddingBottom: 10,
     paddingHorizontal: 16,
     borderBottomWidth: 1,

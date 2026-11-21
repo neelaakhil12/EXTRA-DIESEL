@@ -2,13 +2,16 @@ import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
+  Text,
+  TouchableOpacity,
+  Modal,
   SafeAreaView,
   Alert,
   BackHandler,
   Platform,
-  StatusBar as RNStatusBar,
+  StatusBar,
 } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from './src/constants/theme';
 import { ScreenName } from './src/types';
 import { DeviceFrame } from './src/components/DeviceFrame';
@@ -170,10 +173,20 @@ export default function App() {
   // Show header back button whenever there is a previous screen to go back to and we are not on root home
   const showBackBtn = screenStack.length > 1 && currentScreen !== 'home';
 
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      (StatusBar as any).setBackgroundColor?.('#FFFFFF');
+      (StatusBar as any).setBarStyle?.('dark-content');
+      (StatusBar as any).setTranslucent?.(false);
+    }
+  }, []);
+
   return (
     <DeviceFrame>
       <SafeAreaView style={styles.container}>
-        <StatusBar style={currentScreen === 'splash' ? 'dark' : 'light'} />
+        <StatusBar barStyle="dark-content" />
 
         {/* Header */}
         {showHeader && (
@@ -181,12 +194,7 @@ export default function App() {
             title={getHeaderTitle()}
             showBack={showBackBtn}
             onBack={goBack}
-            onNotificationPress={() =>
-              Alert.alert(
-                'Notifications',
-                '• Today\'s rate updated: ₹94.50/L\n• Delivery #ED20261116-8941 is out for delivery\n• Scheduled refill arriving Thursday'
-              )
-            }
+            onNotificationPress={() => setShowNotifications(true)}
             onProfilePress={() => navigateTo('profile')}
           />
         )}
@@ -252,6 +260,57 @@ export default function App() {
             onNavigate={(screen) => navigateTo(screen)}
           />
         )}
+        {/* Notifications In-App Modal */}
+        <Modal
+          visible={showNotifications}
+          animationType="fade"
+          transparent={true}
+          onRequestClose={() => setShowNotifications(false)}
+        >
+          <View style={styles.modalBackdrop}>
+            <View style={styles.notifCard}>
+              <View style={styles.notifHeader}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Ionicons name="notifications" size={20} color={COLORS.primary} />
+                  <Text style={styles.notifTitle}>Notifications</Text>
+                </View>
+                <TouchableOpacity onPress={() => setShowNotifications(false)} style={styles.notifClose}>
+                  <Ionicons name="close" size={20} color={COLORS.dark} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.notifItem}>
+                <View style={[styles.notifIconWrap, { backgroundColor: '#FEF2F2' }]}>
+                  <Ionicons name="trending-down" size={18} color={COLORS.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.notifItemTitle}>Today's Diesel Rate Updated</Text>
+                  <Text style={styles.notifItemBody}>High-speed diesel updated to ₹94.50/L today.</Text>
+                </View>
+              </View>
+
+              <View style={styles.notifItem}>
+                <View style={[styles.notifIconWrap, { backgroundColor: '#EFF6FF' }]}>
+                  <Ionicons name="navigate" size={18} color="#2563EB" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.notifItemTitle}>Bowser Out for Delivery</Text>
+                  <Text style={styles.notifItemBody}>Delivery #ED20261116-8941 is arriving in ~25 mins.</Text>
+                </View>
+              </View>
+
+              <View style={[styles.notifItem, { borderBottomWidth: 0 }]}>
+                <View style={[styles.notifIconWrap, { backgroundColor: '#ECFDF5' }]}>
+                  <Ionicons name="calendar" size={18} color="#059669" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.notifItemTitle}>Scheduled Generator Refill</Text>
+                  <Text style={styles.notifItemBody}>Weekly 500L refill scheduled for Thursday 10:00 AM.</Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </DeviceFrame>
   );
@@ -260,12 +319,74 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.primary,
-    // Android safe top padding to prevent notch & status bar clipping
-    paddingTop: Platform.OS === 'android' ? (RNStatusBar.currentHeight || 0) : 0,
+    backgroundColor: '#FFFFFF',
+    paddingTop: 0,
   },
   screenContent: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  notifCard: {
+    width: '100%',
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  notifHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    marginBottom: 10,
+  },
+  notifTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: COLORS.dark,
+  },
+  notifClose: {
+    padding: 4,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 16,
+  },
+  notifItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8FAFC',
+  },
+  notifIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  notifItemTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.dark,
+    marginBottom: 2,
+  },
+  notifItemBody: {
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 16,
   },
 });

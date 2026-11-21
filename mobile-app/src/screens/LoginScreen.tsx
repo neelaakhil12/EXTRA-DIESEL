@@ -247,37 +247,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
       setShowGoogleModal(false);
 
       if (data.registered && data.user) {
-        // Registered User -> Instant Native Sign In
-        Alert.alert(
-          'Google Sign-In Successful! ✓',
-          `Welcome back to Extra Diesel, ${data.user.name}!`,
-          [
-            {
-              text: 'Continue',
-              onPress: () => onLoginSuccess(data.user),
-            },
-          ]
-        );
+        // Registered User -> Seamless Instant Sign In directly into app!
+        onLoginSuccess(data.user);
       } else {
-        // Unregistered Account -> Prompt Sign Up & Pre-fill fields
-        Alert.alert(
-          'Account Not Found ⚠️',
-          `The Google account "${account.email}" is not registered with Extra Diesel yet.\n\nPlease complete Sign Up first to create your account.`,
-          [
-            {
-              text: 'Sign Up Now',
-              onPress: () => {
-                setFullName(account.name);
-                setSignupEmail(account.email);
-                setAuthMode('signup');
-              },
-            },
-            {
-              text: 'Cancel',
-              style: 'cancel',
-            },
-          ]
-        );
+        // Unregistered Account -> Seamlessly pre-fill fields and switch to Sign Up
+        setFullName(account.name);
+        setSignupEmail(account.email);
+        setAuthMode('signup');
       }
     } catch (err: any) {
       setIsCheckingGoogleAuth(false);
@@ -310,19 +286,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
         setOtpSent(true);
         setIsEmailVerified(false);
         setEmailOtp('');
-        Alert.alert(
-          'OTP Sent to Email! 📧',
-          `A 6-digit verification code has been sent from Aadhyafuels9@gmail.com to ${signupEmail}.\n\nPlease check your inbox and spam folder, then enter the OTP below.`,
-          [{ text: 'OK' }]
-        );
       } else {
-        Alert.alert('Failed to Send OTP', data.error || 'Could not send verification email. Please try again.');
+        Alert.alert('Unable to Send OTP', data.error || 'Could not send verification email. Please check your email address.');
       }
     } catch (err: any) {
       setIsSendingOtp(false);
       Alert.alert(
         'Connection Error',
-        `Unable to connect to the server to send OTP (${err?.message || 'Network request failed'}). Please check your internet connection and try again.`
+        'Unable to connect to server. Please check your internet connection.'
       );
     }
   };
@@ -330,7 +301,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
   // 4. Handle Verify Inline OTP via Backend
   const handleVerifyInlineOtp = async () => {
     if (!emailOtp || emailOtp.trim().length !== 6) {
-      Alert.alert('Enter OTP', 'Please enter the 6-digit OTP code sent to your email.');
+      Alert.alert('Enter OTP', 'Please enter the 6-digit code sent to your email.');
       return;
     }
 
@@ -346,9 +317,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
 
       if (data.success && data.verified) {
         setIsEmailVerified(true);
-        Alert.alert('Email Verified! ✓', `${signupEmail} has been successfully verified.`);
       } else {
-        Alert.alert('Verification Failed', data.error || 'Incorrect OTP code. Please check your email.');
+        Alert.alert('Incorrect OTP', data.error || 'Please check the 6-digit code in your email and try again.');
       }
     } catch (err) {
       setIsVerifyingOtp(false);
