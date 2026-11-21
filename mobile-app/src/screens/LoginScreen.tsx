@@ -189,6 +189,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
     // 2. Native Android / iOS: Official Google Play Services Account Chooser
     try {
       setIsCheckingGoogleAuth(true);
+      // Clear previous cached session so all device accounts are always shown
+      try {
+        await GoogleSignin.signOut();
+      } catch (e) {}
+
       await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
       const response = await GoogleSignin.signIn();
       setIsCheckingGoogleAuth(false);

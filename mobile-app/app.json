@@ -13,6 +13,7 @@
     },
     "android": {
       "package": "com.extradiesel.app",
+      "usesCleartextTraffic": true,
       "softwareKeyboardLayoutMode": "pan",
       "adaptiveIcon": {
         "backgroundColor": "#D50000",

@@ -18,76 +18,33 @@ interface SplashScreenProps {
 }
 
 export const SplashScreen: React.FC<SplashScreenProps> = ({ onGetStarted }) => {
-  // Animation values for clean entrance and sleek disappear transition
+  // Animation value for clean logo entrance on mount
   const splashOpacity = useRef(new Animated.Value(0)).current;
-  const splashScale = useRef(new Animated.Value(0.92)).current;
-  const footerFade = useRef(new Animated.Value(0)).current;
-
-  // Trigger smooth disappearing exit animation
-  const handleDisappearExit = () => {
-    Animated.parallel([
-      Animated.timing(splashOpacity, {
-        toValue: 0,
-        duration: 450,
-        easing: Easing.in(Easing.cubic),
-        useNativeDriver: Platform.OS !== 'web',
-      }),
-      Animated.timing(splashScale, {
-        toValue: 1.12,
-        duration: 450,
-        easing: Easing.in(Easing.ease),
-        useNativeDriver: Platform.OS !== 'web',
-      }),
-      Animated.timing(footerFade, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: Platform.OS !== 'web',
-      }),
-    ]).start(() => {
-      onGetStarted();
-    });
-  };
+  const splashScale = useRef(new Animated.Value(0.95)).current;
 
   useEffect(() => {
-    // 1. Smooth entrance of transparent logo
+    // Smooth entrance of logo on app launch
     Animated.parallel([
       Animated.timing(splashOpacity, {
         toValue: 1,
-        duration: 650,
+        duration: 500,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: Platform.OS !== 'web',
       }),
       Animated.spring(splashScale, {
         toValue: 1,
-        friction: 7,
-        tension: 40,
-        useNativeDriver: Platform.OS !== 'web',
-      }),
-      Animated.timing(footerFade, {
-        toValue: 1,
-        duration: 800,
-        delay: 300,
+        friction: 8,
+        tension: 50,
         useNativeDriver: Platform.OS !== 'web',
       }),
     ]).start();
-
-    // 2. Exactly 2 seconds splash duration, then smooth disappear transition to Login screen
-    const timer = setTimeout(() => {
-      handleDisappearExit();
-    }, 2000);
-
-    return () => clearTimeout(timer);
   }, []);
 
   return (
-    <TouchableOpacity
-      style={styles.container}
-      activeOpacity={1}
-      onPress={handleDisappearExit}
-    >
+    <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
 
-      {/* Main Center Area: Crisp Transparent Logo with Disappear Exit Animation */}
+      {/* Main Center Area: Logo */}
       <View style={styles.centerContainer}>
         <Animated.View
           style={[
@@ -106,11 +63,11 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onGetStarted }) => {
         </Animated.View>
       </View>
 
-      {/* Bottom Minimal Footer & Login Action */}
-      <Animated.View style={[styles.bottomSection, { opacity: footerFade }]}>
+      {/* Bottom Section: Static Login Button (Navigates ONLY on click) */}
+      <View style={styles.bottomSection}>
         <TouchableOpacity
           style={styles.loginButton}
-          onPress={handleDisappearExit}
+          onPress={onGetStarted}
           activeOpacity={0.88}
         >
           <Text style={styles.loginButtonText}>Login</Text>
@@ -118,8 +75,8 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onGetStarted }) => {
         </TouchableOpacity>
 
         <Text style={styles.taglineText}>Doorstep Diesel Delivery Platform</Text>
-      </Animated.View>
-    </TouchableOpacity>
+      </View>
+    </View>
   );
 };
 

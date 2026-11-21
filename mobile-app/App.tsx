@@ -134,7 +134,13 @@ export default function App() {
       {
         text: 'Logout',
         style: 'destructive',
-        onPress: () => {
+        onPress: async () => {
+          try {
+            if (Platform.OS !== 'web') {
+              const { GoogleSignin } = require('@react-native-google-signin/google-signin');
+              await GoogleSignin.signOut();
+            }
+          } catch (e) {}
           setIsLoggedIn(false);
           setScreenStack(['login']);
         },
