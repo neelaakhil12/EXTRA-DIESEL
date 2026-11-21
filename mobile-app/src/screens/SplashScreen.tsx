@@ -20,24 +20,48 @@ interface SplashScreenProps {
 export const SplashScreen: React.FC<SplashScreenProps> = ({ onGetStarted }) => {
   // Animation value for clean logo entrance on mount
   const splashOpacity = useRef(new Animated.Value(0)).current;
-  const splashScale = useRef(new Animated.Value(0.95)).current;
+  const splashScale = useRef(new Animated.Value(0.92)).current;
+
+  // Animation values for Login button sliding up & popping up from the bottom
+  const buttonSlideY = useRef(new Animated.Value(90)).current;
+  const buttonOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // Smooth entrance of logo on app launch
+    // 1. Smooth entrance of logo on app launch
     Animated.parallel([
       Animated.timing(splashOpacity, {
         toValue: 1,
-        duration: 500,
+        duration: 550,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: Platform.OS !== 'web',
       }),
       Animated.spring(splashScale, {
         toValue: 1,
         friction: 8,
-        tension: 50,
+        tension: 45,
         useNativeDriver: Platform.OS !== 'web',
       }),
     ]).start();
+
+    // 2. A little bit after logo appears (delay ~600ms), Login button springs up from bottom
+    const timer = setTimeout(() => {
+      Animated.parallel([
+        Animated.spring(buttonSlideY, {
+          toValue: 0,
+          friction: 6.5,
+          tension: 48,
+          useNativeDriver: Platform.OS !== 'web',
+        }),
+        Animated.timing(buttonOpacity, {
+          toValue: 1,
+          duration: 400,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: Platform.OS !== 'web',
+        }),
+      ]).start();
+    }, 650);
+
+    return () => clearTimeout(timer);
   }, []);
 
   return (
@@ -63,8 +87,16 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onGetStarted }) => {
         </Animated.View>
       </View>
 
-      {/* Bottom Section: Static Login Button (Navigates ONLY on click) */}
-      <View style={styles.bottomSection}>
+      {/* Bottom Section: Login Button Pops Up from Bottom */}
+      <Animated.View
+        style={[
+          styles.bottomSection,
+          {
+            opacity: buttonOpacity,
+            transform: [{ translateY: buttonSlideY }],
+          },
+        ]}
+      >
         <TouchableOpacity
           style={styles.loginButton}
           onPress={onGetStarted}
@@ -75,7 +107,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onGetStarted }) => {
         </TouchableOpacity>
 
         <Text style={styles.taglineText}>Doorstep Diesel Delivery Platform</Text>
-      </View>
+      </Animated.View>
     </View>
   );
 };
