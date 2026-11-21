@@ -103,9 +103,9 @@ export default function App() {
   // Handle splash completion (revealed Login button pressed)
   const handleGetStarted = () => {
     if (isLoggedIn) {
-      navigateTo('home');
+      setScreenStack(['home']);
     } else {
-      navigateTo('login');
+      setScreenStack(['login']);
     }
   };
 

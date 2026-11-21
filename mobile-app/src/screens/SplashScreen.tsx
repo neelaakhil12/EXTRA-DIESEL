@@ -3,7 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
+  Pressable,
   Image,
   StatusBar,
   Animated,
@@ -23,15 +23,23 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onGetStarted }) => {
   const splashScale = useRef(new Animated.Value(0.92)).current;
 
   // Animation values for Login button sliding up & popping up from the bottom
-  const buttonSlideY = useRef(new Animated.Value(90)).current;
+  // NOTE: useNativeDriver: false is mandatory here so Android's UI thread HitRect updates in sync with layout!
+  const buttonSlideY = useRef(new Animated.Value(60)).current;
   const buttonOpacity = useRef(new Animated.Value(0)).current;
+  const hasTriggeredRef = useRef(false);
+
+  const handlePress = () => {
+    if (hasTriggeredRef.current) return;
+    hasTriggeredRef.current = true;
+    onGetStarted();
+  };
 
   useEffect(() => {
     // 1. Smooth entrance of logo on app launch
     Animated.parallel([
       Animated.timing(splashOpacity, {
         toValue: 1,
-        duration: 550,
+        duration: 500,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: Platform.OS !== 'web',
       }),
@@ -43,23 +51,23 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onGetStarted }) => {
       }),
     ]).start();
 
-    // 2. A little bit after logo appears (delay ~600ms), Login button springs up from bottom
+    // 2. A little bit after logo appears (delay ~400ms), Login button springs up from bottom
     const timer = setTimeout(() => {
       Animated.parallel([
         Animated.spring(buttonSlideY, {
           toValue: 0,
-          friction: 6.5,
-          tension: 48,
-          useNativeDriver: Platform.OS !== 'web',
+          friction: 7,
+          tension: 50,
+          useNativeDriver: false,
         }),
         Animated.timing(buttonOpacity, {
           toValue: 1,
-          duration: 400,
+          duration: 350,
           easing: Easing.out(Easing.quad),
-          useNativeDriver: Platform.OS !== 'web',
+          useNativeDriver: false,
         }),
       ]).start();
-    }, 650);
+    }, 400);
 
     return () => clearTimeout(timer);
   }, []);
@@ -89,7 +97,6 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onGetStarted }) => {
 
       {/* Bottom Section: Login Button Pops Up from Bottom */}
       <Animated.View
-        pointerEvents="box-none"
         style={[
           styles.bottomSection,
           {
@@ -98,16 +105,18 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onGetStarted }) => {
           },
         ]}
       >
-        <TouchableOpacity
-          style={styles.loginButton}
-          onPress={() => onGetStarted()}
-          activeOpacity={0.75}
-          delayPressIn={0}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        <Pressable
+          style={({ pressed }) => [
+            styles.loginButton,
+            pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] },
+          ]}
+          onPress={handlePress}
+          android_ripple={{ color: '#B71C1C' }}
+          hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
         >
           <Text style={styles.loginButtonText}>Login</Text>
           <Ionicons name="arrow-forward" size={19} color={COLORS.white} />
-        </TouchableOpacity>
+        </Pressable>
 
         <Text style={styles.taglineText}>Doorstep Diesel Delivery Platform</Text>
       </Animated.View>
