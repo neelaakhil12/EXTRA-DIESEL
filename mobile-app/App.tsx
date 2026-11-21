@@ -192,6 +192,7 @@ export default function App() {
         {showHeader && (
           <Header
             title={getHeaderTitle()}
+            userName={currentUser.name}
             showBack={showBackBtn}
             onBack={goBack}
             onNotificationPress={() => setShowNotifications(true)}

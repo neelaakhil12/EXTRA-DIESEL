@@ -327,7 +327,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
   };
 
   // 5. Handle Final Create Account Submit
-  const handleCreateAccount = () => {
+  const handleCreateAccount = async () => {
     if (!fullName.trim()) {
       Alert.alert('Name Required', 'Please enter your full name or company name.');
       return;
@@ -357,31 +357,30 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
     }
 
     const userData = {
-      name: fullName,
-      email: signupEmail,
-      phone: signupPhone ? `+91 ${signupPhone}` : '+91 9876543210',
+      name: fullName.trim(),
+      email: signupEmail.trim().toLowerCase(),
+      phone: signupPhone ? `+91 ${signupPhone.trim()}` : '+91 9876543210',
     };
 
-    // Register in backend database
-    fetch(`${API_BASE}/api/auth/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...userData,
-        password: signupPassword,
-      }),
-    }).catch(() => {});
-
-    Alert.alert(
-      'Account Created! 🎉',
-      `Welcome to Extra Diesel, ${fullName}! Your account has been created and verified.`,
-      [
-        {
-          text: 'Get Started',
-          onPress: () => onLoginSuccess(userData),
-        },
-      ]
-    );
+    try {
+      // Register in backend database and wait for persistent save
+      const res = await fetch(`${API_BASE}/api/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...userData,
+          password: signupPassword,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.user) {
+        onLoginSuccess(data.user);
+      } else {
+        onLoginSuccess(userData);
+      }
+    } catch (e) {
+      onLoginSuccess(userData);
+    }
   };
 
   return (

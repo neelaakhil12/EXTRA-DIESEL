@@ -5,6 +5,7 @@ import { COLORS } from '../constants/theme';
 
 interface HeaderProps {
   title?: string;
+  userName?: string;
   showBack?: boolean;
   onBack?: () => void;
   showNotification?: boolean;
@@ -14,12 +15,21 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({
   title,
+  userName,
   showBack = false,
   onBack,
   showNotification = true,
   onNotificationPress,
   onProfilePress,
 }) => {
+  const getInitials = (name?: string) => {
+    if (!name || !name.trim()) return 'ED';
+    const parts = name.trim().split(' ').filter(Boolean);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return name.slice(0, 2).toUpperCase();
+  };
   // If it's an inner screen with a title (e.g. Order Diesel, Track, History, etc.)
   if (title) {
     return (
@@ -88,7 +98,7 @@ export const Header: React.FC<HeaderProps> = ({
             style={styles.avatarButton}
             activeOpacity={0.7}
           >
-            <Text style={styles.avatarText}>AK</Text>
+            <Text style={styles.avatarText}>{getInitials(userName)}</Text>
             <View style={styles.onlineBadge} />
           </TouchableOpacity>
         </View>

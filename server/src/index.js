@@ -5,10 +5,83 @@ import multer from 'multer';
 import crypto from 'crypto';
 import Razorpay from 'razorpay';
 import nodemailer from 'nodemailer';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const DATA_DIR = path.join(__dirname, '../data');
+
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
+const USERS_FILE = path.join(DATA_DIR, 'users.json');
+const ORDERS_FILE = path.join(DATA_DIR, 'orders.json');
+
+// Helper to load persistent users from disk
+function loadUsers() {
+  const map = new Map([
+    [
+      'aadhyafuels9@gmail.com',
+      {
+        name: 'Aadhya Fuels',
+        email: 'aadhyafuels9@gmail.com',
+        phone: '+91 9876543210',
+        createdAt: new Date().toISOString(),
+      },
+    ],
+  ]);
+
+  try {
+    if (fs.existsSync(USERS_FILE)) {
+      const data = fs.readFileSync(USERS_FILE, 'utf-8');
+      const list = JSON.parse(data);
+      list.forEach(u => {
+        if (u && u.email) {
+          map.set(u.email.toLowerCase().trim(), u);
+        }
+      });
+    }
+  } catch (e) {
+    console.error('Error reading users.json:', e);
+  }
+  return map;
+}
+
+function saveUsers(map) {
+  try {
+    const list = Array.from(map.values());
+    fs.writeFileSync(USERS_FILE, JSON.stringify(list, null, 2), 'utf-8');
+  } catch (e) {
+    console.error('Error writing users.json:', e);
+  }
+}
+
+function loadOrders() {
+  try {
+    if (fs.existsSync(ORDERS_FILE)) {
+      const data = fs.readFileSync(ORDERS_FILE, 'utf-8');
+      return JSON.parse(data);
+    }
+  } catch (e) {
+    console.error('Error reading orders.json:', e);
+  }
+  return [];
+}
+
+function saveOrders(orders) {
+  try {
+    fs.writeFileSync(ORDERS_FILE, JSON.stringify(orders, null, 2), 'utf-8');
+  } catch (e) {
+    console.error('Error writing orders.json:', e);
+  }
+}
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -59,27 +132,8 @@ const transporter = nodemailer.createTransport({
 // In-memory OTP Store: email -> { otp, expiresAt }
 const otpStore = new Map();
 
-// Registered Users Store: email -> { name, email, phone, password, createdAt }
-const registeredUsers = new Map([
-  [
-    'aadhyafuels9@gmail.com',
-    {
-      name: 'Aadhya Fuels',
-      email: 'aadhyafuels9@gmail.com',
-      phone: '+91 9876543210',
-      createdAt: new Date().toISOString(),
-    },
-  ],
-  [
-    'akhil.kumar@gmail.com',
-    {
-      name: 'Akhil Kumar',
-      email: 'akhil.kumar@gmail.com',
-      phone: '+91 9876543210',
-      createdAt: new Date().toISOString(),
-    },
-  ],
-]);
+// Persistent Registered Users Store (Loaded from users.json)
+const registeredUsers = loadUsers();
 
 // --- API ROUTES ---
 
@@ -167,7 +221,7 @@ app.post('/api/auth/verify-otp', (req, res) => {
   }
 });
 
-// Auth 3: Register New User Account
+// Auth 3: Register New User Account (Persisted to disk)
 app.post('/api/auth/register', (req, res) => {
   try {
     const { name, email, phone, password } = req.body;
@@ -176,20 +230,17 @@ app.post('/api/auth/register', (req, res) => {
     }
 
     const key = email.toLowerCase().trim();
-    if (registeredUsers.has(key)) {
-      return res.status(400).json({ success: false, error: 'An account with this email already exists. Please Sign In.' });
-    }
-
     const user = {
       name: name.trim(),
       email: key,
-      phone: phone || '+91 9876543210',
+      phone: phone || '',
       password: password || '',
       createdAt: new Date().toISOString(),
     };
 
     registeredUsers.set(key, user);
-    console.log(`[Auth] Registered new account: ${user.name} (${user.email})`);
+    saveUsers(registeredUsers);
+    console.log(`[Auth] Registered and persisted new account: ${user.name} (${user.email})`);
 
     res.json({
       success: true,
@@ -201,7 +252,7 @@ app.post('/api/auth/register', (req, res) => {
   }
 });
 
-// Auth 4: Native In-App Google Auth Verification (checks if email is registered)
+// Auth 4: Native Google Auth - If user exists, log in; if not, AUTO-REGISTER with Google profile immediately!
 app.post('/api/auth/google-auth', (req, res) => {
   try {
     const { email, name } = req.body;
@@ -210,34 +261,79 @@ app.post('/api/auth/google-auth', (req, res) => {
     }
 
     const key = email.toLowerCase().trim();
-    const existingUser = registeredUsers.get(key);
+    let existingUser = registeredUsers.get(key);
 
-    if (existingUser) {
-      // User is registered -> allow instant native sign-in
-      console.log(`[Google Auth Bridge] Existing user authenticated: ${existingUser.name} (${existingUser.email})`);
-      return res.json({
-        success: true,
-        registered: true,
-        message: 'Google authentication successful',
-        user: {
-          name: existingUser.name,
-          email: existingUser.email,
-          phone: existingUser.phone || '+91 9876543210',
-        },
-      });
+    if (!existingUser) {
+      // User is logging in with Google for the first time -> Auto-register in database!
+      existingUser = {
+        name: (name && name.trim()) || key.split('@')[0],
+        email: key,
+        phone: '',
+        authProvider: 'google',
+        createdAt: new Date().toISOString(),
+      };
+      registeredUsers.set(key, existingUser);
+      saveUsers(registeredUsers);
+      console.log(`[Google Auth] Auto-registered and persisted new user: ${existingUser.name} (${existingUser.email})`);
+    } else {
+      console.log(`[Google Auth] Existing user authenticated: ${existingUser.name} (${existingUser.email})`);
     }
 
-    // User is NOT registered yet -> tell the app to prompt Sign Up
-    console.log(`[Google Auth Bridge] Account not registered: ${email}`);
-    res.json({
-      success: false,
-      registered: false,
-      message: 'Account not found. This Google account is not registered yet. Please sign up first.',
-      suggestedEmail: key,
-      suggestedName: name || key.split('@')[0],
+    return res.json({
+      success: true,
+      registered: true,
+      message: 'Google authentication successful',
+      user: {
+        name: existingUser.name,
+        email: existingUser.email,
+        phone: existingUser.phone || '',
+      },
     });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Google authentication check failed', details: error.message });
+  }
+});
+
+// Orders API: Get orders (filtered by email if provided)
+app.get('/api/orders', (req, res) => {
+  try {
+    const { email } = req.query;
+    const allOrders = loadOrders();
+    if (email) {
+      const userOrders = allOrders.filter(o => o.email && o.email.toLowerCase().trim() === email.toLowerCase().trim());
+      return res.json({ success: true, orders: userOrders });
+    }
+    res.json({ success: true, orders: allOrders });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to fetch orders' });
+  }
+});
+
+// Orders API: Create new order (Persisted to disk)
+app.post('/api/orders', (req, res) => {
+  try {
+    const { id, email, name, liters, total, address, status, statusText } = req.body;
+    const newOrder = {
+      id: id || `ED${Date.now().toString().slice(-8)}`,
+      email: email ? email.toLowerCase().trim() : '',
+      name: name || '',
+      date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ' • ' + new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+      liters: Number(liters) || 200,
+      total: Number(total) || 19845.00,
+      status: status || 'out_for_delivery',
+      statusText: statusText || 'Out for Delivery',
+      address: address || 'Plot 42, Hitech City, Hyderabad',
+      createdAt: new Date().toISOString(),
+    };
+
+    const allOrders = loadOrders();
+    allOrders.unshift(newOrder); // newest first
+    saveOrders(allOrders);
+
+    console.log(`[Orders] Created order #${newOrder.id} for ${newOrder.liters}L (${newOrder.email})`);
+    res.json({ success: true, order: newOrder });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to create order', details: error.message });
   }
 });
 

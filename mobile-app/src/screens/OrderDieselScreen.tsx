@@ -43,18 +43,27 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({ onOrderSuc
   const vehicleOptions = ['DG Set', 'Excavator', 'Commercial Fleet', 'Storage Tank'];
   const slotOptions = ['08:00 AM - 12:00 PM', '01:00 PM - 05:00 PM', '06:00 PM - 10:00 PM'];
 
-  const handlePlaceOrder = () => {
+  const handlePlaceOrder = async () => {
     const newOrderId = `ED${new Date().getFullYear()}${Math.floor(100000 + Math.random() * 900000)}`;
-    Alert.alert(
-      'Order Placed Successfully!',
-      `Order #${newOrderId} for ${liters}L of diesel has been placed. Total: ₹${totalAmount.toFixed(2)}`,
-      [
-        {
-          text: 'Track Order',
-          onPress: () => onOrderSuccess(newOrderId),
-        },
-      ]
-    );
+    const orderPayload = {
+      id: newOrderId,
+      liters,
+      total: totalAmount,
+      address: selectedAddress,
+      status: 'out_for_delivery',
+      statusText: 'Out for Delivery',
+    };
+
+    try {
+      const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'https://gtmining.xyz';
+      await fetch(`${baseUrl}/api/orders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(orderPayload),
+      });
+    } catch (e) {}
+
+    onOrderSuccess(newOrderId);
   };
 
   return (
