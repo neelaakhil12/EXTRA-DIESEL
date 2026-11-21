@@ -177,9 +177,9 @@ export default function App() {
 
   useEffect(() => {
     if (Platform.OS === 'android') {
-      (StatusBar as any).setBackgroundColor?.('#FFFFFF');
+      (StatusBar as any).setBackgroundColor?.('transparent');
       (StatusBar as any).setBarStyle?.('dark-content');
-      (StatusBar as any).setTranslucent?.(false);
+      (StatusBar as any).setTranslucent?.(true);
     }
   }, []);
 

@@ -124,7 +124,7 @@ export const Header: React.FC<HeaderProps> = ({
 const styles = StyleSheet.create({
   container: {
     backgroundColor: COLORS.white,
-    paddingTop: Platform.OS === 'android' ? 8 : 12,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 28) + 8 : 14,
     paddingBottom: 10,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
