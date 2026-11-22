@@ -5,12 +5,12 @@ import {
   Text,
   TouchableOpacity,
   Modal,
-  SafeAreaView,
   Alert,
   BackHandler,
   Platform,
   StatusBar,
 } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from './src/constants/theme';
 import { ScreenName } from './src/types';
@@ -27,6 +27,14 @@ import { SubscriptionScreen } from './src/screens/SubscriptionScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 
 export default function App() {
+  return (
+    <SafeAreaProvider>
+      <MainApp />
+    </SafeAreaProvider>
+  );
+}
+
+function MainApp() {
   // Navigation stack state for seamless back button & gesture navigation history
   const [screenStack, setScreenStack] = useState<ScreenName[]>(['splash']);
   const currentScreen = screenStack[screenStack.length - 1];
@@ -185,7 +193,7 @@ export default function App() {
 
   return (
     <DeviceFrame>
-      <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
         <StatusBar barStyle="dark-content" />
 
         {/* Header */}
@@ -312,7 +320,7 @@ export default function App() {
             </View>
           </View>
         </Modal>
-      </SafeAreaView>
+      </View>
     </DeviceFrame>
   );
 }

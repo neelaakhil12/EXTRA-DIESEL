@@ -12,7 +12,9 @@ import {
   Modal,
   ActivityIndicator,
   Image,
+  StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import { COLORS } from '../constants/theme';
@@ -32,6 +34,11 @@ interface LoginScreenProps {
 }
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip }) => {
+  const insets = useSafeAreaInsets();
+  const topSafeHeight = Platform.OS === 'android'
+    ? Math.max(insets.top, StatusBar.currentHeight || 28) + 8
+    : Math.max(insets.top, 20);
+
   // Screen state: 'login' or 'signup'
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
 
@@ -389,7 +396,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
       style={styles.container}
     >
       {/* Top Safe Area Header to prevent scrolled content from overlapping the notch */}
-      <View style={styles.topSafeAreaBar} />
+      <View style={[styles.topSafeAreaBar, { height: topSafeHeight }]} />
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
@@ -837,7 +844,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   topSafeAreaBar: {
-    height: 38,
     backgroundColor: COLORS.background,
     zIndex: 10,
   },

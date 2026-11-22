@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, StatusBar, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 
@@ -22,6 +23,11 @@ export const Header: React.FC<HeaderProps> = ({
   onNotificationPress,
   onProfilePress,
 }) => {
+  const insets = useSafeAreaInsets();
+  const dynamicPaddingTop = Platform.OS === 'android'
+    ? Math.max(insets.top, StatusBar.currentHeight || 28) + 8
+    : Math.max(insets.top, 14);
+
   const getInitials = (name?: string) => {
     if (!name || !name.trim()) return 'ED';
     const parts = name.trim().split(' ').filter(Boolean);
@@ -33,7 +39,7 @@ export const Header: React.FC<HeaderProps> = ({
   // If it's an inner screen with a title (e.g. Order Diesel, Track, History, etc.)
   if (title) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingTop: dynamicPaddingTop }]}>
         <StatusBar barStyle="dark-content" />
         <View style={styles.innerHeader}>
           {showBack ? (
@@ -63,7 +69,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   // Home Screen: Modern App Location & Profile Bar (like Blinkit / Swiggy / Uber)
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: dynamicPaddingTop }]}>
       <StatusBar barStyle="dark-content" />
       <View style={styles.homeHeader}>
         {/* Left: Location Pin & Site Selector */}
@@ -124,7 +130,6 @@ export const Header: React.FC<HeaderProps> = ({
 const styles = StyleSheet.create({
   container: {
     backgroundColor: COLORS.white,
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 28) + 8 : 14,
     paddingBottom: 10,
     paddingHorizontal: 16,
     borderBottomWidth: 1,

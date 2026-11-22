@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 import { ScreenName } from '../types';
@@ -10,6 +11,19 @@ interface BottomNavProps {
 }
 
 export const BottomNav: React.FC<BottomNavProps> = ({ currentScreen, onNavigate }) => {
+  const insets = useSafeAreaInsets();
+
+  // Dynamic bottom padding:
+  // - With Android 3-Button Navigation (Square/Circle/Triangle): insets.bottom is ~48-56dp.
+  //   We add +6dp breathing room, so labels & icons sit completely clear above the system buttons.
+  // - With Android Gesture Navigation: insets.bottom is ~15-20dp -> padding becomes ~21-26dp.
+  // - With iOS Home Indicator: insets.bottom is 34dp -> padding becomes 40dp.
+  // - Desktop web / devices without bottom bar: insets.bottom is 0 -> fallback to 14dp.
+  const dynamicPaddingBottom = Math.max(
+    insets.bottom > 0 ? insets.bottom + 6 : (Platform.OS === 'android' ? 14 : 10),
+    12
+  );
+
   const tabs: { screen: ScreenName; label: string; icon: keyof typeof Ionicons.glyphMap; iconActive: keyof typeof Ionicons.glyphMap }[] = [
     { screen: 'home', label: 'Home', icon: 'home-outline', iconActive: 'home' },
     { screen: 'orders', label: 'Orders', icon: 'receipt-outline', iconActive: 'receipt' },
@@ -18,7 +32,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentScreen, onNavigate 
   ];
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: dynamicPaddingBottom }]}>
       {tabs.map((tab) => {
         const isActive = currentScreen === tab.screen;
         return (
@@ -49,8 +63,7 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     backgroundColor: COLORS.white,
-    paddingVertical: 10,
-    paddingBottom: Platform.OS === 'android' ? 22 : 16,
+    paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
     elevation: 8,

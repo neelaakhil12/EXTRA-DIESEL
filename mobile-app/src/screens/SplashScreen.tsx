@@ -10,6 +10,7 @@ import {
   Easing,
   Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 
@@ -18,6 +19,15 @@ interface SplashScreenProps {
 }
 
 export const SplashScreen: React.FC<SplashScreenProps> = ({ onGetStarted }) => {
+  const insets = useSafeAreaInsets();
+  const dynamicTopPadding = Platform.OS === 'android'
+    ? Math.max(insets.top, StatusBar.currentHeight || 28) + 12
+    : Math.max(insets.top, 24);
+  const dynamicBottomPadding = Math.max(
+    insets.bottom > 0 ? insets.bottom + 8 : (Platform.OS === 'android' ? 20 : 14),
+    16
+  );
+
   // Animation value for clean logo entrance on mount
   const splashOpacity = useRef(new Animated.Value(0)).current;
   const splashScale = useRef(new Animated.Value(0.92)).current;
@@ -73,7 +83,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onGetStarted }) => {
   }, []);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: dynamicTopPadding, paddingBottom: dynamicBottomPadding }]}>
       <StatusBar barStyle="dark-content" />
 
       {/* Main Center Area: Logo */}
@@ -129,7 +139,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
     justifyContent: 'space-between',
-    paddingVertical: Platform.OS === 'android' ? 24 : 32,
     paddingHorizontal: 24,
   },
   centerContainer: {
@@ -148,7 +157,7 @@ const styles = StyleSheet.create({
   bottomSection: {
     width: '100%',
     alignItems: 'center',
-    paddingBottom: Platform.OS === 'android' ? 20 : 14,
+    paddingBottom: 0,
   },
   loginButton: {
     width: '100%',
