@@ -23,20 +23,97 @@ if (!fs.existsSync(DATA_DIR)) {
 
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const ORDERS_FILE = path.join(DATA_DIR, 'orders.json');
+const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
+
+// Default Global Settings (Diesel Price & Delivery Tier Charges)
+const DEFAULT_SETTINGS = {
+  dieselRate: 94.50,
+  currency: 'INR',
+  unit: 'Liter',
+  fuelType: 'BS-VI High Speed Diesel',
+  city: 'Hyderabad',
+  tier1MaxLiters: 500,           // 0 to 500 Liters
+  deliveryChargeUpTo500: 350,    // Delivery charge for 0 - 500 Liters (₹)
+  deliveryChargeAbove500: 0,     // Delivery charge above 500 Liters (0 = FREE)
+  taxRatePercent: 5,             // 5% GST on fuel delivery
+  updatedAt: new Date().toISOString(),
+};
+
+function loadSettings() {
+  try {
+    if (fs.existsSync(SETTINGS_FILE)) {
+      const data = fs.readFileSync(SETTINGS_FILE, 'utf-8');
+      return { ...DEFAULT_SETTINGS, ...JSON.parse(data) };
+    }
+  } catch (e) {
+    console.error('Error reading settings.json:', e);
+  }
+  return { ...DEFAULT_SETTINGS };
+}
+
+function saveSettings(settings) {
+  try {
+    fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2), 'utf-8');
+  } catch (e) {
+    console.error('Error writing settings.json:', e);
+  }
+}
+
+let currentSettings = loadSettings();
+
+// Default admin and sample delivery boy accounts
+const DEFAULT_ACCOUNTS = [
+  {
+    name: 'Aadhya Fuels Admin',
+    email: 'aadhyafuels9@gmail.com',
+    phone: '+91 9876543210',
+    password: 'admin123',
+    role: 'admin',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    name: 'Extra Diesel Admin',
+    email: 'admin@extradiesel.in',
+    phone: '+91 9876543210',
+    password: 'admin123',
+    role: 'admin',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    name: 'Akhil Neela (Admin)',
+    email: 'neelaakhilharish@gmail.com',
+    phone: '+91 9876543210',
+    password: 'admin123',
+    role: 'admin',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    name: 'Akhil Neela (Admin)',
+    email: 'akhil.neela@gmail.com',
+    phone: '+91 9876543210',
+    password: 'admin123',
+    role: 'admin',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    name: 'Ramesh Kumar',
+    email: 'delivery@extradiesel.in',
+    phone: '+91 9123456789',
+    password: 'driver123',
+    vehicleNumber: 'TS 09 UB 4521',
+    role: 'delivery',
+    createdAt: new Date().toISOString(),
+  },
+];
 
 // Helper to load persistent users from disk
 function loadUsers() {
-  const map = new Map([
-    [
-      'aadhyafuels9@gmail.com',
-      {
-        name: 'Aadhya Fuels',
-        email: 'aadhyafuels9@gmail.com',
-        phone: '+91 9876543210',
-        createdAt: new Date().toISOString(),
-      },
-    ],
-  ]);
+  const map = new Map();
+
+  // Populate defaults
+  DEFAULT_ACCOUNTS.forEach(acc => {
+    map.set(acc.email.toLowerCase().trim(), { ...acc });
+  });
 
   try {
     if (fs.existsSync(USERS_FILE)) {
@@ -44,7 +121,10 @@ function loadUsers() {
       const list = JSON.parse(data);
       list.forEach(u => {
         if (u && u.email) {
-          map.set(u.email.toLowerCase().trim(), u);
+          const key = u.email.toLowerCase().trim();
+          const existing = map.get(key) || {};
+          // Preserve role if defined in default accounts or existing user
+          map.set(key, { ...existing, ...u });
         }
       });
     }
@@ -63,16 +143,83 @@ function saveUsers(map) {
   }
 }
 
+// Initial seed orders if orders.json is empty
+const SEED_ORDERS = [
+  {
+    id: 'ED20261122-1084',
+    email: 'neelaakhilharish@gmail.com',
+    name: 'Akhil Harish',
+    phone: '+91 9876543210',
+    date: '23 Nov 2026 • 09:15 AM',
+    liters: 500,
+    fuelRate: 94.50,
+    deliveryFee: 0,
+    tax: 2362.50,
+    total: 49612.50,
+    status: 'delivered',
+    statusText: 'Delivered',
+    address: 'Plot 42, Hitech City, Hyderabad',
+    assignedTo: 'delivery@extradiesel.in',
+    assignedToName: 'Ramesh Kumar',
+    vehicleNumber: 'TS 09 UB 4521',
+    deliveredAt: '2026-11-23T04:15:00.000Z',
+    createdAt: '2026-11-23T03:45:00.000Z',
+  },
+  {
+    id: 'ED20261123-2491',
+    email: 'customer@extradiesel.in',
+    name: 'GVK One Infra Site',
+    phone: '+91 9988776655',
+    date: '23 Nov 2026 • 10:00 AM',
+    liters: 250,
+    fuelRate: 94.50,
+    deliveryFee: 350,
+    tax: 1198.75,
+    total: 25173.75,
+    status: 'out_for_delivery',
+    statusText: 'Out for Delivery',
+    address: 'Road No 1, Banjara Hills, Hyderabad',
+    assignedTo: 'delivery@extradiesel.in',
+    assignedToName: 'Ramesh Kumar',
+    vehicleNumber: 'TS 09 UB 4521',
+    createdAt: '2026-11-23T04:30:00.000Z',
+  },
+  {
+    id: 'ED20261123-3921',
+    email: 'aadhyafuels9@gmail.com',
+    name: 'Cyber Towers DG Set',
+    phone: '+91 9876543210',
+    date: '23 Nov 2026 • 10:15 AM',
+    liters: 1000,
+    fuelRate: 94.50,
+    deliveryFee: 0,
+    tax: 4725.00,
+    total: 99225.00,
+    status: 'pending',
+    statusText: 'Order Placed - Pending Confirmation',
+    address: 'Cyber Towers Gate 3, Madhapur, Hyderabad',
+    assignedTo: null,
+    assignedToName: null,
+    vehicleNumber: null,
+    createdAt: '2026-11-23T04:45:00.000Z',
+  },
+];
+
 function loadOrders() {
   try {
     if (fs.existsSync(ORDERS_FILE)) {
       const data = fs.readFileSync(ORDERS_FILE, 'utf-8');
-      return JSON.parse(data);
+      const list = JSON.parse(data);
+      if (Array.isArray(list) && list.length > 0) {
+        return list;
+      }
     }
   } catch (e) {
     console.error('Error reading orders.json:', e);
   }
-  return [];
+  // Initialize with seed orders
+  saveOrders(SEED_ORDERS);
+  return SEED_ORDERS;
 }
 
 function saveOrders(orders) {
@@ -96,7 +243,7 @@ app.use(cors({
 app.use(express.json({ limit: '25mb' }));
 app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
-// 1. AWS S3 Client Configuration (using provided IAM User or EC2 Role)
+// 1. AWS S3 Client Configuration
 const s3Client = new S3Client({
   region: process.env.AWS_REGION || 'ap-south-1',
   credentials: process.env.AWS_ACCESS_KEY_ID ? {
@@ -123,7 +270,7 @@ const razorpay = new Razorpay({
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtp.gmail.com',
   port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: false, // true for port 465, false for 587
+  secure: false,
   auth: {
     user: process.env.SMTP_USER || 'Aadhyafuels9@gmail.com',
     pass: process.env.SMTP_PASSWORD || 'iqhnztorwddnpapl',
@@ -138,6 +285,130 @@ const registeredUsers = loadUsers();
 
 // --- API ROUTES ---
 
+// Health Check Endpoint
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'online',
+    service: 'Extra Diesel AWS EC2 Backend',
+    region: process.env.AWS_REGION || 'ap-south-1',
+    s3Bucket: S3_BUCKET,
+    razorpayConfigured: !!process.env.RAZORPAY_KEY_ID,
+    currentRate: currentSettings.dieselRate,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// -------------------------------------------------------------------------
+// GLOBAL SETTINGS & DAILY DIESEL PRICE APIS
+// -------------------------------------------------------------------------
+
+// 1. Get Global Settings (Live Diesel Rate, Delivery Charges 0-500L & 500L+)
+app.get('/api/settings', (req, res) => {
+  currentSettings = loadSettings();
+  res.json({
+    success: true,
+    settings: currentSettings,
+  });
+});
+
+// 2. Admin Update Global Settings
+app.post('/api/settings', (req, res) => {
+  try {
+    const {
+      dieselRate,
+      city,
+      deliveryChargeUpTo500,
+      deliveryChargeAbove500,
+      tier1MaxLiters,
+      taxRatePercent
+    } = req.body;
+
+    currentSettings = loadSettings();
+
+    if (dieselRate !== undefined && !isNaN(Number(dieselRate)) && Number(dieselRate) > 0) {
+      currentSettings.dieselRate = parseFloat(Number(dieselRate).toFixed(2));
+    }
+    if (city) currentSettings.city = city.trim();
+    if (deliveryChargeUpTo500 !== undefined && !isNaN(Number(deliveryChargeUpTo500))) {
+      currentSettings.deliveryChargeUpTo500 = Number(deliveryChargeUpTo500);
+    }
+    if (deliveryChargeAbove500 !== undefined && !isNaN(Number(deliveryChargeAbove500))) {
+      currentSettings.deliveryChargeAbove500 = Number(deliveryChargeAbove500);
+    }
+    if (tier1MaxLiters !== undefined && !isNaN(Number(tier1MaxLiters))) {
+      currentSettings.tier1MaxLiters = Number(tier1MaxLiters);
+    }
+    if (taxRatePercent !== undefined && !isNaN(Number(taxRatePercent))) {
+      currentSettings.taxRatePercent = Number(taxRatePercent);
+    }
+
+    currentSettings.updatedAt = new Date().toISOString();
+    saveSettings(currentSettings);
+
+    console.log(`[Settings Updated] Diesel: ₹${currentSettings.dieselRate}/L | Delivery 0-500L: ₹${currentSettings.deliveryChargeUpTo500} | Above 500L: ₹${currentSettings.deliveryChargeAbove500}`);
+
+    res.json({
+      success: true,
+      message: 'Settings updated successfully',
+      settings: currentSettings,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to update settings', details: error.message });
+  }
+});
+
+// Backward compatible Fuel Rate endpoints
+app.get('/api/fuel-rate', (req, res) => {
+  currentSettings = loadSettings();
+  res.json({
+    success: true,
+    rate: currentSettings.dieselRate,
+    formattedRate: `₹${currentSettings.dieselRate.toFixed(2)}`,
+    currency: currentSettings.currency,
+    unit: currentSettings.unit,
+    fuelType: currentSettings.fuelType,
+    city: currentSettings.city,
+    updatedAt: currentSettings.updatedAt,
+  });
+});
+
+app.post('/api/fuel-rate', (req, res) => {
+  try {
+    const { rate, city } = req.body;
+    if (!rate || isNaN(Number(rate)) || Number(rate) <= 0) {
+      return res.status(400).json({ success: false, error: 'A valid positive diesel rate is required' });
+    }
+
+    currentSettings = loadSettings();
+    const previousRate = currentSettings.dieselRate;
+    currentSettings.dieselRate = parseFloat(Number(rate).toFixed(2));
+    if (city) currentSettings.city = city.trim();
+    currentSettings.updatedAt = new Date().toISOString();
+    saveSettings(currentSettings);
+
+    const change = currentSettings.dieselRate - previousRate;
+    const changeText = change === 0 ? 'unchanged' : change > 0 ? `increased by ₹${change.toFixed(2)}` : `decreased by ₹${Math.abs(change).toFixed(2)}`;
+
+    console.log(`[Fuel Rate] Daily rate updated to ₹${currentSettings.dieselRate}/L (${changeText})`);
+
+    res.json({
+      success: true,
+      message: `Diesel price updated successfully (${changeText})`,
+      rate: currentSettings.dieselRate,
+      formattedRate: `₹${currentSettings.dieselRate.toFixed(2)}`,
+      previousRate,
+      changeText,
+      updatedAt: currentSettings.updatedAt,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to update fuel rate', details: error.message });
+  }
+});
+
+// -------------------------------------------------------------------------
+// AUTHENTICATION & USERS APIS
+// -------------------------------------------------------------------------
+
 // Auth 1: Send Email Verification OTP via SMTP
 app.post('/api/auth/send-otp', async (req, res) => {
   try {
@@ -146,9 +417,8 @@ app.post('/api/auth/send-otp', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Valid email address is required' });
     }
 
-    // Generate random 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes expiry
+    const expiresAt = Date.now() + 10 * 60 * 1000;
     otpStore.set(email.toLowerCase().trim(), { otp, expiresAt });
 
     const mailOptions = {
@@ -214,7 +484,6 @@ app.post('/api/auth/verify-otp', (req, res) => {
       return res.status(400).json({ success: false, error: 'Incorrect OTP. Please enter the correct 6-digit code.' });
     }
 
-    // OTP is valid
     otpStore.delete(key);
     res.json({ success: true, verified: true, message: 'Email verified successfully!' });
   } catch (error) {
@@ -222,7 +491,7 @@ app.post('/api/auth/verify-otp', (req, res) => {
   }
 });
 
-// Auth 3: Register New User Account (Persisted to disk)
+// Auth 3: Register New User Account
 app.post('/api/auth/register', (req, res) => {
   try {
     const { name, email, phone, password } = req.body;
@@ -231,17 +500,20 @@ app.post('/api/auth/register', (req, res) => {
     }
 
     const key = email.toLowerCase().trim();
+    const isAdminEmail = ['aadhyafuels9@gmail.com', 'admin@extradiesel.in', 'neelaakhilharish@gmail.com', 'akhil.neela@gmail.com'].includes(key);
+
     const user = {
       name: name.trim(),
       email: key,
       phone: phone || '',
       password: password || '',
+      role: isAdminEmail ? 'admin' : 'customer',
       createdAt: new Date().toISOString(),
     };
 
     registeredUsers.set(key, user);
     saveUsers(registeredUsers);
-    console.log(`[Auth] Registered and persisted new account: ${user.name} (${user.email})`);
+    console.log(`[Auth] Registered: ${user.name} (${user.email}) - Role: ${user.role}`);
 
     res.json({
       success: true,
@@ -250,6 +522,7 @@ app.post('/api/auth/register', (req, res) => {
         name: user.name,
         email: user.email,
         phone: user.phone,
+        role: user.role,
         profileImage: user.profileImage || null,
       },
     });
@@ -258,7 +531,74 @@ app.post('/api/auth/register', (req, res) => {
   }
 });
 
-// Auth 4: Native Google Auth - If user exists, log in; if not, AUTO-REGISTER with Google profile immediately!
+// Auth 4: Unified Email & Password Login (Supports Admin, Delivery Boy, and Customer)
+app.post('/api/auth/login', (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ success: false, error: 'Email and password are required' });
+    }
+
+    const key = email.toLowerCase().trim();
+    let user = registeredUsers.get(key);
+
+    const adminEmails = ['aadhyafuels9@gmail.com', 'admin@extradiesel.in', 'neelaakhilharish@gmail.com', 'akhil.neela@gmail.com'];
+
+    if (!user) {
+      // If logging in as admin with default admin password
+      if (adminEmails.includes(key) && password === 'admin123') {
+        user = {
+          name: 'Extra Diesel Admin',
+          email: key,
+          phone: '+91 9876543210',
+          password: 'admin123',
+          role: 'admin',
+          createdAt: new Date().toISOString(),
+        };
+        registeredUsers.set(key, user);
+        saveUsers(registeredUsers);
+      } else {
+        // Auto-create standard customer
+        user = {
+          name: key.split('@')[0],
+          email: key,
+          phone: '+91 9876543210',
+          password: password,
+          role: 'customer',
+          createdAt: new Date().toISOString(),
+        };
+        registeredUsers.set(key, user);
+        saveUsers(registeredUsers);
+      }
+    } else {
+      // Validate password if present
+      if (user.password && user.password !== password) {
+        return res.status(400).json({ success: false, error: 'Incorrect password. Please try again.' });
+      }
+    }
+
+    const effectiveRole = user.role || (adminEmails.includes(key) ? 'admin' : 'customer');
+
+    console.log(`[Auth Login] ${user.name} (${user.email}) logged in. Role: ${effectiveRole}`);
+
+    res.json({
+      success: true,
+      message: 'Logged in successfully',
+      user: {
+        name: user.name,
+        email: user.email,
+        phone: user.phone || '',
+        role: effectiveRole,
+        vehicleNumber: user.vehicleNumber || '',
+        profileImage: user.profileImage || null,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Login failed', details: error.message });
+  }
+});
+
+// Auth 5: Native Google Auth
 app.post('/api/auth/google-auth', (req, res) => {
   try {
     const { email, name } = req.body;
@@ -268,21 +608,26 @@ app.post('/api/auth/google-auth', (req, res) => {
 
     const key = email.toLowerCase().trim();
     let existingUser = registeredUsers.get(key);
+    const adminEmails = ['aadhyafuels9@gmail.com', 'admin@extradiesel.in', 'neelaakhilharish@gmail.com', 'akhil.neela@gmail.com'];
+    const isAdmin = adminEmails.includes(key);
 
     if (!existingUser) {
-      // User is logging in with Google for the first time -> Auto-register in database!
       existingUser = {
         name: (name && name.trim()) || key.split('@')[0],
         email: key,
         phone: '',
+        role: isAdmin ? 'admin' : 'customer',
         authProvider: 'google',
         createdAt: new Date().toISOString(),
       };
       registeredUsers.set(key, existingUser);
       saveUsers(registeredUsers);
-      console.log(`[Google Auth] Auto-registered and persisted new user: ${existingUser.name} (${existingUser.email})`);
+      console.log(`[Google Auth] Auto-registered new user: ${existingUser.name} (${existingUser.email}) - Role: ${existingUser.role}`);
     } else {
-      console.log(`[Google Auth] Existing user authenticated: ${existingUser.name} (${existingUser.email})`);
+      if (isAdmin && existingUser.role !== 'admin') {
+        existingUser.role = 'admin';
+        saveUsers(registeredUsers);
+      }
     }
 
     return res.json({
@@ -293,6 +638,8 @@ app.post('/api/auth/google-auth', (req, res) => {
         name: existingUser.name,
         email: existingUser.email,
         phone: existingUser.phone || '',
+        role: existingUser.role || (isAdmin ? 'admin' : 'customer'),
+        vehicleNumber: existingUser.vehicleNumber || '',
         profileImage: existingUser.profileImage || null,
       },
     });
@@ -301,87 +648,7 @@ app.post('/api/auth/google-auth', (req, res) => {
   }
 });
 
-// Orders API: Get orders (filtered by email if provided)
-app.get('/api/orders', (req, res) => {
-  try {
-    const { email } = req.query;
-    const allOrders = loadOrders();
-    if (email) {
-      const userOrders = allOrders.filter(o => o.email && o.email.toLowerCase().trim() === email.toLowerCase().trim());
-      return res.json({ success: true, orders: userOrders });
-    }
-    res.json({ success: true, orders: allOrders });
-  } catch (error) {
-    res.status(500).json({ success: false, error: 'Failed to fetch orders' });
-  }
-});
-
-// Orders API: Create new order (Persisted to disk)
-app.post('/api/orders', (req, res) => {
-  try {
-    const { id, email, name, liters, total, address, status, statusText } = req.body;
-    const newOrder = {
-      id: id || `ED${Date.now().toString().slice(-8)}`,
-      email: email ? email.toLowerCase().trim() : '',
-      name: name || '',
-      date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ' • ' + new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-      liters: Number(liters) || 200,
-      total: Number(total) || 19845.00,
-      status: status || 'out_for_delivery',
-      statusText: statusText || 'Out for Delivery',
-      address: address || 'Plot 42, Hitech City, Hyderabad',
-      createdAt: new Date().toISOString(),
-    };
-
-    const allOrders = loadOrders();
-    allOrders.unshift(newOrder); // newest first
-    saveOrders(allOrders);
-
-    console.log(`[Orders] Created order #${newOrder.id} for ${newOrder.liters}L (${newOrder.email})`);
-    res.json({ success: true, order: newOrder });
-  } catch (error) {
-    res.status(500).json({ success: false, error: 'Failed to create order', details: error.message });
-  }
-});
-
-// Auth 5: Standard Email & Password Login
-app.post('/api/auth/login', (req, res) => {
-  try {
-    const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ success: false, error: 'Email and password are required' });
-    }
-
-    const key = email.toLowerCase().trim();
-    const user = registeredUsers.get(key);
-
-    if (!user) {
-      return res.status(400).json({
-        success: false,
-        error: 'Account not found. Please sign up first.',
-      });
-    }
-
-    if (user.password && user.password !== password) {
-      return res.status(400).json({ success: false, error: 'Incorrect password. Please try again.' });
-    }
-
-    res.json({
-      success: true,
-      message: 'Logged in successfully',
-      user: {
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-        profileImage: user.profileImage || null,
-      },
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, error: 'Login failed', details: error.message });
-  }
-});
-
-// User Profile API 1: Update Profile (Name, Phone, Profile Image Avatar) - Persisted to database
+// User Profile API 1: Update Profile
 app.post('/api/user/profile', (req, res) => {
   try {
     const { email, name, phone, profileImage } = req.body;
@@ -397,6 +664,7 @@ app.post('/api/user/profile', (req, res) => {
         name: (name && name.trim()) || key.split('@')[0],
         email: key,
         phone: phone || '',
+        role: 'customer',
         createdAt: new Date().toISOString(),
       };
     }
@@ -408,7 +676,6 @@ app.post('/api/user/profile', (req, res) => {
 
     registeredUsers.set(key, user);
     saveUsers(registeredUsers);
-    console.log(`[User Profile] Saved updated profile for ${user.email} (Avatar length: ${profileImage ? profileImage.length : 0})`);
 
     res.json({
       success: true,
@@ -417,6 +684,8 @@ app.post('/api/user/profile', (req, res) => {
         name: user.name,
         email: user.email,
         phone: user.phone,
+        role: user.role || 'customer',
+        vehicleNumber: user.vehicleNumber || '',
         profileImage: user.profileImage || null,
       },
     });
@@ -426,7 +695,7 @@ app.post('/api/user/profile', (req, res) => {
   }
 });
 
-// User Profile API 2: Fetch Profile Data by Email
+// User Profile API 2: Fetch Profile Data
 app.get('/api/user/profile', (req, res) => {
   try {
     const { email } = req.query;
@@ -447,6 +716,8 @@ app.get('/api/user/profile', (req, res) => {
         name: user.name,
         email: user.email,
         phone: user.phone || '',
+        role: user.role || 'customer',
+        vehicleNumber: user.vehicleNumber || '',
         profileImage: user.profileImage || null,
       },
     });
@@ -455,19 +726,386 @@ app.get('/api/user/profile', (req, res) => {
   }
 });
 
-// Health Check Endpoint
-app.get('/api/health', (req, res) => {
-  res.json({
-    status: 'online',
-    service: 'Extra Diesel AWS EC2 Backend',
-    region: process.env.AWS_REGION || 'ap-south-1',
-    s3Bucket: S3_BUCKET,
-    razorpayConfigured: !!process.env.RAZORPAY_KEY_ID,
-    timestamp: new Date().toISOString()
-  });
+// -------------------------------------------------------------------------
+// DELIVERY BOYS MANAGEMENT (ADMIN APIS)
+// -------------------------------------------------------------------------
+
+// 1. Get all Delivery Boys with order assignment stats
+app.get('/api/admin/delivery-boys', (req, res) => {
+  try {
+    const allOrders = loadOrders();
+    const deliveryBoys = [];
+
+    registeredUsers.forEach(u => {
+      if (u.role === 'delivery') {
+        const email = u.email.toLowerCase().trim();
+        const assignedCount = allOrders.filter(
+          o => o.assignedTo && o.assignedTo.toLowerCase().trim() === email && o.status !== 'delivered' && o.status !== 'cancelled'
+        ).length;
+        const completedCount = allOrders.filter(
+          o => o.assignedTo && o.assignedTo.toLowerCase().trim() === email && o.status === 'delivered'
+        ).length;
+
+        deliveryBoys.push({
+          id: u.id || `driver_${email}`,
+          name: u.name,
+          email: u.email,
+          phone: u.phone,
+          vehicleNumber: u.vehicleNumber || 'Unassigned Bowser',
+          status: u.status || 'Active',
+          assignedOrdersCount: assignedCount,
+          completedOrdersCount: completedCount,
+          createdAt: u.createdAt,
+        });
+      }
+    });
+
+    res.json({ success: true, deliveryBoys });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to fetch delivery boys', details: error.message });
+  }
 });
 
-// Razorpay 1: Create Order Endpoint
+// 2. Admin Creates New Delivery Boy Credentials
+app.post('/api/admin/delivery-boys', (req, res) => {
+  try {
+    const { name, email, phone, password, vehicleNumber } = req.body;
+    if (!name || !email || !password) {
+      return res.status(400).json({ success: false, error: 'Name, email, and password are required' });
+    }
+
+    const key = email.toLowerCase().trim();
+    const deliveryUser = {
+      name: name.trim(),
+      email: key,
+      phone: phone ? phone.trim() : '',
+      password: password.trim(),
+      vehicleNumber: (vehicleNumber && vehicleNumber.trim()) || 'Bowser TS 09 UB 4521',
+      role: 'delivery',
+      status: 'Active',
+      createdAt: new Date().toISOString(),
+    };
+
+    registeredUsers.set(key, deliveryUser);
+    saveUsers(registeredUsers);
+
+    console.log(`[Admin] Created delivery boy login: ${deliveryUser.name} (${deliveryUser.email})`);
+
+    res.json({
+      success: true,
+      message: 'Delivery boy credentials created successfully',
+      deliveryBoy: {
+        name: deliveryUser.name,
+        email: deliveryUser.email,
+        phone: deliveryUser.phone,
+        vehicleNumber: deliveryUser.vehicleNumber,
+        role: deliveryUser.role,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to create delivery credentials', details: error.message });
+  }
+});
+
+// 3. Admin Deletes / Removes a Delivery Boy
+app.delete('/api/admin/delivery-boys/:email', (req, res) => {
+  try {
+    const { email } = req.params;
+    if (!email) {
+      return res.status(400).json({ success: false, error: 'Email parameter is required' });
+    }
+
+    const key = decodeURIComponent(email).toLowerCase().trim();
+    if (registeredUsers.has(key)) {
+      registeredUsers.delete(key);
+      saveUsers(registeredUsers);
+      console.log(`[Admin] Removed delivery boy: ${key}`);
+      return res.json({ success: true, message: 'Delivery boy removed successfully' });
+    }
+
+    res.status(404).json({ success: false, error: 'Delivery boy not found' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to remove delivery boy', details: error.message });
+  }
+});
+
+// -------------------------------------------------------------------------
+// ORDERS & ASSIGNMENT MANAGEMENT APIS
+// -------------------------------------------------------------------------
+
+// 1. Fetch Orders (All, by customer email, or by assigned delivery boy)
+app.get('/api/orders', (req, res) => {
+  try {
+    const { email, deliveryBoyEmail, all } = req.query;
+    const allOrders = loadOrders();
+
+    if (deliveryBoyEmail) {
+      const driverEmail = deliveryBoyEmail.toLowerCase().trim();
+      const driverOrders = allOrders.filter(
+        o => o.assignedTo && o.assignedTo.toLowerCase().trim() === driverEmail
+      );
+      return res.json({ success: true, orders: driverOrders });
+    }
+
+    if (email && !all) {
+      const userOrders = allOrders.filter(
+        o => o.email && o.email.toLowerCase().trim() === email.toLowerCase().trim()
+      );
+      return res.json({ success: true, orders: userOrders });
+    }
+
+    // Default: return all orders (newest first)
+    res.json({ success: true, orders: allOrders });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to fetch orders' });
+  }
+});
+
+// 2. Create Order (Applies Live Settings & Delivery Tier Charges)
+app.post('/api/orders', (req, res) => {
+  try {
+    const { id, email, name, phone, liters, address, vehicleType, slot } = req.body;
+    currentSettings = loadSettings();
+
+    const orderLiters = Number(liters) || 200;
+    const rate = currentSettings.dieselRate || 94.50;
+    const subtotal = orderLiters * rate;
+
+    // Delivery fee calculated using Admin Global Settings:
+    // 0 - 500L => deliveryChargeUpTo500 (e.g. ₹350)
+    // 500L+    => deliveryChargeAbove500 (e.g. ₹0 / FREE)
+    const deliveryFee = orderLiters <= (currentSettings.tier1MaxLiters || 500)
+      ? currentSettings.deliveryChargeUpTo500
+      : currentSettings.deliveryChargeAbove500;
+
+    const taxRate = (currentSettings.taxRatePercent || 5) / 100;
+    const tax = (subtotal + deliveryFee) * taxRate;
+    const totalAmount = parseFloat((subtotal + deliveryFee + tax).toFixed(2));
+
+    const now = new Date();
+    const formattedDate = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) +
+      ' • ' + now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+    const newOrder = {
+      id: id || `ED${now.getFullYear()}${Math.floor(100000 + Math.random() * 900000)}`,
+      email: email ? email.toLowerCase().trim() : '',
+      name: name || 'Customer',
+      phone: phone || '',
+      date: formattedDate,
+      liters: orderLiters,
+      fuelRate: rate,
+      deliveryFee,
+      tax: parseFloat(tax.toFixed(2)),
+      total: totalAmount,
+      status: 'pending',
+      statusText: 'Order Placed - Pending Confirmation',
+      address: address || 'Plot 42, Hitech City, Hyderabad',
+      vehicleType: vehicleType || 'DG Set',
+      slot: slot || '08:00 AM - 12:00 PM',
+      assignedTo: null,
+      assignedToName: null,
+      vehicleNumber: null,
+      createdAt: now.toISOString(),
+    };
+
+    const allOrders = loadOrders();
+    allOrders.unshift(newOrder);
+    saveOrders(allOrders);
+
+    console.log(`[Orders] New Order #${newOrder.id} for ${newOrder.liters}L (₹${newOrder.total}) placed by ${newOrder.name}`);
+    res.json({ success: true, order: newOrder });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to create order', details: error.message });
+  }
+});
+
+// 3. Assign Order to Delivery Boy (Admin API)
+app.post('/api/admin/orders/assign', (req, res) => {
+  try {
+    const { orderId, deliveryBoyEmail, deliveryBoyName, vehicleNumber } = req.body;
+    if (!orderId || !deliveryBoyEmail) {
+      return res.status(400).json({ success: false, error: 'Order ID and Delivery Boy email are required' });
+    }
+
+    const allOrders = loadOrders();
+    const orderIndex = allOrders.findIndex(o => o.id === orderId);
+
+    if (orderIndex === -1) {
+      return res.status(404).json({ success: false, error: 'Order not found' });
+    }
+
+    allOrders[orderIndex].assignedTo = deliveryBoyEmail.toLowerCase().trim();
+    allOrders[orderIndex].assignedToName = deliveryBoyName || deliveryBoyEmail.split('@')[0];
+    allOrders[orderIndex].vehicleNumber = vehicleNumber || 'Bowser TS 09 UB 4521';
+    allOrders[orderIndex].status = 'assigned';
+    allOrders[orderIndex].statusText = `Assigned to ${allOrders[orderIndex].assignedToName}`;
+    allOrders[orderIndex].assignedAt = new Date().toISOString();
+
+    saveOrders(allOrders);
+    console.log(`[Orders] Assigned order #${orderId} to ${allOrders[orderIndex].assignedToName} (${deliveryBoyEmail})`);
+
+    res.json({ success: true, message: 'Order assigned successfully', order: allOrders[orderIndex] });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to assign order', details: error.message });
+  }
+});
+
+// 4. Update Order Status (Admin or Delivery Boy: Out for Delivery, Delivered, Cancelled)
+app.patch('/api/orders/:id/status', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, statusText } = req.body;
+
+    if (!id || !status) {
+      return res.status(400).json({ success: false, error: 'Order ID and status are required' });
+    }
+
+    const allOrders = loadOrders();
+    const orderIndex = allOrders.findIndex(o => o.id === id);
+
+    if (orderIndex === -1) {
+      return res.status(404).json({ success: false, error: 'Order not found' });
+    }
+
+    const readableStatusMap = {
+      pending: 'Order Placed - Pending Confirmation',
+      assigned: 'Assigned to Delivery Partner',
+      out_for_delivery: 'Out for Delivery (Bowser En Route)',
+      delivered: 'Delivered',
+      cancelled: 'Cancelled',
+    };
+
+    allOrders[orderIndex].status = status;
+    allOrders[orderIndex].statusText = statusText || readableStatusMap[status] || status;
+
+    if (status === 'delivered') {
+      allOrders[orderIndex].deliveredAt = new Date().toISOString();
+    }
+
+    saveOrders(allOrders);
+    console.log(`[Orders] Updated order #${id} status to ${status}`);
+
+    res.json({ success: true, message: 'Order status updated successfully', order: allOrders[orderIndex] });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to update order status', details: error.message });
+  }
+});
+
+// -------------------------------------------------------------------------
+// ADMIN DASHBOARD STATS & CSV EXPORT
+// -------------------------------------------------------------------------
+
+// 1. Dashboard Metrics (Total Earnings, Today's Earnings, Pending & Delivered counts)
+app.get('/api/admin/stats', (req, res) => {
+  try {
+    const allOrders = loadOrders();
+    const today = new Date().toLocaleDateString('en-GB'); // "23/11/2026" or matches date prefix
+
+    let totalEarnings = 0;
+    let todayEarnings = 0;
+    let pendingOrdersCount = 0;
+    let deliveredOrdersCount = 0;
+
+    allOrders.forEach(o => {
+      const orderTotal = Number(o.total) || 0;
+      if (o.status !== 'cancelled') {
+        totalEarnings += orderTotal;
+
+        // Check if created today
+        const orderDateStr = o.createdAt ? new Date(o.createdAt).toLocaleDateString('en-GB') : '';
+        if (orderDateStr === today || (o.date && o.date.includes('Today'))) {
+          todayEarnings += orderTotal;
+        }
+      }
+
+      if (o.status === 'delivered') {
+        deliveredOrdersCount++;
+      } else if (o.status !== 'cancelled') {
+        pendingOrdersCount++;
+      }
+    });
+
+    // Count delivery boys
+    let totalDeliveryBoys = 0;
+    registeredUsers.forEach(u => {
+      if (u.role === 'delivery') totalDeliveryBoys++;
+    });
+
+    res.json({
+      success: true,
+      stats: {
+        totalEarnings: Math.round(totalEarnings),
+        todayEarnings: Math.round(todayEarnings),
+        pendingOrdersCount,
+        deliveredOrdersCount,
+        totalOrdersCount: allOrders.length,
+        totalDeliveryBoys,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to compute dashboard stats', details: error.message });
+  }
+});
+
+// 2. Export All Transactions / Orders as CSV
+app.get('/api/admin/export-transactions', (req, res) => {
+  try {
+    const allOrders = loadOrders();
+
+    const headers = [
+      'Order ID',
+      'Date',
+      'Customer Name',
+      'Customer Email',
+      'Customer Phone',
+      'Liters (L)',
+      'Diesel Rate (Rs/L)',
+      'Delivery Fee (Rs)',
+      'GST Tax (Rs)',
+      'Total Amount (Rs)',
+      'Status',
+      'Assigned Delivery Partner',
+      'Vehicle Number',
+      'Delivery Address',
+    ];
+
+    const escapeCsv = (str) => {
+      if (str === null || str === undefined) return '""';
+      const s = String(str).replace(/"/g, '""');
+      return `"${s}"`;
+    };
+
+    const rows = allOrders.map(o => [
+      escapeCsv(o.id),
+      escapeCsv(o.date),
+      escapeCsv(o.name),
+      escapeCsv(o.email),
+      escapeCsv(o.phone || ''),
+      escapeCsv(o.liters),
+      escapeCsv(o.fuelRate || 94.50),
+      escapeCsv(o.deliveryFee || 0),
+      escapeCsv(o.tax || 0),
+      escapeCsv(o.total),
+      escapeCsv(o.statusText || o.status),
+      escapeCsv(o.assignedToName || 'Unassigned'),
+      escapeCsv(o.vehicleNumber || '-'),
+      escapeCsv(o.address || ''),
+    ].join(','));
+
+    const csvContent = [headers.join(','), ...rows].join('\r\n');
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="ExtraDiesel_Transactions_${new Date().toISOString().slice(0, 10)}.csv"`);
+    res.send(csvContent);
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to export transactions', details: error.message });
+  }
+});
+
+// -------------------------------------------------------------------------
+// RAZORPAY PAYMENT ENDPOINTS
+// -------------------------------------------------------------------------
+
 app.post('/api/payment/create-order', async (req, res) => {
   try {
     const { amount, receipt } = req.body;
@@ -476,7 +1114,7 @@ app.post('/api/payment/create-order', async (req, res) => {
     }
 
     const options = {
-      amount: Math.round(Number(amount) * 100), // amount in paise
+      amount: Math.round(Number(amount) * 100),
       currency: 'INR',
       receipt: receipt || `rcpt_${Date.now()}`
     };
@@ -495,7 +1133,6 @@ app.post('/api/payment/create-order', async (req, res) => {
   }
 });
 
-// Razorpay 2: Verify Payment Signature
 app.post('/api/payment/verify', (req, res) => {
   try {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
@@ -525,7 +1162,10 @@ app.post('/api/payment/verify', (req, res) => {
   }
 });
 
-// S3 Upload Endpoint (Invoices, Receipts & KYB Documents)
+// -------------------------------------------------------------------------
+// AWS S3 UPLOAD & PRESIGNED URLS
+// -------------------------------------------------------------------------
+
 app.post('/api/upload', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
@@ -542,21 +1182,15 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
     });
 
     await s3Client.send(putCommand);
-
     const fileUrl = `https://${S3_BUCKET}.s3.${process.env.AWS_REGION || 'ap-south-1'}.amazonaws.com/${fileKey}`;
 
-    res.json({
-      success: true,
-      fileKey,
-      fileUrl
-    });
+    res.json({ success: true, fileKey, fileUrl });
   } catch (error) {
     console.error('S3 Upload Error:', error);
     res.status(500).json({ error: 'Failed to upload document to AWS S3', details: error.message });
   }
 });
 
-// S3 Presigned URL Download Endpoint
 app.get('/api/files/signed-url', async (req, res) => {
   try {
     const { key } = req.query;
@@ -575,63 +1209,9 @@ app.get('/api/files/signed-url', async (req, res) => {
   }
 });
 
-// In-memory Dynamic Fuel Rate (BS-VI High Speed Diesel)
-let currentFuelRate = {
-  rate: 94.50,
-  currency: 'INR',
-  unit: 'Liter',
-  fuelType: 'BS-VI High Speed Diesel',
-  city: 'Hyderabad',
-  updatedAt: new Date().toISOString(),
-};
-
-// 1. Get Live Fuel Rate API
-app.get('/api/fuel-rate', (req, res) => {
-  res.json({
-    success: true,
-    rate: currentFuelRate.rate,
-    formattedRate: `₹${currentFuelRate.rate.toFixed(2)}`,
-    currency: currentFuelRate.currency,
-    unit: currentFuelRate.unit,
-    fuelType: currentFuelRate.fuelType,
-    city: currentFuelRate.city,
-    updatedAt: currentFuelRate.updatedAt,
-  });
-});
-
-// 2. Admin / Daily Update Fuel Rate API (Increases or Decreases price)
-app.post('/api/fuel-rate', (req, res) => {
-  try {
-    const { rate, city } = req.body;
-    if (!rate || isNaN(Number(rate)) || Number(rate) <= 0) {
-      return res.status(400).json({ success: false, error: 'A valid positive diesel rate is required' });
-    }
-
-    const previousRate = currentFuelRate.rate;
-    currentFuelRate.rate = parseFloat(Number(rate).toFixed(2));
-    if (city) currentFuelRate.city = city;
-    currentFuelRate.updatedAt = new Date().toISOString();
-
-    const change = currentFuelRate.rate - previousRate;
-    const changeText = change === 0 ? 'unchanged' : change > 0 ? `increased by ₹${change.toFixed(2)}` : `decreased by ₹${Math.abs(change).toFixed(2)}`;
-
-    console.log(`[Fuel Rate] Updated: ₹${currentFuelRate.rate}/L (${changeText}) for ${currentFuelRate.city}`);
-
-    res.json({
-      success: true,
-      message: `Diesel price updated successfully (${changeText})`,
-      rate: currentFuelRate.rate,
-      formattedRate: `₹${currentFuelRate.rate.toFixed(2)}`,
-      previousRate,
-      changeText,
-      updatedAt: currentFuelRate.updatedAt,
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, error: 'Failed to update fuel rate', details: error.message });
-  }
-});
-
-// Serve exported React Native Web Build (Full Desktop & Mobile Web)
+// -------------------------------------------------------------------------
+// SERVE EXPORTED REACT NATIVE WEB BUILD
+// -------------------------------------------------------------------------
 const DIST_PATH = path.join(__dirname, '../../mobile-app/dist');
 if (fs.existsSync(DIST_PATH)) {
   console.log(`[Static] Serving web frontend from ${DIST_PATH}`);
@@ -647,5 +1227,5 @@ if (fs.existsSync(DIST_PATH)) {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Extra Diesel AWS Backend running on port ${PORT}`);
   console.log(`📍 S3 Bucket: ${S3_BUCKET} (${process.env.AWS_REGION || 'ap-south-1'})`);
-  console.log(`💳 Razorpay Key ID: ${process.env.RAZORPAY_KEY_ID ? 'Configured' : 'Not Set'}`);
+  console.log(`⛽ Live Rate: ₹${currentSettings.dieselRate}/L | Delivery 0-500L: ₹${currentSettings.deliveryChargeUpTo500}`);
 });

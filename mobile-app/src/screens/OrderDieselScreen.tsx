@@ -19,26 +19,33 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({ onOrderSuc
   const [selectedSlot, setSelectedSlot] = useState<string>('08:00 AM - 12:00 PM');
   const [selectedAddress, setSelectedAddress] = useState<string>('Plot 42, Hitech City, Phase 2, Hyderabad');
   const [ratePerLiter, setRatePerLiter] = useState<number>(94.50);
+  const [deliveryChargeUpTo500, setDeliveryChargeUpTo500] = useState<number>(350);
+  const [deliveryChargeAbove500, setDeliveryChargeAbove500] = useState<number>(0);
+  const [tier1MaxLiters, setTier1MaxLiters] = useState<number>(500);
 
-  // Fetch live dynamic diesel rate from backend
+  // Fetch live settings (Diesel rate + Delivery Tier Charges) from backend
   useEffect(() => {
-    const fetchRate = async () => {
+    const fetchSettings = async () => {
       try {
         const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'https://extradiesel.in';
-        const res = await fetch(`${baseUrl}/api/fuel-rate`);
+        const res = await fetch(`${baseUrl}/api/settings`);
         const data = await res.json();
-        if (data.rate && !isNaN(Number(data.rate))) {
-          setRatePerLiter(Number(data.rate));
+        if (data.success && data.settings) {
+          const s = data.settings;
+          if (s.dieselRate) setRatePerLiter(Number(s.dieselRate));
+          if (s.deliveryChargeUpTo500 !== undefined) setDeliveryChargeUpTo500(Number(s.deliveryChargeUpTo500));
+          if (s.deliveryChargeAbove500 !== undefined) setDeliveryChargeAbove500(Number(s.deliveryChargeAbove500));
+          if (s.tier1MaxLiters !== undefined) setTier1MaxLiters(Number(s.tier1MaxLiters));
         }
       } catch (err) {}
     };
-    fetchRate();
+    fetchSettings();
   }, []);
 
   const subtotal = liters * ratePerLiter;
-  const deliveryFee = liters >= 200 ? 0 : 250;
+  const deliveryFee = liters <= tier1MaxLiters ? deliveryChargeUpTo500 : deliveryChargeAbove500;
   const gstRate = 0.05; // 5%
-  const tax = subtotal * gstRate;
+  const tax = (subtotal + deliveryFee) * gstRate;
   const totalAmount = subtotal + deliveryFee + tax;
 
   const quickQuantities = [100, 200, 500, 1000];
@@ -126,10 +133,17 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({ onOrderSuc
             <Ionicons name="add" size={22} color={COLORS.dark} />
           </TouchableOpacity>
         </View>
-        {liters >= 200 && (
+        {deliveryFee === 0 ? (
           <View style={styles.freeDeliveryBadge}>
             <Ionicons name="checkmark-circle" size={14} color={COLORS.greenDark} />
-            <Text style={styles.freeDeliveryText}>Qualified for FREE Doorstep Delivery!</Text>
+            <Text style={styles.freeDeliveryText}>Qualified for FREE Doorstep Delivery (Above {tier1MaxLiters}L)!</Text>
+          </View>
+        ) : (
+          <View style={[styles.freeDeliveryBadge, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}>
+            <Ionicons name="information-circle" size={14} color="#2563EB" />
+            <Text style={[styles.freeDeliveryText, { color: '#2563EB' }]}>
+              Delivery fee: ₹{deliveryFee} (Orders above {tier1MaxLiters}L get FREE Delivery)
+            </Text>
           </View>
         )}
       </View>

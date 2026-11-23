@@ -25,6 +25,8 @@ import { TrackOrderScreen } from './src/screens/TrackOrderScreen';
 import { MyOrdersScreen } from './src/screens/MyOrdersScreen';
 import { SubscriptionScreen } from './src/screens/SubscriptionScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
+import { AdminScreen } from './src/screens/AdminScreen';
+import { DeliveryDashboardScreen } from './src/screens/DeliveryDashboardScreen';
 import { APP_CONFIG } from './src/constants/config';
 
 export default function App() {
@@ -44,17 +46,36 @@ function MainApp() {
 
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(Platform.OS === 'web');
   const [activeTrackingOrderId, setActiveTrackingOrderId] = useState<string>('ED20261116-8941');
+  const [liveFuelRate, setLiveFuelRate] = useState<number>(94.50);
   const [currentUser, setCurrentUser] = useState<{
     name: string;
     email: string;
     phone: string;
+    role?: string;
+    vehicleNumber?: string;
     profileImage?: string;
   }>({
     name: 'Akhil Kumar',
-    email: 'akhil@extradiesel.com',
+    email: 'aadhyafuels9@gmail.com',
     phone: '+91 98765 43210',
+    role: 'admin',
     profileImage: undefined,
   });
+
+  // Fetch live fuel rate for header
+  useEffect(() => {
+    const fetchRate = async () => {
+      try {
+        const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'https://extradiesel.in';
+        const res = await fetch(`${baseUrl}/api/fuel-rate`);
+        const data = await res.json();
+        if (data.rate && !isNaN(Number(data.rate))) {
+          setLiveFuelRate(Number(data.rate));
+        }
+      } catch (e) {}
+    };
+    fetchRate();
+  }, []);
 
   // Sync fresh profile from database whenever user email or login status changes
   useEffect(() => {
@@ -69,6 +90,8 @@ function MainApp() {
             ...prev,
             name: data.user.name || prev.name,
             phone: data.user.phone || prev.phone,
+            role: data.user.role || prev.role,
+            vehicleNumber: data.user.vehicleNumber || prev.vehicleNumber,
             profileImage: data.user.profileImage || prev.profileImage,
           }));
         }
@@ -158,11 +181,25 @@ function MainApp() {
     }
   };
 
-  // Handle successful login / signup
-  const handleLoginSuccess = (userData: { name: string; email: string; phone: string; profileImage?: string }) => {
+  // Handle successful login / signup (Automatically routes Admin, Delivery Boy, or Customer)
+  const handleLoginSuccess = (userData: {
+    name: string;
+    email: string;
+    phone: string;
+    role?: string;
+    vehicleNumber?: string;
+    profileImage?: string;
+  }) => {
     setCurrentUser((prev) => ({ ...prev, ...userData }));
     setIsLoggedIn(true);
-    setScreenStack(['home']);
+
+    if (userData.role === 'admin') {
+      setScreenStack(['admin']);
+    } else if (userData.role === 'delivery') {
+      setScreenStack(['delivery']);
+    } else {
+      setScreenStack(['home']);
+    }
   };
 
   // Handle guest mode / skip login
@@ -209,13 +246,17 @@ function MainApp() {
         return 'Subscriptions';
       case 'profile':
         return 'My Account';
+      case 'admin':
+        return 'Admin Control Center';
+      case 'delivery':
+        return 'Bowser Delivery Portal';
       default:
         return undefined; // shows brand home bar
     }
   };
 
   const showHeader = currentScreen !== 'splash' && currentScreen !== 'login';
-  const showBottomNav = currentScreen !== 'splash' && currentScreen !== 'login';
+  const showBottomNav = currentScreen !== 'splash' && currentScreen !== 'login' && currentScreen !== 'admin' && currentScreen !== 'delivery';
   // Show header back button whenever there is a previous screen to go back to and we are not on root home
   const showBackBtn = screenStack.length > 1 && currentScreen !== 'home';
 
@@ -240,6 +281,8 @@ function MainApp() {
             title={getHeaderTitle()}
             userName={currentUser.name}
             userAvatar={currentUser.profileImage}
+            userRole={currentUser.role}
+            liveFuelRate={liveFuelRate}
             showBack={showBackBtn}
             onBack={goBack}
             onNotificationPress={() => setShowNotifications(true)}
@@ -303,6 +346,21 @@ function MainApp() {
               onLogout={handleLogout}
               onNavigate={(screen) => navigateTo(screen)}
               onUpdateUser={handleUpdateUser}
+            />
+          )}
+
+          {currentScreen === 'admin' && (
+            <AdminScreen
+              onNavigate={(screen) => navigateTo(screen)}
+              currentUser={currentUser}
+            />
+          )}
+
+          {currentScreen === 'delivery' && (
+            <DeliveryDashboardScreen
+              onNavigate={(screen) => navigateTo(screen)}
+              onLogout={handleLogout}
+              currentUser={currentUser}
             />
           )}
         </View>

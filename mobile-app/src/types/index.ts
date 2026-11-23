@@ -1,4 +1,4 @@
-export type UserRole = 'customer' | 'b2b' | 'manager' | 'admin' | 'driver';
+export type UserRole = 'customer' | 'b2b' | 'manager' | 'admin' | 'delivery' | 'driver';
 
 export interface User {
   id: string;
@@ -8,6 +8,7 @@ export interface User {
   role: UserRole;
   avatar?: string;
   profileImage?: string;
+  vehicleNumber?: string;
   isB2BVerified?: boolean;
   companyName?: string;
   gstin?: string;
@@ -74,4 +75,6 @@ export type ScreenName =
   | 'orders' 
   | 'subscription' 
   | 'profile' 
-  | 'b2b';
+  | 'b2b'
+  | 'admin'
+  | 'delivery';

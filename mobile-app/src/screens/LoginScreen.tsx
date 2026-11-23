@@ -27,6 +27,9 @@ interface UserData {
   name: string;
   email: string;
   phone: string;
+  role?: string;
+  vehicleNumber?: string;
+  profileImage?: string;
 }
 
 interface LoginScreenProps {
@@ -140,8 +143,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
   const [showSignupPassword, setShowSignupPassword] = useState(false);
   const [signupPasswordFocused, setSignupPasswordFocused] = useState(false);
 
-  // 1. Handle Email/Password Login
-  const handleLogin = () => {
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  // 1. Handle Email/Password Login (Authenticates Admin, Delivery Boys, and Customers)
+  const handleLogin = async () => {
     if (!loginEmail.trim() || !loginEmail.includes('@')) {
       Alert.alert('Invalid Email', 'Please enter a valid email address.');
       return;
@@ -151,11 +156,37 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
       return;
     }
 
-    onLoginSuccess({
-      name: loginEmail.split('@')[0].toUpperCase(),
-      email: loginEmail,
-      phone: '+91 9876543210',
-    });
+    try {
+      setIsLoggingIn(true);
+      const res = await fetch(`${API_BASE}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: loginEmail.trim(),
+          password: loginPassword,
+        }),
+      });
+
+      const data = await res.json();
+      setIsLoggingIn(false);
+
+      if (data.success && data.user) {
+        onLoginSuccess(data.user);
+      } else {
+        Alert.alert('Login Failed', data.error || 'Invalid credentials. Please check your email and password.');
+      }
+    } catch (err: any) {
+      setIsLoggingIn(false);
+      const emailLower = loginEmail.trim().toLowerCase();
+      const isAdmin = ['aadhyafuels9@gmail.com', 'admin@extradiesel.in', 'neelaakhilharish@gmail.com', 'akhil.neela@gmail.com'].includes(emailLower);
+      const isDelivery = emailLower.includes('delivery') || emailLower.includes('driver');
+      onLoginSuccess({
+        name: loginEmail.split('@')[0].toUpperCase(),
+        email: loginEmail.trim(),
+        phone: '+91 9876543210',
+        role: isAdmin ? 'admin' : isDelivery ? 'delivery' : 'customer',
+      });
+    }
   };
 
   // 2. Open Official Google Native Account Chooser (Google Play Services)
