@@ -72,7 +72,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onLogout, on
   const saveProfileToDatabase = async (updates: { name?: string; phone?: string; profileImage?: string | null }) => {
     try {
       setIsSaving(true);
-      const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'https://gtmining.xyz';
+      const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'https://extradiesel.in';
       const payload = {
         email: userEmail,
         name: updates.name !== undefined ? updates.name : userName,

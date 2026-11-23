@@ -61,7 +61,7 @@ function MainApp() {
     const syncProfile = async () => {
       try {
         if (!currentUser.email) return;
-        const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'https://gtmining.xyz';
+        const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'https://extradiesel.in';
         const res = await fetch(`${baseUrl}/api/user/profile?email=${encodeURIComponent(currentUser.email)}`);
         const data = await res.json();
         if (data.success && data.user) {

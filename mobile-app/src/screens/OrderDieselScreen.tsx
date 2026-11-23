@@ -24,7 +24,7 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({ onOrderSuc
   useEffect(() => {
     const fetchRate = async () => {
       try {
-        const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'https://gtmining.xyz';
+        const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'https://extradiesel.in';
         const res = await fetch(`${baseUrl}/api/fuel-rate`);
         const data = await res.json();
         if (data.rate && !isNaN(Number(data.rate))) {
@@ -57,7 +57,7 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({ onOrderSuc
     };
 
     try {
-      const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'https://gtmining.xyz';
+      const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'https://extradiesel.in';
       await fetch(`${baseUrl}/api/orders`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

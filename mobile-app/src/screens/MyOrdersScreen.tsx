@@ -31,7 +31,7 @@ export const MyOrdersScreen: React.FC<MyOrdersScreenProps> = ({ onNavigate, onSe
   const fetchOrders = async () => {
     try {
       setIsLoading(true);
-      const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'https://gtmining.xyz';
+      const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'https://extradiesel.in';
       const res = await fetch(`${baseUrl}/api/orders`);
       const data = await res.json();
       if (data.success && Array.isArray(data.orders)) {

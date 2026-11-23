@@ -19,7 +19,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
   useEffect(() => {
     const fetchRate = async () => {
       try {
-        const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'https://gtmining.xyz';
+        const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'https://extradiesel.in';
         const res = await fetch(`${baseUrl}/api/fuel-rate`);
         const data = await res.json();
         if (data.rate && !isNaN(Number(data.rate))) {
