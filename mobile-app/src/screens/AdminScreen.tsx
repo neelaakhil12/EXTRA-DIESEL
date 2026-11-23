@@ -10,6 +10,7 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  Image,
   useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -154,6 +155,9 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
   };
 
   useEffect(() => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      document.title = 'Admin Console | Control Center';
+    }
     loadAdminData();
   }, []);
 
@@ -403,16 +407,12 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
         {/* Brand Area */}
         <View style={styles.sidebarBrand}>
           <View style={styles.brandHeaderTop}>
-            <View style={styles.brandLogoRow}>
-              <View style={styles.flameIconCircle}>
-                <Ionicons name="flame" size={20} color={COLORS.white} />
-              </View>
-              <View>
-                <Text style={styles.brandTitle}>
-                  EXTRA <Text style={{ color: '#FFB300' }}>DIESEL</Text>
-                </Text>
-                <Text style={styles.brandSubtitle}>CONTROL CENTER</Text>
-              </View>
+            <View style={styles.sidebarLogoWrap}>
+              <Image
+                source={require('../../assets/images/logo.png')}
+                style={styles.sidebarLogoImg}
+                resizeMode="contain"
+              />
             </View>
 
             {!isDesktop && (
@@ -1306,33 +1306,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 12,
   },
-  brandLogoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  flameIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: COLORS.primary,
+  sidebarLogoWrap: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  brandTitle: {
-    color: COLORS.white,
-    fontSize: 17,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-  },
-  brandSubtitle: {
-    color: '#64748B',
-    fontSize: 9.5,
-    fontWeight: '700',
-    letterSpacing: 1,
-    marginTop: 1,
+  sidebarLogoImg: {
+    width: 145,
+    height: 42,
   },
   onlineStatusPill: {
     flexDirection: 'row',
