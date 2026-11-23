@@ -88,14 +88,6 @@ const DEFAULT_ACCOUNTS = [
     role: 'admin',
     createdAt: new Date().toISOString(),
   },
-  {
-    name: 'Extra Diesel Admin',
-    email: 'admin@extradiesel.in',
-    phone: '+91 9876543210',
-    password: 'admin123',
-    role: 'admin',
-    createdAt: new Date().toISOString(),
-  },
 ];
 
 // Helper to load persistent users from disk
@@ -520,7 +512,7 @@ app.post('/api/auth/register', (req, res) => {
     }
 
     const key = email.toLowerCase().trim();
-    const isAdminEmail = ['aadhyafuels9@gmail.com', 'admin@extradiesel.in', 'neelaakhilharish@gmail.com', 'akhil.neela@gmail.com'].includes(key);
+    const isAdminEmail = ['aadhyafuels9@gmail.com'].includes(key);
 
     const user = {
       name: name.trim(),
@@ -562,7 +554,7 @@ app.post('/api/auth/login', (req, res) => {
     const key = email.toLowerCase().trim();
     let user = registeredUsers.get(key);
 
-    const adminEmails = ['aadhyafuels9@gmail.com', 'admin@extradiesel.in', 'neelaakhilharish@gmail.com', 'akhil.neela@gmail.com'];
+    const adminEmails = ['aadhyafuels9@gmail.com'];
 
     if (!user) {
       // If logging in as admin with default admin password
@@ -631,7 +623,7 @@ app.post('/api/admin/login', (req, res) => {
     }
 
     const key = email.toLowerCase().trim();
-    const authorizedAdminEmails = ['aadhyafuels9@gmail.com', 'admin@extradiesel.in'];
+    const authorizedAdminEmails = ['aadhyafuels9@gmail.com'];
 
     if (!authorizedAdminEmails.includes(key)) {
       return res.status(403).json({
@@ -684,7 +676,7 @@ app.post('/api/admin/forgot-password', async (req, res) => {
     }
 
     const key = email.toLowerCase().trim();
-    const authorizedAdminEmails = ['aadhyafuels9@gmail.com', 'admin@extradiesel.in'];
+    const authorizedAdminEmails = ['aadhyafuels9@gmail.com'];
 
     if (!authorizedAdminEmails.includes(key)) {
       return res.status(403).json({
@@ -775,7 +767,7 @@ app.post('/api/auth/google-auth', (req, res) => {
 
     const key = email.toLowerCase().trim();
     let existingUser = registeredUsers.get(key);
-    const adminEmails = ['admin@extradiesel.in'];
+    const adminEmails = ['aadhyafuels9@gmail.com'];
     const isAdmin = adminEmails.includes(key);
 
     if (!existingUser) {

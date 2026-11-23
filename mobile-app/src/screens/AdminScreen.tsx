@@ -134,8 +134,7 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       return (
         sessionStorage.getItem('ed_admin_authenticated') === 'true' ||
-        currentUser?.email?.toLowerCase().trim() === 'aadhyafuels9@gmail.com' ||
-        currentUser?.email?.toLowerCase().trim() === 'admin@extradiesel.in'
+        currentUser?.email?.toLowerCase().trim() === 'aadhyafuels9@gmail.com'
       );
     }
     return false;
@@ -238,7 +237,7 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
   const handleAdminLogin = async () => {
     setAdminLoginError('');
     const emailKey = adminLoginEmail.toLowerCase().trim();
-    const authorizedAdminEmails = ['aadhyafuels9@gmail.com', 'admin@extradiesel.in'];
+    const authorizedAdminEmails = ['aadhyafuels9@gmail.com'];
 
     if (!authorizedAdminEmails.includes(emailKey)) {
       setAdminLoginError('Not an admin. This email is not authorized to access the Admin Control Center.');
@@ -287,7 +286,7 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
   const handleSendAdminOtp = async () => {
     setForgotStatusMsg('');
     const emailKey = forgotEmail.toLowerCase().trim();
-    const authorizedAdminEmails = ['aadhyafuels9@gmail.com', 'admin@extradiesel.in'];
+    const authorizedAdminEmails = ['aadhyafuels9@gmail.com'];
 
     if (!authorizedAdminEmails.includes(emailKey)) {
       setForgotStatusMsg('Not an admin. This email is not authorized for password reset.');
@@ -495,7 +494,7 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
               if (data.success) {
                 loadAdminData();
               }
-            } catch (e) {}
+            } catch (e) { }
           },
         },
       ]
@@ -556,8 +555,8 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
       orderStatusFilter === 'all'
         ? true
         : orderStatusFilter === 'pending'
-        ? o.status === 'pending' || o.status === 'assigned'
-        : o.status === orderStatusFilter;
+          ? o.status === 'pending' || o.status === 'assigned'
+          : o.status === orderStatusFilter;
 
     const query = orderSearchQuery.toLowerCase().trim();
     const matchesSearch =
@@ -1176,10 +1175,10 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
                         {st === 'all'
                           ? 'All Orders'
                           : st === 'pending'
-                          ? 'Pending & Assigned'
-                          : st === 'out_for_delivery'
-                          ? 'En Route'
-                          : 'Delivered'}
+                            ? 'Pending & Assigned'
+                            : st === 'out_for_delivery'
+                              ? 'En Route'
+                              : 'Delivered'}
                       </Text>
                     </TouchableOpacity>
                   ))}

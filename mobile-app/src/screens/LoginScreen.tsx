@@ -178,7 +178,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
     } catch (err: any) {
       setIsLoggingIn(false);
       const emailLower = loginEmail.trim().toLowerCase();
-      const isAdmin = ['admin@extradiesel.in'].includes(emailLower);
+      const isAdmin = ['aadhyafuels9@gmail.com'].includes(emailLower);
       const isDelivery = emailLower.includes('delivery') || emailLower.includes('driver');
       onLoginSuccess({
         name: loginEmail.split('@')[0].toUpperCase(),
