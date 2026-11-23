@@ -38,10 +38,38 @@ export default function App() {
 }
 
 function MainApp() {
-  // Navigation stack: On Web starts at 'home' like real websites, on Mobile App starts at 'splash'
-  const [screenStack, setScreenStack] = useState<ScreenName[]>(
-    Platform.OS === 'web' ? ['home'] : ['splash']
-  );
+  // Determine initial screen based on Web URL path (e.g. /admin -> 'admin', /delivery -> 'delivery')
+  const getInitialScreen = (): ScreenName => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const path = (window.location.pathname || '').toLowerCase().replace(/\/+$/, '');
+      if (path === '/admin' || path.startsWith('/admin')) {
+        return 'admin';
+      }
+      if (path === '/delivery' || path.startsWith('/delivery')) {
+        return 'delivery';
+      }
+      if (path === '/orders' || path.startsWith('/orders')) {
+        return 'orders';
+      }
+      if (path === '/order' || path.startsWith('/order')) {
+        return 'order';
+      }
+      if (path === '/track' || path.startsWith('/track')) {
+        return 'track';
+      }
+      if (path === '/profile' || path.startsWith('/profile')) {
+        return 'profile';
+      }
+      if (path === '/login' || path.startsWith('/login')) {
+        return 'login';
+      }
+      return 'home';
+    }
+    return 'splash';
+  };
+
+  // Navigation stack: Web supports direct URL routes like domain/admin, mobile starts at splash
+  const [screenStack, setScreenStack] = useState<ScreenName[]>([getInitialScreen()]);
   const currentScreen = screenStack[screenStack.length - 1];
 
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(Platform.OS === 'web');
@@ -159,18 +187,39 @@ function MainApp() {
     return () => backSubscription.remove();
   }, [screenStack, currentScreen]);
 
-  // Web Browser Back Button Compatibility
+  // Web Browser URL synchronization (Keeps address bar in sync: /admin, /orders, /delivery, etc.)
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const targetPath = currentScreen === 'home' ? '/' : `/${currentScreen}`;
+      if (window.location.pathname !== targetPath) {
+        window.history.pushState(null, '', targetPath);
+      }
+    }
+  }, [currentScreen]);
+
+  // Web Browser Back & Forward URL Navigation
   useEffect(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       const handlePopState = () => {
-        if (screenStack.length > 1) {
-          setScreenStack((prev) => (prev.length > 1 ? prev.slice(0, -1) : prev));
-        }
+        const path = (window.location.pathname || '').toLowerCase().replace(/\/+$/, '');
+        let targetScreen: ScreenName = 'home';
+        if (path === '/admin' || path.startsWith('/admin')) targetScreen = 'admin';
+        else if (path === '/delivery' || path.startsWith('/delivery')) targetScreen = 'delivery';
+        else if (path === '/orders' || path.startsWith('/orders')) targetScreen = 'orders';
+        else if (path === '/order' || path.startsWith('/order')) targetScreen = 'order';
+        else if (path === '/track' || path.startsWith('/track')) targetScreen = 'track';
+        else if (path === '/profile' || path.startsWith('/profile')) targetScreen = 'profile';
+        else if (path === '/login' || path.startsWith('/login')) targetScreen = 'login';
+
+        setScreenStack((prev) => {
+          if (prev[prev.length - 1] === targetScreen) return prev;
+          return [...prev, targetScreen];
+        });
       };
       window.addEventListener('popstate', handlePopState);
       return () => window.removeEventListener('popstate', handlePopState);
     }
-  }, [screenStack]);
+  }, []);
 
   // Handle splash completion (revealed Login button pressed)
   const handleGetStarted = () => {
