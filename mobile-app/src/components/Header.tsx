@@ -111,7 +111,7 @@ export const Header: React.FC<HeaderProps> = ({
                 >
                   <Ionicons
                     name={link.icon}
-                    size={17}
+                    size={19}
                     color={isActive ? COLORS.primary : '#475569'}
                   />
                   <Text style={[styles.desktopNavLinkText, isActive && styles.desktopNavLinkTextActive]}>
@@ -493,15 +493,15 @@ const styles = StyleSheet.create({
     zIndex: 100,
   },
   desktopNavInner: {
-    maxWidth: 1240,
+    maxWidth: 1440,
     width: '100%',
     marginHorizontal: 'auto' as any,
     alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    paddingVertical: 14,
+    paddingHorizontal: 28,
+    paddingVertical: 18,
   },
   desktopBrandWrap: {
     flexDirection: 'row',
@@ -509,28 +509,28 @@ const styles = StyleSheet.create({
     cursor: 'pointer' as any,
   },
   desktopBrandLogoImage: {
-    width: 145,
-    height: 46,
+    width: 220,
+    height: 62,
   },
   desktopNavLinks: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
   desktopNavLink: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 10,
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
   },
   desktopNavLinkActive: {
     backgroundColor: '#FEE2E2',
   },
   desktopNavLinkText: {
-    fontSize: 13.5,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
     color: '#475569',
   },
   desktopNavLinkTextActive: {
@@ -540,32 +540,32 @@ const styles = StyleSheet.create({
   desktopRightActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: 16,
   },
   desktopLocationPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
+    gap: 8,
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
   },
   desktopLocationLabel: {
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: '700',
     color: '#64748B',
     textTransform: 'uppercase',
   },
   desktopLocationVal: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
     color: '#0F172A',
   },
   desktopLocationChangeText: {
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: '700',
     color: COLORS.primary,
     marginLeft: 4,
@@ -576,24 +576,24 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEF3C7',
     borderWidth: 1,
     borderColor: '#FDE68A',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 20,
-    gap: 6,
+    gap: 7,
   },
   livePulseDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: '#D97706',
   },
   desktopRateLabel: {
-    fontSize: 11.5,
+    fontSize: 12,
     fontWeight: '600',
     color: '#92400E',
   },
   desktopRatePrice: {
-    fontSize: 12.5,
+    fontSize: 13.5,
     fontWeight: '800',
     color: '#78350F',
   },
@@ -633,28 +633,28 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   desktopUserAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
   },
   desktopUserAvatarFallback: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: '#0F172A',
     justifyContent: 'center',
     alignItems: 'center',
   },
   desktopAvatarInitials: {
     color: COLORS.white,
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '800',
   },
   desktopUserNameWrap: {
-    maxWidth: 120,
+    maxWidth: 130,
   },
   desktopUserName: {
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: '700',
     color: COLORS.dark,
   },
