@@ -131,29 +131,6 @@ export const Header: React.FC<HeaderProps> = ({
               <Text style={styles.desktopRatePrice}>₹{liveFuelRate.toFixed(2)}/L</Text>
             </View>
 
-            {/* Admin or Delivery Quick Switcher Button */}
-            {userRole === 'admin' && (
-              <TouchableOpacity
-                onPress={() => onNavigate?.('admin')}
-                style={[styles.roleQuickPill, { backgroundColor: '#0F172A' }]}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="shield" size={13} color="#FFFFFF" />
-                <Text style={styles.roleQuickPillText}>Admin Panel</Text>
-              </TouchableOpacity>
-            )}
-
-            {userRole === 'delivery' && (
-              <TouchableOpacity
-                onPress={() => onNavigate?.('delivery')}
-                style={[styles.roleQuickPill, { backgroundColor: '#059669' }]}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="bicycle" size={13} color="#FFFFFF" />
-                <Text style={styles.roleQuickPillText}>Bowser Dashboard</Text>
-              </TouchableOpacity>
-            )}
-
             {/* Notification Bell */}
             <TouchableOpacity
               onPress={onNotificationPress}
@@ -293,30 +270,10 @@ export const Header: React.FC<HeaderProps> = ({
           </Text>
         </View>
 
-        {userRole === 'admin' ? (
-          <TouchableOpacity
-            style={[styles.complianceTag, { backgroundColor: '#0F172A' }]}
-            onPress={() => onNavigate?.('admin')}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="shield" size={12} color="#FFFFFF" />
-            <Text style={[styles.complianceText, { color: '#FFFFFF' }]}>Admin Control</Text>
-          </TouchableOpacity>
-        ) : userRole === 'delivery' ? (
-          <TouchableOpacity
-            style={[styles.complianceTag, { backgroundColor: '#059669' }]}
-            onPress={() => onNavigate?.('delivery')}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="bicycle" size={12} color="#FFFFFF" />
-            <Text style={[styles.complianceText, { color: '#FFFFFF' }]}>Bowser Driver</Text>
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.complianceTag}>
-            <Ionicons name="shield-checkmark" size={12} color={COLORS.greenDark} />
-            <Text style={styles.complianceText}>PESO Certified Bowser</Text>
-          </View>
-        )}
+        <View style={styles.complianceTag}>
+          <Ionicons name="shield-checkmark" size={12} color={COLORS.greenDark} />
+          <Text style={styles.complianceText}>PESO Certified Bowser</Text>
+        </View>
       </View>
     </View>
   );

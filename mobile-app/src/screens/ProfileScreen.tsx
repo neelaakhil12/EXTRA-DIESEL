@@ -265,50 +265,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onLogout, on
         </View>
       </TouchableOpacity>
 
-      {/* Admin Portal Quick Access */}
-      {user?.role === 'admin' && (
-        <TouchableOpacity
-          style={styles.adminPortalCard}
-          onPress={() => onNavigate('admin')}
-          activeOpacity={0.85}
-        >
-          <View style={styles.adminPortalLeft}>
-            <View style={styles.adminShieldIcon}>
-              <Ionicons name="shield" size={22} color="#FFFFFF" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.adminPortalTitle}>Admin Control Center</Text>
-              <Text style={styles.adminPortalSub}>
-                Manage Diesel Prices, Delivery Fees, Orders & Delivery Boys
-              </Text>
-            </View>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
-        </TouchableOpacity>
-      )}
-
-      {/* Delivery Bowser Portal Quick Access */}
-      {user?.role === 'delivery' && (
-        <TouchableOpacity
-          style={[styles.adminPortalCard, { backgroundColor: '#059669' }]}
-          onPress={() => onNavigate('delivery')}
-          activeOpacity={0.85}
-        >
-          <View style={styles.adminPortalLeft}>
-            <View style={[styles.adminShieldIcon, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
-              <Ionicons name="bicycle" size={22} color="#FFFFFF" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.adminPortalTitle}>Bowser Delivery Portal</Text>
-              <Text style={styles.adminPortalSub}>
-                View Assigned Orders & Update Delivery Status
-              </Text>
-            </View>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
-        </TouchableOpacity>
-      )}
-
       {/* Menu List */}
       <View style={styles.menuCard}>
         {menuItems.map((item, index) => (

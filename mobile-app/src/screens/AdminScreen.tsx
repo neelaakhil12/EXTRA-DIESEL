@@ -61,11 +61,14 @@ interface DeliveryBoy {
   completedOrdersCount: number;
 }
 
+type TabType = 'dashboard' | 'orders' | 'delivery' | 'settings';
+
 export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUser }) => {
   const { width } = useWindowDimensions();
-  const isDesktop = Platform.OS === 'web' && width >= 768;
+  const isDesktop = Platform.OS === 'web' && width >= 860;
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'orders' | 'delivery' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<TabType>('dashboard');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
 
@@ -368,6 +371,19 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
     }
   };
 
+  const getTabTitle = () => {
+    switch (activeTab) {
+      case 'dashboard':
+        return 'Executive Dashboard';
+      case 'orders':
+        return 'Orders & Fleet Assignments';
+      case 'delivery':
+        return 'Bowser Delivery Fleet';
+      case 'settings':
+        return 'Global Pricing & Delivery Settings';
+    }
+  };
+
   if (loading && !refreshing) {
     return (
       <View style={styles.centerLoading}>
@@ -378,699 +394,752 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
   }
 
   return (
-    <View style={styles.container}>
-      {/* Admin Top Header Bar */}
-      <View style={styles.adminHeader}>
-        <View style={styles.headerLeft}>
-          <View style={styles.adminBadge}>
-            <Ionicons name="shield" size={14} color={COLORS.white} />
-            <Text style={styles.adminBadgeText}>ADMIN PORTAL</Text>
+    <View style={[styles.container, isDesktop ? styles.desktopRow : styles.mobileColumn]}>
+      {/* =========================================================================
+          LEFT SIDEBAR (Dedicated Desktop Sidebar or Mobile Header Drawer)
+      ========================================================================== */}
+      <View style={[styles.sidebar, !isDesktop && styles.mobileSidebar]}>
+        {/* Brand Area */}
+        <View style={styles.sidebarBrand}>
+          <View style={styles.brandLogoRow}>
+            <View style={styles.flameIconCircle}>
+              <Ionicons name="flame" size={20} color={COLORS.white} />
+            </View>
+            <View>
+              <Text style={styles.brandTitle}>
+                EXTRA <Text style={{ color: '#FFB300' }}>DIESEL</Text>
+              </Text>
+              <Text style={styles.brandSubtitle}>CONTROL CENTER</Text>
+            </View>
           </View>
-          <Text style={styles.adminTitle}>Extra Diesel Control Center</Text>
+
+          {/* Online System Status */}
+          <View style={styles.onlineStatusPill}>
+            <View style={styles.onlineDot} />
+            <Text style={styles.onlineStatusText}>SYSTEM ONLINE</Text>
+          </View>
+
+          {!isDesktop && (
+            <TouchableOpacity
+              style={styles.mobileMenuToggle}
+              onPress={() => setMobileMenuOpen(!mobileMenuOpen)}
+            >
+              <Ionicons name={mobileMenuOpen ? 'close' : 'menu'} size={24} color={COLORS.white} />
+            </TouchableOpacity>
+          )}
         </View>
 
-        <View style={styles.headerRight}>
+        {/* Sidebar Navigation Items */}
+        <View style={[styles.sidebarNav, !isDesktop && !mobileMenuOpen && styles.hiddenMobileNav]}>
+          <Text style={styles.navSectionLabel}>NAVIGATION MENU</Text>
+
+          {/* Item 1: Dashboard */}
           <TouchableOpacity
-            style={styles.customerViewBtn}
-            onPress={() => onNavigate('home')}
+            style={[styles.sidebarNavItem, activeTab === 'dashboard' && styles.sidebarNavItemActive]}
+            onPress={() => {
+              setActiveTab('dashboard');
+              setMobileMenuOpen(false);
+            }}
             activeOpacity={0.8}
           >
-            <Ionicons name="storefront-outline" size={16} color={COLORS.dark} />
-            <Text style={styles.customerViewText}>Store View</Text>
+            <Ionicons
+              name={activeTab === 'dashboard' ? 'grid' : 'grid-outline'}
+              size={19}
+              color={activeTab === 'dashboard' ? COLORS.white : '#94A3B8'}
+            />
+            <Text style={[styles.sidebarNavText, activeTab === 'dashboard' && styles.sidebarNavTextActive]}>
+              Dashboard
+            </Text>
           </TouchableOpacity>
 
+          {/* Item 2: Orders */}
           <TouchableOpacity
-            style={styles.refreshBtn}
-            onPress={loadAdminData}
-            activeOpacity={0.7}
+            style={[styles.sidebarNavItem, activeTab === 'orders' && styles.sidebarNavItemActive]}
+            onPress={() => {
+              setActiveTab('orders');
+              setMobileMenuOpen(false);
+            }}
+            activeOpacity={0.8}
           >
-            <Ionicons name="reload" size={18} color={COLORS.primary} />
+            <Ionicons
+              name={activeTab === 'orders' ? 'receipt' : 'receipt-outline'}
+              size={19}
+              color={activeTab === 'orders' ? COLORS.white : '#94A3B8'}
+            />
+            <Text style={[styles.sidebarNavText, activeTab === 'orders' && styles.sidebarNavTextActive]}>
+              Orders Management
+            </Text>
+            <View style={styles.sidebarBadge}>
+              <Text style={styles.sidebarBadgeText}>{orders.length}</Text>
+            </View>
           </TouchableOpacity>
+
+          {/* Item 3: Delivery Boys */}
+          <TouchableOpacity
+            style={[styles.sidebarNavItem, activeTab === 'delivery' && styles.sidebarNavItemActive]}
+            onPress={() => {
+              setActiveTab('delivery');
+              setMobileMenuOpen(false);
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name={activeTab === 'delivery' ? 'bicycle' : 'bicycle-outline'}
+              size={19}
+              color={activeTab === 'delivery' ? COLORS.white : '#94A3B8'}
+            />
+            <Text style={[styles.sidebarNavText, activeTab === 'delivery' && styles.sidebarNavTextActive]}>
+              Delivery Fleet
+            </Text>
+            <View style={[styles.sidebarBadge, { backgroundColor: '#059669' }]}>
+              <Text style={styles.sidebarBadgeText}>{deliveryBoys.length}</Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Item 4: Global Settings */}
+          <TouchableOpacity
+            style={[styles.sidebarNavItem, activeTab === 'settings' && styles.sidebarNavItemActive]}
+            onPress={() => {
+              setActiveTab('settings');
+              setMobileMenuOpen(false);
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name={activeTab === 'settings' ? 'settings-sharp' : 'settings-outline'}
+              size={19}
+              color={activeTab === 'settings' ? COLORS.white : '#94A3B8'}
+            />
+            <Text style={[styles.sidebarNavText, activeTab === 'settings' && styles.sidebarNavTextActive]}>
+              Global Settings
+            </Text>
+          </TouchableOpacity>
+
+          {/* Sidebar Footer (Desktop only) */}
+          {isDesktop && (
+            <View style={styles.sidebarFooter}>
+              {/* Go to Live Website link */}
+              <TouchableOpacity
+                style={styles.visitSiteBtn}
+                onPress={() => onNavigate('home')}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="globe-outline" size={16} color="#94A3B8" />
+                <Text style={styles.visitSiteText}>View Live Website</Text>
+                <Ionicons name="arrow-forward" size={14} color="#64748B" />
+              </TouchableOpacity>
+
+              {/* Admin Profile Details */}
+              <View style={styles.adminUserBox}>
+                <View style={styles.adminAvatarCircle}>
+                  <Text style={styles.adminAvatarText}>AD</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.adminUserName} numberOfLines={1}>
+                    {currentUser?.name || 'Administrator'}
+                  </Text>
+                  <Text style={styles.adminUserRole}>Super Admin</Text>
+                </View>
+              </View>
+            </View>
+          )}
         </View>
       </View>
 
-      {/* Navigation Tabs Bar */}
-      <View style={styles.tabsContainer}>
-        <TouchableOpacity
-          style={[styles.tabBtn, activeTab === 'dashboard' && styles.tabBtnActive]}
-          onPress={() => setActiveTab('dashboard')}
-        >
-          <Ionicons
-            name="pie-chart"
-            size={18}
-            color={activeTab === 'dashboard' ? COLORS.primary : COLORS.muted}
-          />
-          <Text style={[styles.tabBtnText, activeTab === 'dashboard' && styles.tabBtnTextActive]}>
-            Dashboard
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tabBtn, activeTab === 'orders' && styles.tabBtnActive]}
-          onPress={() => setActiveTab('orders')}
-        >
-          <Ionicons
-            name="receipt"
-            size={18}
-            color={activeTab === 'orders' ? COLORS.primary : COLORS.muted}
-          />
-          <Text style={[styles.tabBtnText, activeTab === 'orders' && styles.tabBtnTextActive]}>
-            Orders ({orders.length})
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tabBtn, activeTab === 'delivery' && styles.tabBtnActive]}
-          onPress={() => setActiveTab('delivery')}
-        >
-          <Ionicons
-            name="bicycle"
-            size={18}
-            color={activeTab === 'delivery' ? COLORS.primary : COLORS.muted}
-          />
-          <Text style={[styles.tabBtnText, activeTab === 'delivery' && styles.tabBtnTextActive]}>
-            Delivery Boys ({deliveryBoys.length})
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tabBtn, activeTab === 'settings' && styles.tabBtnActive]}
-          onPress={() => setActiveTab('settings')}
-        >
-          <Ionicons
-            name="options"
-            size={18}
-            color={activeTab === 'settings' ? COLORS.primary : COLORS.muted}
-          />
-          <Text style={[styles.tabBtnText, activeTab === 'settings' && styles.tabBtnTextActive]}>
-            Global Settings
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Main Tab Content */}
-      <ScrollView
-        style={styles.scrollArea}
-        contentContainerStyle={[styles.contentContainer, isDesktop && styles.desktopContainer]}
-      >
-        {/* =========================================================================
-            TAB 1: DASHBOARD
-        ========================================================================== */}
-        {activeTab === 'dashboard' && (
+      {/* =========================================================================
+          RIGHT MAIN CONTENT AREA
+      ========================================================================== */}
+      <View style={styles.mainContent}>
+        {/* Top Navbar */}
+        <View style={styles.topNavbar}>
           <View>
-            {/* Top Metrics Cards Row */}
-            <View style={styles.metricsGrid}>
-              {/* Card 1: Total Earnings */}
-              <View style={[styles.metricCard, { borderLeftColor: '#059669', borderLeftWidth: 4 }]}>
-                <View style={styles.metricCardTop}>
-                  <Text style={styles.metricLabel}>Total Revenue</Text>
-                  <View style={[styles.metricIconWrap, { backgroundColor: '#ECFDF5' }]}>
-                    <Ionicons name="cash" size={20} color="#059669" />
-                  </View>
-                </View>
-                <Text style={styles.metricValue}>₹{stats.totalEarnings.toLocaleString('en-IN')}</Text>
-                <Text style={styles.metricSub}>From all confirmed deliveries</Text>
-              </View>
+            <Text style={styles.topNavbarBreadcrumb}>ADMIN CONSOLE / {activeTab.toUpperCase()}</Text>
+            <Text style={styles.topNavbarTitle}>{getTabTitle()}</Text>
+          </View>
 
-              {/* Card 2: Today's Earnings */}
-              <View style={[styles.metricCard, { borderLeftColor: COLORS.secondary, borderLeftWidth: 4 }]}>
-                <View style={styles.metricCardTop}>
-                  <Text style={styles.metricLabel}>Today's Earnings</Text>
-                  <View style={[styles.metricIconWrap, { backgroundColor: '#FEF3C7' }]}>
-                    <Ionicons name="trending-up" size={20} color="#D97706" />
-                  </View>
-                </View>
-                <Text style={styles.metricValue}>₹{stats.todayEarnings.toLocaleString('en-IN')}</Text>
-                <Text style={styles.metricSub}>Gross revenue for today</Text>
-              </View>
-
-              {/* Card 3: Pending Orders */}
-              <View style={[styles.metricCard, { borderLeftColor: COLORS.primary, borderLeftWidth: 4 }]}>
-                <View style={styles.metricCardTop}>
-                  <Text style={styles.metricLabel}>Pending Deliveries</Text>
-                  <View style={[styles.metricIconWrap, { backgroundColor: '#FEF2F2' }]}>
-                    <Ionicons name="time" size={20} color={COLORS.primary} />
-                  </View>
-                </View>
-                <Text style={styles.metricValue}>{stats.pendingOrdersCount}</Text>
-                <Text style={styles.metricSub}>Awaiting / en route bowsers</Text>
-              </View>
-
-              {/* Card 4: Delivered Orders */}
-              <View style={[styles.metricCard, { borderLeftColor: '#2563EB', borderLeftWidth: 4 }]}>
-                <View style={styles.metricCardTop}>
-                  <Text style={styles.metricLabel}>Completed Orders</Text>
-                  <View style={[styles.metricIconWrap, { backgroundColor: '#EFF6FF' }]}>
-                    <Ionicons name="checkmark-done" size={20} color="#2563EB" />
-                  </View>
-                </View>
-                <Text style={styles.metricValue}>{stats.deliveredOrdersCount}</Text>
-                <Text style={styles.metricSub}>Successfully delivered</Text>
-              </View>
+          <View style={styles.topNavbarActions}>
+            {/* Live Diesel Rate Pill */}
+            <View style={styles.topRatePill}>
+              <View style={styles.topRatePulse} />
+              <Text style={styles.topRateText}>₹{dieselRateInput}/L ({rateCityInput})</Text>
             </View>
 
-            {/* Actions & Export Row */}
-            <View style={styles.exportRow}>
-              <View>
-                <Text style={styles.sectionTitle}>Financial & Order Transactions</Text>
-                <Text style={styles.sectionSub}>Download complete order records, client billings & delivery details.</Text>
+            {/* Quick Export CSV Button */}
+            <TouchableOpacity style={styles.topActionBtn} onPress={handleExportCsv} activeOpacity={0.8}>
+              <Ionicons name="download-outline" size={16} color={COLORS.white} />
+              <Text style={styles.topActionBtnText}>Export CSV</Text>
+            </TouchableOpacity>
+
+            {/* Refresh Button */}
+            <TouchableOpacity style={styles.topRefreshBtn} onPress={loadAdminData} activeOpacity={0.8}>
+              <Ionicons name="reload" size={16} color="#475569" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Scrollable Body */}
+        <ScrollView style={styles.bodyScroll} contentContainerStyle={styles.bodyScrollContent}>
+          {/* =========================================================================
+              TAB 1: DASHBOARD
+          ========================================================================== */}
+          {activeTab === 'dashboard' && (
+            <View>
+              {/* Metrics Grid */}
+              <View style={styles.metricsGrid}>
+                {/* Metric 1 */}
+                <View style={[styles.metricCard, { borderTopColor: '#059669', borderTopWidth: 4 }]}>
+                  <View style={styles.metricCardTop}>
+                    <Text style={styles.metricLabel}>Total Revenue</Text>
+                    <View style={[styles.metricIconWrap, { backgroundColor: '#ECFDF5' }]}>
+                      <Ionicons name="cash" size={20} color="#059669" />
+                    </View>
+                  </View>
+                  <Text style={styles.metricValue}>₹{stats.totalEarnings.toLocaleString('en-IN')}</Text>
+                  <Text style={styles.metricSub}>Gross confirmed order volume</Text>
+                </View>
+
+                {/* Metric 2 */}
+                <View style={[styles.metricCard, { borderTopColor: '#D97706', borderTopWidth: 4 }]}>
+                  <View style={styles.metricCardTop}>
+                    <Text style={styles.metricLabel}>Today's Earnings</Text>
+                    <View style={[styles.metricIconWrap, { backgroundColor: '#FEF3C7' }]}>
+                      <Ionicons name="trending-up" size={20} color="#D97706" />
+                    </View>
+                  </View>
+                  <Text style={styles.metricValue}>₹{stats.todayEarnings.toLocaleString('en-IN')}</Text>
+                  <Text style={styles.metricSub}>Recorded for today</Text>
+                </View>
+
+                {/* Metric 3 */}
+                <View style={[styles.metricCard, { borderTopColor: COLORS.primary, borderTopWidth: 4 }]}>
+                  <View style={styles.metricCardTop}>
+                    <Text style={styles.metricLabel}>Pending Deliveries</Text>
+                    <View style={[styles.metricIconWrap, { backgroundColor: '#FEF2F2' }]}>
+                      <Ionicons name="time" size={20} color={COLORS.primary} />
+                    </View>
+                  </View>
+                  <Text style={styles.metricValue}>{stats.pendingOrdersCount}</Text>
+                  <Text style={styles.metricSub}>Awaiting / en route bowsers</Text>
+                </View>
+
+                {/* Metric 4 */}
+                <View style={[styles.metricCard, { borderTopColor: '#2563EB', borderTopWidth: 4 }]}>
+                  <View style={styles.metricCardTop}>
+                    <Text style={styles.metricLabel}>Completed Orders</Text>
+                    <View style={[styles.metricIconWrap, { backgroundColor: '#EFF6FF' }]}>
+                      <Ionicons name="checkmark-done" size={20} color="#2563EB" />
+                    </View>
+                  </View>
+                  <Text style={styles.metricValue}>{stats.deliveredOrdersCount}</Text>
+                  <Text style={styles.metricSub}>Successfully delivered</Text>
+                </View>
               </View>
 
-              <TouchableOpacity style={styles.exportBtn} onPress={handleExportCsv} activeOpacity={0.85}>
-                <Ionicons name="download-outline" size={18} color={COLORS.white} />
-                <Text style={styles.exportBtnText}>Download Transactions (CSV)</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Quick Live Rate Status Card */}
-            <View style={styles.quickSettingsBanner}>
-              <View style={styles.quickSettingsLeft}>
-                <View style={styles.flameIconWrap}>
-                  <Ionicons name="flame" size={24} color="#EA580C" />
+              {/* Quick Config Banner */}
+              <View style={styles.quickBanner}>
+                <View style={styles.quickBannerLeft}>
+                  <View style={styles.quickBannerIcon}>
+                    <Ionicons name="flame" size={24} color="#EA580C" />
+                  </View>
+                  <View>
+                    <Text style={styles.quickBannerTitle}>
+                      Active Fuel Rate: ₹{dieselRateInput}/L • Delivery: ₹{tier1FeeInput} (≤500L) • ₹{tier2FeeInput === '0' ? 'FREE' : '₹' + tier2FeeInput} (&gt;500L)
+                    </Text>
+                    <Text style={styles.quickBannerSub}>
+                      All customer billings are automatically computed using these global parameters.
+                    </Text>
+                  </View>
                 </View>
-                <View>
-                  <Text style={styles.quickSettingsTitle}>Current Live Diesel Rate: ₹{dieselRateInput}/L ({rateCityInput})</Text>
-                  <Text style={styles.quickSettingsSub}>
-                    Delivery Charge: ₹{tier1FeeInput} (0-500L) • ₹{tier2FeeInput === '0' ? 'FREE' : '₹' + tier2FeeInput} (500L+)
-                  </Text>
-                </View>
-              </View>
-              <TouchableOpacity
-                style={styles.quickEditBtn}
-                onPress={() => setActiveTab('settings')}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.quickEditBtnText}>Edit Rates</Text>
-                <Ionicons name="chevron-forward" size={16} color={COLORS.primary} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Recent Orders Overview */}
-            <View style={styles.recentOrdersCard}>
-              <View style={styles.recentOrdersHeader}>
-                <Text style={styles.recentOrdersTitle}>Recent Orders Activity</Text>
-                <TouchableOpacity onPress={() => setActiveTab('orders')}>
-                  <Text style={styles.viewAllText}>View All ({orders.length}) →</Text>
+                <TouchableOpacity style={styles.quickBannerBtn} onPress={() => setActiveTab('settings')}>
+                  <Text style={styles.quickBannerBtnText}>Adjust Settings</Text>
+                  <Ionicons name="chevron-forward" size={16} color={COLORS.primary} />
                 </TouchableOpacity>
               </View>
 
-              {orders.slice(0, 4).map((order) => {
-                const badge = getStatusBadgeStyle(order.status);
-                return (
-                  <View key={order.id} style={styles.recentOrderItem}>
-                    <View style={{ flex: 1 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <Text style={styles.recentOrderId}>#{order.id}</Text>
-                        <View style={[styles.statusPill, { backgroundColor: badge.bg }]}>
-                          <Text style={[styles.statusPillText, { color: badge.text }]}>{badge.label}</Text>
+              {/* Recent Orders Overview */}
+              <View style={styles.cardBox}>
+                <View style={styles.cardBoxHeader}>
+                  <View>
+                    <Text style={styles.cardBoxTitle}>Recent Orders Activity</Text>
+                    <Text style={styles.cardBoxSub}>Latest deliveries placed across sites</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => setActiveTab('orders')}>
+                    <Text style={styles.linkText}>View All ({orders.length}) →</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {orders.slice(0, 5).map((order) => {
+                  const badge = getStatusBadgeStyle(order.status);
+                  return (
+                    <View key={order.id} style={styles.recentRow}>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <Text style={styles.orderIdBold}>#{order.id}</Text>
+                          <View style={[styles.statusTag, { backgroundColor: badge.bg }]}>
+                            <Text style={[styles.statusTagText, { color: badge.text }]}>{badge.label}</Text>
+                          </View>
+                        </View>
+                        <Text style={styles.orderClientText}>{order.name} • {order.liters} Liters</Text>
+                        <Text style={styles.orderDateSub}>{order.date}</Text>
+                      </View>
+
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={styles.orderAmountBold}>₹{Number(order.total).toLocaleString('en-IN')}</Text>
+                        <Text style={styles.orderDriverSub}>
+                          {order.assignedToName ? `🚚 ${order.assignedToName}` : '⚠️ Unassigned'}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+
+          {/* =========================================================================
+              TAB 2: ORDERS MANAGEMENT
+          ========================================================================== */}
+          {activeTab === 'orders' && (
+            <View>
+              {/* Filter & Search Bar */}
+              <View style={styles.filterCard}>
+                <View style={styles.searchRow}>
+                  <Ionicons name="search" size={18} color="#94A3B8" />
+                  <TextInput
+                    style={styles.searchInputField}
+                    placeholder="Search by order ID, customer name, phone, address..."
+                    value={orderSearchQuery}
+                    onChangeText={setOrderSearchQuery}
+                  />
+                  {orderSearchQuery ? (
+                    <TouchableOpacity onPress={() => setOrderSearchQuery('')}>
+                      <Ionicons name="close-circle" size={18} color="#94A3B8" />
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+
+                {/* Filter Chips */}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsRow}>
+                  {['all', 'pending', 'out_for_delivery', 'delivered'].map((st) => (
+                    <TouchableOpacity
+                      key={st}
+                      style={[styles.filterChip, orderStatusFilter === st && styles.filterChipActive]}
+                      onPress={() => setOrderStatusFilter(st)}
+                    >
+                      <Text
+                        style={[
+                          styles.filterChipText,
+                          orderStatusFilter === st && styles.filterChipTextActive,
+                        ]}
+                      >
+                        {st === 'all'
+                          ? 'All Orders'
+                          : st === 'pending'
+                          ? 'Pending & Assigned'
+                          : st === 'out_for_delivery'
+                          ? 'En Route'
+                          : 'Delivered'}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+
+              {/* Orders List */}
+              {filteredOrders.length === 0 ? (
+                <View style={styles.emptyBox}>
+                  <Ionicons name="file-tray-outline" size={48} color="#94A3B8" />
+                  <Text style={styles.emptyTitle}>No Orders Match Your Query</Text>
+                  <Text style={styles.emptySub}>Try searching with a different term or clear the filter.</Text>
+                </View>
+              ) : (
+                filteredOrders.map((order) => {
+                  const badge = getStatusBadgeStyle(order.status);
+                  return (
+                    <View key={order.id} style={styles.orderListItem}>
+                      <View style={styles.orderListTop}>
+                        <View>
+                          <Text style={styles.orderListId}>#{order.id}</Text>
+                          <Text style={styles.orderListDate}>{order.date}</Text>
+                        </View>
+                        <View style={[styles.statusTag, { backgroundColor: badge.bg }]}>
+                          <Text style={[styles.statusTagText, { color: badge.text }]}>{badge.label}</Text>
                         </View>
                       </View>
-                      <Text style={styles.recentOrderCustomer}>{order.name} • {order.liters} Liters</Text>
-                      <Text style={styles.recentOrderDate}>{order.date}</Text>
-                    </View>
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={styles.recentOrderTotal}>₹{Number(order.total).toLocaleString('en-IN')}</Text>
-                      <Text style={styles.recentOrderDriver}>
-                        {order.assignedToName ? `👤 ${order.assignedToName}` : '⚠️ Unassigned'}
-                      </Text>
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-          </View>
-        )}
 
-        {/* =========================================================================
-            TAB 2: ORDERS DETAILS TAB
-        ========================================================================== */}
-        {activeTab === 'orders' && (
-          <View>
-            <View style={styles.ordersHeaderRow}>
-              <Text style={styles.sectionTitle}>All Customer Orders ({filteredOrders.length})</Text>
-              <TouchableOpacity style={styles.exportBtnSmall} onPress={handleExportCsv}>
-                <Ionicons name="download-outline" size={16} color={COLORS.white} />
-                <Text style={styles.exportBtnTextSmall}>Export CSV</Text>
-              </TouchableOpacity>
-            </View>
+                      <View style={styles.orderListDivider} />
 
-            {/* Search and Filters */}
-            <View style={styles.filterBar}>
-              <View style={styles.searchBox}>
-                <Ionicons name="search" size={18} color={COLORS.muted} />
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="Search order ID, client name, phone..."
-                  value={orderSearchQuery}
-                  onChangeText={setOrderSearchQuery}
-                />
-                {orderSearchQuery ? (
-                  <TouchableOpacity onPress={() => setOrderSearchQuery('')}>
-                    <Ionicons name="close-circle" size={18} color={COLORS.muted} />
-                  </TouchableOpacity>
-                ) : null}
-              </View>
+                      <View style={styles.orderListColumns}>
+                        <View style={{ flex: 1.2, minWidth: 150 }}>
+                          <Text style={styles.colLabel}>Customer Details</Text>
+                          <Text style={styles.colValue}>{order.name}</Text>
+                          <Text style={styles.colSub}>{order.email}</Text>
+                          {order.phone ? <Text style={styles.colSub}>📞 {order.phone}</Text> : null}
+                        </View>
 
-              {/* Status Pills */}
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.statusChipsRow}>
-                {['all', 'pending', 'out_for_delivery', 'delivered'].map((st) => (
-                  <TouchableOpacity
-                    key={st}
-                    style={[styles.statusChip, orderStatusFilter === st && styles.statusChipActive]}
-                    onPress={() => setOrderStatusFilter(st)}
-                  >
-                    <Text
-                      style={[
-                        styles.statusChipText,
-                        orderStatusFilter === st && styles.statusChipTextActive,
-                      ]}
-                    >
-                      {st === 'all'
-                        ? 'All'
-                        : st === 'pending'
-                        ? 'Pending / Assigned'
-                        : st === 'out_for_delivery'
-                        ? 'En Route'
-                        : 'Delivered'}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
+                        <View style={{ flex: 1, minWidth: 110 }}>
+                          <Text style={styles.colLabel}>Fuel Volume</Text>
+                          <Text style={styles.colValue}>{order.liters} L</Text>
+                          <Text style={styles.colSub}>@ ₹{order.fuelRate || dieselRateInput}/L</Text>
+                        </View>
 
-            {/* Orders List */}
-            {filteredOrders.length === 0 ? (
-              <View style={styles.emptyCard}>
-                <Ionicons name="file-tray-outline" size={48} color={COLORS.muted} />
-                <Text style={styles.emptyTitle}>No Orders Found</Text>
-                <Text style={styles.emptySub}>No orders matching the selected filter criteria.</Text>
-              </View>
-            ) : (
-              filteredOrders.map((order) => {
-                const badge = getStatusBadgeStyle(order.status);
-                return (
-                  <View key={order.id} style={styles.orderCard}>
-                    <View style={styles.orderCardHeader}>
-                      <View>
-                        <Text style={styles.orderCardId}>#{order.id}</Text>
-                        <Text style={styles.orderCardDate}>{order.date}</Text>
-                      </View>
-                      <View style={[styles.statusPill, { backgroundColor: badge.bg }]}>
-                        <Text style={[styles.statusPillText, { color: badge.text }]}>{badge.label}</Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.orderDivider} />
-
-                    <View style={styles.orderDetailRow}>
-                      <View style={styles.orderDetailCol}>
-                        <Text style={styles.orderDetailLabel}>Customer</Text>
-                        <Text style={styles.orderDetailValue}>{order.name}</Text>
-                        <Text style={styles.orderDetailSub}>{order.email}</Text>
-                        {order.phone ? <Text style={styles.orderDetailSub}>📞 {order.phone}</Text> : null}
-                      </View>
-
-                      <View style={styles.orderDetailCol}>
-                        <Text style={styles.orderDetailLabel}>Fuel Quantity</Text>
-                        <Text style={styles.orderDetailValue}>{order.liters} Liters</Text>
-                        <Text style={styles.orderDetailSub}>@ ₹{order.fuelRate || dieselRateInput}/L</Text>
-                      </View>
-
-                      <View style={styles.orderDetailCol}>
-                        <Text style={styles.orderDetailLabel}>Total Amount</Text>
-                        <Text style={[styles.orderDetailValue, { color: COLORS.primary }]}>
-                          ₹{Number(order.total).toLocaleString('en-IN')}
-                        </Text>
-                        <Text style={styles.orderDetailSub}>
-                          Delivery: {order.deliveryFee === 0 ? 'FREE' : `₹${order.deliveryFee}`}
-                        </Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.orderAddressBox}>
-                      <Ionicons name="location" size={16} color={COLORS.primary} />
-                      <Text style={styles.orderAddressText}>{order.address}</Text>
-                    </View>
-
-                    {/* Assigned Driver Info */}
-                    <View style={styles.driverInfoRow}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Ionicons
-                          name={order.assignedToName ? 'bicycle' : 'alert-circle'}
-                          size={16}
-                          color={order.assignedToName ? '#059669' : '#D97706'}
-                        />
-                        <Text style={styles.driverInfoText}>
-                          {order.assignedToName
-                            ? `Assigned: ${order.assignedToName} (${order.vehicleNumber || 'Bowser'})`
-                            : 'No Delivery Partner Assigned'}
-                        </Text>
-                      </View>
-
-                      <View style={styles.orderCardActions}>
-                        <TouchableOpacity
-                          style={styles.actionBtnAssign}
-                          onPress={() => setSelectedOrderForAssign(order)}
-                          activeOpacity={0.8}
-                        >
-                          <Ionicons name="person-add" size={14} color={COLORS.primary} />
-                          <Text style={styles.actionBtnAssignText}>
-                            {order.assignedToName ? 'Reassign' : 'Assign Driver'}
+                        <View style={{ flex: 1, minWidth: 110 }}>
+                          <Text style={styles.colLabel}>Total Invoice</Text>
+                          <Text style={[styles.colValue, { color: COLORS.primary }]}>
+                            ₹{Number(order.total).toLocaleString('en-IN')}
                           </Text>
-                        </TouchableOpacity>
+                          <Text style={styles.colSub}>
+                            Delivery: {order.deliveryFee === 0 ? 'FREE' : `₹${order.deliveryFee}`}
+                          </Text>
+                        </View>
+                      </View>
 
-                        <TouchableOpacity
-                          style={styles.actionBtnStatus}
-                          onPress={() => setSelectedOrderForStatus(order)}
-                          activeOpacity={0.8}
-                        >
-                          <Ionicons name="sync" size={14} color="#2563EB" />
-                          <Text style={styles.actionBtnStatusText}>Status</Text>
-                        </TouchableOpacity>
+                      <View style={styles.orderSiteBox}>
+                        <Ionicons name="location" size={16} color={COLORS.primary} />
+                        <Text style={styles.orderSiteText}>{order.address}</Text>
+                      </View>
+
+                      {/* Driver & Action Buttons */}
+                      <View style={styles.orderBottomBar}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                          <Ionicons
+                            name={order.assignedToName ? 'bicycle' : 'alert-circle'}
+                            size={16}
+                            color={order.assignedToName ? '#059669' : '#D97706'}
+                          />
+                          <Text style={styles.driverAssignedText}>
+                            {order.assignedToName
+                              ? `Assigned: ${order.assignedToName} (${order.vehicleNumber || 'Bowser'})`
+                              : 'No Delivery Partner Assigned'}
+                          </Text>
+                        </View>
+
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                          <TouchableOpacity
+                            style={styles.btnAssign}
+                            onPress={() => setSelectedOrderForAssign(order)}
+                          >
+                            <Ionicons name="person-add" size={13} color={COLORS.primary} />
+                            <Text style={styles.btnAssignText}>
+                              {order.assignedToName ? 'Reassign' : 'Assign Driver'}
+                            </Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={styles.btnStatus}
+                            onPress={() => setSelectedOrderForStatus(order)}
+                          >
+                            <Ionicons name="sync" size={13} color="#2563EB" />
+                            <Text style={styles.btnStatusText}>Status</Text>
+                          </TouchableOpacity>
+                        </View>
                       </View>
                     </View>
-                  </View>
-                );
-              })
-            )}
-          </View>
-        )}
-
-        {/* =========================================================================
-            TAB 3: DELIVERY BOYS MANAGEMENT
-        ========================================================================== */}
-        {activeTab === 'delivery' && (
-          <View>
-            <View style={styles.ordersHeaderRow}>
-              <View>
-                <Text style={styles.sectionTitle}>Delivery Bowser Partners ({deliveryBoys.length})</Text>
-                <Text style={styles.sectionSub}>
-                  Create credentials here. Delivery boys log in directly using the regular app login screen.
-                </Text>
-              </View>
-
-              <TouchableOpacity
-                style={styles.addDriverBtn}
-                onPress={() => setShowAddDriverModal(true)}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="add" size={20} color={COLORS.white} />
-                <Text style={styles.addDriverBtnText}>Create Driver Login</Text>
-              </TouchableOpacity>
+                  );
+                })
+              )}
             </View>
+          )}
 
-            {deliveryBoys.length === 0 ? (
-              <View style={styles.emptyCard}>
-                <Ionicons name="bicycle-outline" size={48} color={COLORS.muted} />
-                <Text style={styles.emptyTitle}>No Delivery Partners Yet</Text>
-                <Text style={styles.emptySub}>Click the button above to create login credentials for your first driver.</Text>
-              </View>
-            ) : (
-              <View style={styles.driverCardsGrid}>
-                {deliveryBoys.map((driver) => (
-                  <View key={driver.email} style={styles.driverCard}>
-                    <View style={styles.driverCardTop}>
-                      <View style={styles.driverAvatar}>
-                        <Ionicons name="person" size={24} color={COLORS.primary} />
-                      </View>
-                      <View style={{ flex: 1, marginLeft: 12 }}>
-                        <Text style={styles.driverName}>{driver.name}</Text>
-                        <Text style={styles.driverVehicle}>{driver.vehicleNumber}</Text>
-                      </View>
-                      <View style={styles.driverActivePill}>
-                        <View style={styles.activeDot} />
-                        <Text style={styles.driverActiveText}>Active</Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.driverDetailsBox}>
-                      <View style={styles.driverDetailItem}>
-                        <Ionicons name="mail-outline" size={14} color={COLORS.muted} />
-                        <Text style={styles.driverDetailValue}>{driver.email}</Text>
-                      </View>
-                      <View style={styles.driverDetailItem}>
-                        <Ionicons name="call-outline" size={14} color={COLORS.muted} />
-                        <Text style={styles.driverDetailValue}>{driver.phone || 'No phone set'}</Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.driverStatsRow}>
-                      <View style={styles.driverStatBox}>
-                        <Text style={styles.driverStatNum}>{driver.assignedOrdersCount}</Text>
-                        <Text style={styles.driverStatLabel}>Assigned</Text>
-                      </View>
-                      <View style={styles.driverStatBox}>
-                        <Text style={[styles.driverStatNum, { color: '#059669' }]}>
-                          {driver.completedOrdersCount}
-                        </Text>
-                        <Text style={styles.driverStatLabel}>Completed</Text>
-                      </View>
-                    </View>
-
-                    <TouchableOpacity
-                      style={styles.deleteDriverBtn}
-                      onPress={() => handleDeleteDriver(driver.email, driver.name)}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons name="trash-outline" size={14} color="#DC2626" />
-                      <Text style={styles.deleteDriverText}>Remove Account</Text>
-                    </TouchableOpacity>
-                  </View>
-                ))}
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* =========================================================================
-            TAB 4: GLOBAL SETTINGS & DAILY PRICE UPDATE
-        ========================================================================== */}
-        {activeTab === 'settings' && (
-          <View>
-            <Text style={styles.sectionTitle}>Global System Configuration</Text>
-            <Text style={styles.sectionSub}>
-              Set the daily live diesel rate and delivery fees. Changes take effect instantly for all app and web users.
-            </Text>
-
-            {settingsSuccessMessage ? (
-              <View style={styles.successBanner}>
-                <Ionicons name="checkmark-circle" size={20} color="#059669" />
-                <Text style={styles.successBannerText}>{settingsSuccessMessage}</Text>
-              </View>
-            ) : null}
-
-            {/* Section 1: Daily Diesel Price */}
-            <View style={styles.settingsCard}>
-              <View style={styles.settingsCardHeader}>
-                <View style={[styles.settingsIconWrap, { backgroundColor: '#FEF2F2' }]}>
-                  <Ionicons name="flame" size={22} color={COLORS.primary} />
-                </View>
+          {/* =========================================================================
+              TAB 3: DELIVERY FLEET
+          ========================================================================== */}
+          {activeTab === 'delivery' && (
+            <View>
+              <View style={styles.headerActionRow}>
                 <View>
-                  <Text style={styles.settingsCardTitle}>Daily Diesel Price Rate</Text>
-                  <Text style={styles.settingsCardSub}>Live per-liter rate charged on all purchases</Text>
+                  <Text style={styles.pageSectionTitle}>Bowser Drivers & Delivery Personnel</Text>
+                  <Text style={styles.pageSectionSub}>
+                    Create login credentials for your drivers. They log in directly via the regular app login screen.
+                  </Text>
                 </View>
+                <TouchableOpacity
+                  style={styles.primaryAddBtn}
+                  onPress={() => setShowAddDriverModal(true)}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="add" size={18} color={COLORS.white} />
+                  <Text style={styles.primaryAddBtnText}>Add New Driver</Text>
+                </TouchableOpacity>
               </View>
 
-              <View style={styles.formRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>Fuel Rate (₹ per Liter)</Text>
-                  <View style={styles.currencyInputWrap}>
-                    <Text style={styles.currencyPrefix}>₹</Text>
+              {deliveryBoys.length === 0 ? (
+                <View style={styles.emptyBox}>
+                  <Ionicons name="bicycle-outline" size={48} color="#94A3B8" />
+                  <Text style={styles.emptyTitle}>No Delivery Partners Configured</Text>
+                  <Text style={styles.emptySub}>Click the button above to register your first delivery driver.</Text>
+                </View>
+              ) : (
+                <View style={styles.driverGrid}>
+                  {deliveryBoys.map((driver) => (
+                    <View key={driver.email} style={styles.driverGridCard}>
+                      <View style={styles.driverGridTop}>
+                        <View style={styles.driverGridAvatar}>
+                          <Ionicons name="person" size={22} color={COLORS.primary} />
+                        </View>
+                        <View style={{ flex: 1, marginLeft: 12 }}>
+                          <Text style={styles.driverGridName}>{driver.name}</Text>
+                          <Text style={styles.driverGridVehicle}>🚚 {driver.vehicleNumber}</Text>
+                        </View>
+                        <View style={styles.driverOnlineBadge}>
+                          <Text style={styles.driverOnlineText}>Active</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.driverDetailsContainer}>
+                        <View style={styles.driverDetailRow}>
+                          <Ionicons name="mail-outline" size={14} color="#64748B" />
+                          <Text style={styles.driverDetailText}>{driver.email}</Text>
+                        </View>
+                        <View style={styles.driverDetailRow}>
+                          <Ionicons name="call-outline" size={14} color="#64748B" />
+                          <Text style={styles.driverDetailText}>{driver.phone || 'No phone set'}</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.driverStatsPair}>
+                        <View style={styles.statSubBox}>
+                          <Text style={styles.statSubNum}>{driver.assignedOrdersCount}</Text>
+                          <Text style={styles.statSubLabel}>In Progress</Text>
+                        </View>
+                        <View style={styles.statSubBox}>
+                          <Text style={[styles.statSubNum, { color: '#059669' }]}>
+                            {driver.completedOrdersCount}
+                          </Text>
+                          <Text style={styles.statSubLabel}>Delivered</Text>
+                        </View>
+                      </View>
+
+                      <TouchableOpacity
+                        style={styles.deleteDriverAction}
+                        onPress={() => handleDeleteDriver(driver.email, driver.name)}
+                      >
+                        <Ionicons name="trash-outline" size={14} color="#DC2626" />
+                        <Text style={styles.deleteDriverActionText}>Remove Driver</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* =========================================================================
+              TAB 4: GLOBAL PRICING & SETTINGS
+          ========================================================================== */}
+          {activeTab === 'settings' && (
+            <View>
+              <Text style={styles.pageSectionTitle}>Global Fuel & Delivery Fee Settings</Text>
+              <Text style={styles.pageSectionSub}>
+                Update daily diesel price and volume-based delivery fees. All changes take effect across mobile & web instantly.
+              </Text>
+
+              {settingsSuccessMessage ? (
+                <View style={styles.alertSuccess}>
+                  <Ionicons name="checkmark-circle" size={20} color="#059669" />
+                  <Text style={styles.alertSuccessText}>{settingsSuccessMessage}</Text>
+                </View>
+              ) : null}
+
+              {/* Fuel Price Card */}
+              <View style={styles.settingCard}>
+                <View style={styles.settingCardHeader}>
+                  <View style={[styles.settingIconBox, { backgroundColor: '#FEF2F2' }]}>
+                    <Ionicons name="flame" size={22} color={COLORS.primary} />
+                  </View>
+                  <View>
+                    <Text style={styles.settingCardTitle}>Daily Diesel Price Rate</Text>
+                    <Text style={styles.settingCardSub}>Live retail rate per liter applied to new orders</Text>
+                  </View>
+                </View>
+
+                <View style={styles.formRowInline}>
+                  <View style={{ flex: 1, minWidth: 200 }}>
+                    <Text style={styles.fieldLabel}>Price Per Liter (₹)</Text>
+                    <View style={styles.inputPrefixWrap}>
+                      <Text style={styles.inputPrefixText}>₹</Text>
+                      <TextInput
+                        style={styles.inputPrefixField}
+                        keyboardType="decimal-pad"
+                        value={dieselRateInput}
+                        onChangeText={setDieselRateInput}
+                        placeholder="94.50"
+                      />
+                    </View>
+                  </View>
+
+                  <View style={{ flex: 1, minWidth: 200 }}>
+                    <Text style={styles.fieldLabel}>City / Jurisdiction</Text>
                     <TextInput
-                      style={styles.currencyInput}
-                      keyboardType="decimal-pad"
-                      value={dieselRateInput}
-                      onChangeText={setDieselRateInput}
-                      placeholder="94.50"
+                      style={styles.standardField}
+                      value={rateCityInput}
+                      onChangeText={setRateCityInput}
+                      placeholder="Hyderabad"
                     />
                   </View>
                 </View>
+              </View>
 
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>City / Location</Text>
+              {/* Delivery Charges Tiers Card */}
+              <View style={styles.settingCard}>
+                <View style={styles.settingCardHeader}>
+                  <View style={[styles.settingIconBox, { backgroundColor: '#EFF6FF' }]}>
+                    <Ionicons name="cube" size={22} color="#2563EB" />
+                  </View>
+                  <View>
+                    <Text style={styles.settingCardTitle}>Doorstep Delivery Fee Tiers</Text>
+                    <Text style={styles.settingCardSub}>Configure automated delivery pricing for small vs bulk orders</Text>
+                  </View>
+                </View>
+
+                <View style={styles.tiersGrid}>
+                  {/* Tier 1 */}
+                  <View style={styles.tierGridBox}>
+                    <View style={styles.tierHeaderRow}>
+                      <Text style={styles.tierHeading}>Tier 1: Up to {tier1MaxLitersInput} Liters</Text>
+                      <Text style={styles.tierPillStandard}>Standard Fee</Text>
+                    </View>
+                    <Text style={styles.fieldLabel}>Delivery Fee (₹)</Text>
+                    <View style={styles.inputPrefixWrap}>
+                      <Text style={styles.inputPrefixText}>₹</Text>
+                      <TextInput
+                        style={styles.inputPrefixField}
+                        keyboardType="number-pad"
+                        value={tier1FeeInput}
+                        onChangeText={setTier1FeeInput}
+                        placeholder="350"
+                      />
+                    </View>
+                    <Text style={styles.tierNote}>
+                      Orders ≤ {tier1MaxLitersInput}L will automatically add ₹{tier1FeeInput} delivery charge.
+                    </Text>
+                  </View>
+
+                  {/* Tier 2 */}
+                  <View style={styles.tierGridBox}>
+                    <View style={styles.tierHeaderRow}>
+                      <Text style={styles.tierHeading}>Tier 2: Above {tier1MaxLitersInput} Liters (Bulk)</Text>
+                      <Text style={[styles.tierPillStandard, { backgroundColor: '#ECFDF5', color: '#059669' }]}>
+                        {tier2FeeInput === '0' ? 'FREE' : `₹${tier2FeeInput}`}
+                      </Text>
+                    </View>
+                    <Text style={styles.fieldLabel}>Delivery Fee (₹) - Enter 0 for FREE</Text>
+                    <View style={styles.inputPrefixWrap}>
+                      <Text style={styles.inputPrefixText}>₹</Text>
+                      <TextInput
+                        style={styles.inputPrefixField}
+                        keyboardType="number-pad"
+                        value={tier2FeeInput}
+                        onChangeText={setTier2FeeInput}
+                        placeholder="0"
+                      />
+                    </View>
+                    <Text style={styles.tierNote}>
+                      Orders &gt; {tier1MaxLitersInput}L qualify for FREE Doorstep Delivery (₹0).
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Cut-off volume input */}
+                <View style={{ marginTop: 14 }}>
+                  <Text style={styles.fieldLabel}>Volume Threshold (Liters)</Text>
                   <TextInput
-                    style={styles.textInput}
-                    value={rateCityInput}
-                    onChangeText={setRateCityInput}
-                    placeholder="Hyderabad"
+                    style={styles.standardField}
+                    keyboardType="number-pad"
+                    value={tier1MaxLitersInput}
+                    onChangeText={setTier1MaxLitersInput}
+                    placeholder="500"
                   />
                 </View>
               </View>
+
+              {/* Save Button */}
+              <TouchableOpacity
+                style={styles.saveSettingsButton}
+                onPress={handleSaveSettings}
+                disabled={isSavingSettings}
+                activeOpacity={0.85}
+              >
+                {isSavingSettings ? (
+                  <ActivityIndicator size="small" color={COLORS.white} />
+                ) : (
+                  <>
+                    <Ionicons name="save-outline" size={18} color={COLORS.white} />
+                    <Text style={styles.saveSettingsButtonText}>Update & Save Live Configuration</Text>
+                  </>
+                )}
+              </TouchableOpacity>
             </View>
-
-            {/* Section 2: Delivery Charges Configuration */}
-            <View style={styles.settingsCard}>
-              <View style={styles.settingsCardHeader}>
-                <View style={[styles.settingsIconWrap, { backgroundColor: '#EFF6FF' }]}>
-                  <Ionicons name="cube" size={22} color="#2563EB" />
-                </View>
-                <View>
-                  <Text style={styles.settingsCardTitle}>Doorstep Delivery Charges (Tiers)</Text>
-                  <Text style={styles.settingsCardSub}>Configure automated delivery pricing based on ordered volume</Text>
-                </View>
-              </View>
-
-              <View style={styles.tiersContainer}>
-                {/* Tier 1: 0 to 500L */}
-                <View style={styles.tierBox}>
-                  <View style={styles.tierHeader}>
-                    <Text style={styles.tierTitle}>Tier 1: Up to {tier1MaxLitersInput} Liters (0 - 500L)</Text>
-                    <Text style={styles.tierBadge}>Standard Fee</Text>
-                  </View>
-                  <Text style={styles.inputLabel}>Delivery Charge for orders ≤ {tier1MaxLitersInput}L (₹)</Text>
-                  <View style={styles.currencyInputWrap}>
-                    <Text style={styles.currencyPrefix}>₹</Text>
-                    <TextInput
-                      style={styles.currencyInput}
-                      keyboardType="number-pad"
-                      value={tier1FeeInput}
-                      onChangeText={setTier1FeeInput}
-                      placeholder="350"
-                    />
-                  </View>
-                  <Text style={styles.tierHelperText}>
-                    Orders below {tier1MaxLitersInput}L will automatically add ₹{tier1FeeInput} delivery charge at checkout.
-                  </Text>
-                </View>
-
-                {/* Tier 2: 500L+ */}
-                <View style={styles.tierBox}>
-                  <View style={styles.tierHeader}>
-                    <Text style={styles.tierTitle}>Tier 2: Above {tier1MaxLitersInput} Liters (Bulk Orders)</Text>
-                    <Text style={[styles.tierBadge, { backgroundColor: '#ECFDF5', color: '#059669' }]}>
-                      {tier2FeeInput === '0' ? 'FREE Delivery' : `₹${tier2FeeInput}`}
-                    </Text>
-                  </View>
-                  <Text style={styles.inputLabel}>Delivery Charge for orders &gt; {tier1MaxLitersInput}L (₹)</Text>
-                  <View style={styles.currencyInputWrap}>
-                    <Text style={styles.currencyPrefix}>₹</Text>
-                    <TextInput
-                      style={styles.currencyInput}
-                      keyboardType="number-pad"
-                      value={tier2FeeInput}
-                      onChangeText={setTier2FeeInput}
-                      placeholder="0"
-                    />
-                  </View>
-                  <Text style={styles.tierHelperText}>
-                    Enter 0 to grant FREE Doorstep Delivery on orders above {tier1MaxLitersInput}L.
-                  </Text>
-                </View>
-              </View>
-
-              {/* Threshold control */}
-              <View style={{ marginTop: 14 }}>
-                <Text style={styles.inputLabel}>Tier Cut-off Volume (Liters)</Text>
-                <TextInput
-                  style={styles.textInput}
-                  keyboardType="number-pad"
-                  value={tier1MaxLitersInput}
-                  onChangeText={setTier1MaxLitersInput}
-                  placeholder="500"
-                />
-              </View>
-            </View>
-
-            {/* Save Button */}
-            <TouchableOpacity
-              style={styles.saveSettingsBtn}
-              onPress={handleSaveSettings}
-              disabled={isSavingSettings}
-              activeOpacity={0.85}
-            >
-              {isSavingSettings ? (
-                <ActivityIndicator size="small" color={COLORS.white} />
-              ) : (
-                <>
-                  <Ionicons name="save-outline" size={20} color={COLORS.white} />
-                  <Text style={styles.saveSettingsBtnText}>Update & Save Live Configuration</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
-        )}
-      </ScrollView>
+          )}
+        </ScrollView>
+      </View>
 
       {/* =========================================================================
-          MODAL: ASSIGN DELIVERY BOY
+          MODALS
       ========================================================================== */}
+      {/* Assign Modal */}
       <Modal
         visible={!!selectedOrderForAssign}
         transparent={true}
         animationType="fade"
         onRequestClose={() => setSelectedOrderForAssign(null)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Assign Delivery Partner</Text>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalCardHeader}>
+              <Text style={styles.modalCardTitle}>Assign Delivery Partner</Text>
               <TouchableOpacity onPress={() => setSelectedOrderForAssign(null)}>
-                <Ionicons name="close" size={24} color={COLORS.dark} />
+                <Ionicons name="close" size={22} color="#0F172A" />
               </TouchableOpacity>
             </View>
 
             {selectedOrderForAssign && (
-              <View style={styles.assignOrderMeta}>
-                <Text style={styles.assignOrderTitle}>Order #{selectedOrderForAssign.id}</Text>
-                <Text style={styles.assignOrderSub}>
+              <View style={styles.modalMetaBox}>
+                <Text style={styles.modalMetaTitle}>Order #{selectedOrderForAssign.id}</Text>
+                <Text style={styles.modalMetaSub}>
                   {selectedOrderForAssign.name} • {selectedOrderForAssign.liters}L • {selectedOrderForAssign.address}
                 </Text>
               </View>
             )}
 
-            <Text style={styles.modalSelectLabel}>Select Available Delivery Bowser Partner:</Text>
-
+            <Text style={styles.modalSelectLabel}>Select Available Driver:</Text>
             <ScrollView style={{ maxHeight: 260 }}>
-              {deliveryBoys.length === 0 ? (
-                <Text style={{ color: COLORS.muted, textAlign: 'center', padding: 20 }}>
-                  No delivery boys registered yet. Go to Delivery Boys tab to create credentials.
-                </Text>
-              ) : (
-                deliveryBoys.map((driver) => (
-                  <TouchableOpacity
-                    key={driver.email}
-                    style={styles.driverSelectItem}
-                    onPress={() => handleAssignOrder(driver)}
-                  >
-                    <View style={styles.driverSelectAvatar}>
-                      <Ionicons name="bicycle" size={20} color={COLORS.primary} />
-                    </View>
-                    <View style={{ flex: 1, marginLeft: 10 }}>
-                      <Text style={styles.driverSelectName}>{driver.name}</Text>
-                      <Text style={styles.driverSelectVehicle}>{driver.vehicleNumber}</Text>
-                    </View>
-                    <Text style={styles.driverSelectAssignedCount}>
-                      {driver.assignedOrdersCount} active
-                    </Text>
-                  </TouchableOpacity>
-                ))
-              )}
+              {deliveryBoys.map((driver) => (
+                <TouchableOpacity
+                  key={driver.email}
+                  style={styles.driverOptionItem}
+                  onPress={() => handleAssignOrder(driver)}
+                >
+                  <View style={styles.driverOptionAvatar}>
+                    <Ionicons name="bicycle" size={18} color={COLORS.primary} />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 10 }}>
+                    <Text style={styles.driverOptionName}>{driver.name}</Text>
+                    <Text style={styles.driverOptionVehicle}>{driver.vehicleNumber}</Text>
+                  </View>
+                  <Text style={styles.driverOptionActiveCount}>{driver.assignedOrdersCount} active</Text>
+                </TouchableOpacity>
+              ))}
             </ScrollView>
           </View>
         </View>
       </Modal>
 
-      {/* =========================================================================
-          MODAL: UPDATE ORDER STATUS
-      ========================================================================== */}
+      {/* Status Modal */}
       <Modal
         visible={!!selectedOrderForStatus}
         transparent={true}
         animationType="fade"
         onRequestClose={() => setSelectedOrderForStatus(null)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Update Order Status</Text>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalCardHeader}>
+              <Text style={styles.modalCardTitle}>Change Order Status</Text>
               <TouchableOpacity onPress={() => setSelectedOrderForStatus(null)}>
-                <Ionicons name="close" size={24} color={COLORS.dark} />
+                <Ionicons name="close" size={22} color="#0F172A" />
               </TouchableOpacity>
             </View>
-
-            {selectedOrderForStatus && (
-              <Text style={styles.assignOrderMeta}>Order #{selectedOrderForStatus.id}</Text>
-            )}
 
             {[
               { status: 'pending', label: 'Pending (Order Placed)', color: '#D50000' },
@@ -1081,83 +1150,80 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
             ].map((item) => (
               <TouchableOpacity
                 key={item.status}
-                style={styles.statusOptionItem}
+                style={styles.statusSelectRow}
                 onPress={() => handleUpdateOrderStatus(item.status)}
               >
-                <View style={[styles.statusDot, { backgroundColor: item.color }]} />
-                <Text style={styles.statusOptionLabel}>{item.label}</Text>
-                <Ionicons name="chevron-forward" size={18} color={COLORS.muted} />
+                <View style={[styles.statusSelectDot, { backgroundColor: item.color }]} />
+                <Text style={styles.statusSelectLabel}>{item.label}</Text>
+                <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
               </TouchableOpacity>
             ))}
           </View>
         </View>
       </Modal>
 
-      {/* =========================================================================
-          MODAL: CREATE DELIVERY BOY CREDENTIALS
-      ========================================================================== */}
+      {/* Add Driver Modal */}
       <Modal
         visible={showAddDriverModal}
         transparent={true}
         animationType="slide"
         onRequestClose={() => setShowAddDriverModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxWidth: 500 }]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Create Delivery Partner Account</Text>
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { maxWidth: 460 }]}>
+            <View style={styles.modalCardHeader}>
+              <Text style={styles.modalCardTitle}>Create Driver Login Credentials</Text>
               <TouchableOpacity onPress={() => setShowAddDriverModal(false)}>
-                <Ionicons name="close" size={24} color={COLORS.dark} />
+                <Ionicons name="close" size={22} color="#0F172A" />
               </TouchableOpacity>
             </View>
 
             <ScrollView>
-              <Text style={styles.inputLabel}>Full Name *</Text>
+              <Text style={styles.fieldLabel}>Full Name *</Text>
               <TextInput
-                style={styles.modalInput}
+                style={styles.modalInputField}
                 placeholder="e.g. Suresh Kumar"
                 value={newDriverName}
                 onChangeText={setNewDriverName}
               />
 
-              <Text style={styles.inputLabel}>Email (Login Username) *</Text>
+              <Text style={styles.fieldLabel}>Email (Login Username) *</Text>
               <TextInput
-                style={styles.modalInput}
-                placeholder="e.g. suresh@extradiesel.in"
+                style={styles.modalInputField}
+                placeholder="suresh@extradiesel.in"
                 keyboardType="email-address"
                 autoCapitalize="none"
                 value={newDriverEmail}
                 onChangeText={setNewDriverEmail}
               />
 
-              <Text style={styles.inputLabel}>Mobile Phone Number</Text>
+              <Text style={styles.fieldLabel}>Mobile Number</Text>
               <TextInput
-                style={styles.modalInput}
+                style={styles.modalInputField}
                 placeholder="+91 9876543210"
                 keyboardType="phone-pad"
                 value={newDriverPhone}
                 onChangeText={setNewDriverPhone}
               />
 
-              <Text style={styles.inputLabel}>Login Password *</Text>
+              <Text style={styles.fieldLabel}>Password *</Text>
               <TextInput
-                style={styles.modalInput}
+                style={styles.modalInputField}
                 placeholder="driver123"
-                secureTextEntry={false}
                 value={newDriverPassword}
                 onChangeText={setNewDriverPassword}
               />
 
-              <Text style={styles.inputLabel}>Bowser Vehicle Number</Text>
+              <Text style={styles.fieldLabel}>Bowser Vehicle Number</Text>
               <TextInput
-                style={styles.modalInput}
-                placeholder="e.g. TS 09 UB 4521"
+                style={styles.modalInputField}
+                placeholder="TS 09 UB 4521"
                 value={newDriverVehicle}
                 onChangeText={setNewDriverVehicle}
               />
 
               <TouchableOpacity
-                style={styles.submitDriverBtn}
+                style={styles.submitDriverButton}
                 onPress={handleCreateDriver}
                 disabled={isSavingDriver}
                 activeOpacity={0.85}
@@ -1166,8 +1232,8 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
                   <ActivityIndicator size="small" color={COLORS.white} />
                 ) : (
                   <>
-                    <Ionicons name="person-add" size={18} color={COLORS.white} />
-                    <Text style={styles.submitDriverBtnText}>Create Credentials</Text>
+                    <Ionicons name="person-add" size={16} color={COLORS.white} />
+                    <Text style={styles.submitDriverButtonText}>Create Driver Account</Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -1183,126 +1249,286 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8FAFC',
+    height: '100%',
+  },
+  desktopRow: {
+    flexDirection: 'row',
+  },
+  mobileColumn: {
+    flexDirection: 'column',
   },
   centerLoading: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#0B1120',
   },
   loadingText: {
     marginTop: 12,
-    color: COLORS.dark,
+    color: '#94A3B8',
     fontWeight: '600',
     fontSize: 15,
   },
-  adminHeader: {
-    flexDirection: 'row',
+  // Sidebar
+  sidebar: {
+    width: 260,
+    backgroundColor: '#0B1120',
+    borderRightWidth: 1,
+    borderRightColor: '#1E293B',
+    paddingVertical: 20,
+    paddingHorizontal: 16,
     justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#0F172A',
-    paddingHorizontal: 20,
+  },
+  mobileSidebar: {
+    width: '100%',
     paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#1E293B',
   },
-  headerLeft: {
-    flex: 1,
-  },
-  adminBadge: {
+  sidebarBrand: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    alignSelf: 'flex-start',
-    gap: 4,
-    marginBottom: 4,
+    marginBottom: 24,
+    paddingHorizontal: 4,
   },
-  adminBadgeText: {
-    color: COLORS.white,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  adminTitle: {
-    color: COLORS.white,
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  headerRight: {
+  brandLogoRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
   },
-  customerViewBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 8,
-  },
-  customerViewText: {
-    color: COLORS.dark,
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  refreshBtn: {
+  flameIconCircle: {
     width: 36,
     height: 36,
-    borderRadius: 8,
-    backgroundColor: '#1E293B',
+    borderRadius: 10,
+    backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  tabsContainer: {
+  brandTitle: {
+    color: COLORS.white,
+    fontSize: 17,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  brandSubtitle: {
+    color: '#64748B',
+    fontSize: 9.5,
+    fontWeight: '700',
+    letterSpacing: 1,
+    marginTop: 1,
+  },
+  onlineStatusPill: {
     flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  onlineDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10B981',
+  },
+  onlineStatusText: {
+    color: '#10B981',
+    fontSize: 9.5,
+    fontWeight: '800',
+  },
+  mobileMenuToggle: {
+    padding: 6,
+  },
+  sidebarNav: {
+    flex: 1,
+  },
+  hiddenMobileNav: {
+    display: 'none',
+  },
+  navSectionLabel: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#475569',
+    letterSpacing: 1,
+    marginBottom: 12,
+    marginLeft: 6,
+  },
+  sidebarNavItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 11,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginBottom: 4,
+  },
+  sidebarNavItemActive: {
+    backgroundColor: COLORS.primary,
+  },
+  sidebarNavText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#94A3B8',
+    flex: 1,
+  },
+  sidebarNavTextActive: {
+    color: COLORS.white,
+    fontWeight: '800',
+  },
+  sidebarBadge: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  sidebarBadgeText: {
+    color: COLORS.white,
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  sidebarFooter: {
+    borderTopWidth: 1,
+    borderTopColor: '#1E293B',
+    paddingTop: 16,
+    marginTop: 20,
+    gap: 12,
+  },
+  visitSiteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#1E293B',
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  visitSiteText: {
+    color: '#CBD5E1',
+    fontSize: 13,
+    fontWeight: '700',
+    flex: 1,
+  },
+  adminUserBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 4,
+  },
+  adminAvatarCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#334155',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  adminAvatarText: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  adminUserName: {
+    color: COLORS.white,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  adminUserRole: {
+    color: '#64748B',
+    fontSize: 11,
+  },
+  // Main Content
+  mainContent: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    height: '100%',
+  },
+  topNavbar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 16,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
-    paddingHorizontal: 12,
+    flexWrap: 'wrap',
+    gap: 12,
   },
-  tabBtn: {
+  topNavbarBreadcrumb: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#64748B',
+    letterSpacing: 0.5,
+  },
+  topNavbarTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#0F172A',
+    marginTop: 2,
+  },
+  topNavbarActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  topRatePill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    borderBottomWidth: 3,
-    borderBottomColor: 'transparent',
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
   },
-  tabBtnActive: {
-    borderBottomColor: COLORS.primary,
+  topRatePulse: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#D97706',
   },
-  tabBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.muted,
-  },
-  tabBtnTextActive: {
-    color: COLORS.primary,
+  topRateText: {
+    fontSize: 12,
     fontWeight: '800',
+    color: '#78350F',
   },
-  scrollArea: {
+  topActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#0F172A',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  topActionBtnText: {
+    color: COLORS.white,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  topRefreshBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  bodyScroll: {
     flex: 1,
   },
-  contentContainer: {
-    padding: 16,
+  bodyScrollContent: {
+    padding: 24,
     paddingBottom: 60,
   },
-  desktopContainer: {
-    maxWidth: 1100,
-    width: '100%',
-    alignSelf: 'center',
-  },
-  // Dashboard
+  // Dashboard Metrics
   metricsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 14,
+    gap: 16,
     marginBottom: 20,
   },
   metricCard: {
@@ -1310,7 +1536,7 @@ const styles = StyleSheet.create({
     minWidth: 220,
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    padding: 16,
+    padding: 18,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     shadowColor: '#000',
@@ -1347,58 +1573,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#94A3B8',
   },
-  exportRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 12,
-    backgroundColor: '#FFFFFF',
-    padding: 18,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  sectionSub: {
-    fontSize: 13,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  exportBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#0F172A',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  exportBtnText: {
-    color: COLORS.white,
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  exportBtnSmall: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#0F172A',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  exportBtnTextSmall: {
-    color: COLORS.white,
-    fontWeight: '700',
-    fontSize: 12,
-  },
-  quickSettingsBanner: {
+  quickBanner: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -1408,14 +1583,16 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginBottom: 20,
+    flexWrap: 'wrap',
+    gap: 12,
   },
-  quickSettingsLeft: {
+  quickBannerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     flex: 1,
   },
-  flameIconWrap: {
+  quickBannerIcon: {
     width: 44,
     height: 44,
     borderRadius: 10,
@@ -1423,56 +1600,61 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  quickSettingsTitle: {
+  quickBannerTitle: {
     fontSize: 15,
     fontWeight: '800',
     color: '#9A3412',
   },
-  quickSettingsSub: {
+  quickBannerSub: {
     fontSize: 13,
     color: '#C2410C',
     marginTop: 2,
   },
-  quickEditBtn: {
+  quickBannerBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 7,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#FED7AA',
   },
-  quickEditBtnText: {
+  quickBannerBtnText: {
     color: COLORS.primary,
     fontWeight: '700',
     fontSize: 13,
   },
-  recentOrdersCard: {
+  cardBox: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    padding: 18,
+    padding: 20,
   },
-  recentOrdersHeader: {
+  cardBoxHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 16,
   },
-  recentOrdersTitle: {
+  cardBoxTitle: {
     fontSize: 16,
     fontWeight: '800',
     color: '#0F172A',
   },
-  viewAllText: {
+  cardBoxSub: {
+    fontSize: 12.5,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  linkText: {
     fontSize: 13,
     color: COLORS.primary,
     fontWeight: '700',
   },
-  recentOrderItem: {
+  recentRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -1480,82 +1662,90 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
-  recentOrderId: {
+  orderIdBold: {
     fontSize: 14,
     fontWeight: '800',
     color: '#0F172A',
   },
-  recentOrderCustomer: {
+  orderClientText: {
     fontSize: 13,
     color: '#334155',
     fontWeight: '600',
     marginTop: 2,
   },
-  recentOrderDate: {
+  orderDateSub: {
     fontSize: 11,
     color: '#94A3B8',
     marginTop: 1,
   },
-  recentOrderTotal: {
+  orderAmountBold: {
     fontSize: 15,
     fontWeight: '800',
     color: COLORS.primary,
   },
-  recentOrderDriver: {
+  orderDriverSub: {
     fontSize: 12,
     color: '#64748B',
     marginTop: 2,
   },
+  statusTag: {
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  statusTagText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
   // Orders Tab
-  ordersHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  filterBar: {
-    marginBottom: 16,
-  },
-  searchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  filterCard: {
     backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 14,
+    marginBottom: 16,
+    gap: 10,
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#CBD5E1',
     paddingHorizontal: 12,
     paddingVertical: 8,
     gap: 8,
-    marginBottom: 10,
   },
-  searchInput: {
+  searchInputField: {
     flex: 1,
     fontSize: 14,
-    color: COLORS.dark,
+    color: '#0F172A',
   },
-  statusChipsRow: {
+  chipsRow: {
     flexDirection: 'row',
   },
-  statusChip: {
+  filterChip: {
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 20,
     backgroundColor: '#E2E8F0',
     marginRight: 8,
   },
-  statusChipActive: {
+  filterChipActive: {
     backgroundColor: COLORS.primary,
   },
-  statusChipText: {
-    fontSize: 13,
+  filterChipText: {
+    fontSize: 12.5,
     fontWeight: '600',
     color: '#475569',
   },
-  statusChipTextActive: {
+  filterChipTextActive: {
     color: COLORS.white,
     fontWeight: '700',
   },
-  orderCard: {
+  orderListItem: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
@@ -1563,64 +1753,51 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 12,
   },
-  orderCardHeader: {
+  orderListTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
   },
-  orderCardId: {
-    fontSize: 16,
+  orderListId: {
+    fontSize: 15,
     fontWeight: '800',
     color: '#0F172A',
   },
-  orderCardDate: {
+  orderListDate: {
     fontSize: 12,
     color: '#64748B',
-    marginTop: 2,
+    marginTop: 1,
   },
-  statusPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  statusPillText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  orderDivider: {
+  orderListDivider: {
     height: 1,
     backgroundColor: '#F1F5F9',
     marginVertical: 12,
   },
-  orderDetailRow: {
+  orderListColumns: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     flexWrap: 'wrap',
     gap: 12,
     marginBottom: 12,
   },
-  orderDetailCol: {
-    flex: 1,
-    minWidth: 110,
-  },
-  orderDetailLabel: {
+  colLabel: {
     fontSize: 11,
     color: '#94A3B8',
     textTransform: 'uppercase',
     fontWeight: '700',
     marginBottom: 2,
   },
-  orderDetailValue: {
+  colValue: {
     fontSize: 14,
     fontWeight: '700',
     color: '#0F172A',
   },
-  orderDetailSub: {
+  colSub: {
     fontSize: 12,
     color: '#64748B',
     marginTop: 1,
   },
-  orderAddressBox: {
+  orderSiteBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
@@ -1629,13 +1806,13 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 12,
   },
-  orderAddressText: {
+  orderSiteText: {
     fontSize: 13,
     color: '#334155',
     flex: 1,
     fontWeight: '500',
   },
-  driverInfoRow: {
+  orderBottomBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -1645,16 +1822,12 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
   },
-  driverInfoText: {
+  driverAssignedText: {
     fontSize: 13,
     fontWeight: '600',
     color: '#334155',
   },
-  orderCardActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  actionBtnAssign: {
+  btnAssign: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -1665,12 +1838,12 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 6,
   },
-  actionBtnAssignText: {
+  btnAssignText: {
     color: COLORS.primary,
     fontSize: 12,
     fontWeight: '700',
   },
-  actionBtnStatus: {
+  btnStatus: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -1681,32 +1854,50 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 6,
   },
-  actionBtnStatusText: {
+  btnStatusText: {
     color: '#2563EB',
     fontSize: 12,
     fontWeight: '700',
   },
-  // Delivery Boys Tab
-  addDriverBtn: {
+  // Delivery Fleet
+  headerActionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  pageSectionTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  pageSectionSub: {
+    fontSize: 13,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  primaryAddBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     backgroundColor: COLORS.primary,
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingVertical: 9,
     borderRadius: 8,
   },
-  addDriverBtnText: {
+  primaryAddBtnText: {
     color: COLORS.white,
     fontWeight: '700',
     fontSize: 13,
   },
-  driverCardsGrid: {
+  driverGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 14,
   },
-  driverCard: {
+  driverGridCard: {
     flex: 1,
     minWidth: 280,
     backgroundColor: '#FFFFFF',
@@ -1715,89 +1906,79 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
     padding: 16,
   },
-  driverCardTop: {
+  driverGridTop: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
   },
-  driverAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  driverGridAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: '#FEF2F2',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  driverName: {
+  driverGridName: {
     fontSize: 15,
     fontWeight: '800',
     color: '#0F172A',
   },
-  driverVehicle: {
+  driverGridVehicle: {
     fontSize: 12,
     color: '#64748B',
     marginTop: 1,
   },
-  driverActivePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
+  driverOnlineBadge: {
     backgroundColor: '#ECFDF5',
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 12,
+    borderRadius: 10,
   },
-  activeDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#10B981',
-  },
-  driverActiveText: {
+  driverOnlineText: {
     fontSize: 11,
     color: '#059669',
     fontWeight: '700',
   },
-  driverDetailsBox: {
+  driverDetailsContainer: {
     backgroundColor: '#F8FAFC',
     borderRadius: 8,
     padding: 10,
     gap: 6,
     marginBottom: 12,
   },
-  driverDetailItem: {
+  driverDetailRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  driverDetailValue: {
+  driverDetailText: {
     fontSize: 13,
     color: '#334155',
-    fontWeight: '500',
   },
-  driverStatsRow: {
+  driverStatsPair: {
     flexDirection: 'row',
     gap: 10,
     marginBottom: 12,
   },
-  driverStatBox: {
+  statSubBox: {
     flex: 1,
     backgroundColor: '#F1F5F9',
     padding: 10,
     borderRadius: 8,
     alignItems: 'center',
   },
-  driverStatNum: {
+  statSubNum: {
     fontSize: 18,
     fontWeight: '800',
     color: '#0F172A',
   },
-  driverStatLabel: {
+  statSubLabel: {
     fontSize: 11,
     color: '#64748B',
     marginTop: 2,
   },
-  deleteDriverBtn: {
+  deleteDriverAction: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1806,147 +1987,13 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
   },
-  deleteDriverText: {
+  deleteDriverActionText: {
     color: '#DC2626',
     fontSize: 12,
     fontWeight: '600',
   },
-  // Global Settings Tab
-  settingsCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 18,
-    marginBottom: 16,
-  },
-  settingsCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 16,
-  },
-  settingsIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  settingsCardTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  settingsCardSub: {
-    fontSize: 13,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  formRow: {
-    flexDirection: 'row',
-    gap: 14,
-    flexWrap: 'wrap',
-  },
-  inputLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#334155',
-    marginBottom: 6,
-  },
-  currencyInputWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-  },
-  currencyPrefix: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#64748B',
-    marginRight: 6,
-  },
-  currencyInput: {
-    flex: 1,
-    paddingVertical: 10,
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  textInput: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: '#0F172A',
-  },
-  tiersContainer: {
-    flexDirection: 'row',
-    gap: 14,
-    flexWrap: 'wrap',
-  },
-  tierBox: {
-    flex: 1,
-    minWidth: 260,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
-    padding: 14,
-  },
-  tierHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  tierTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  tierBadge: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#2563EB',
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  tierHelperText: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 6,
-    lineHeight: 16,
-  },
-  saveSettingsBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: COLORS.primary,
-    paddingVertical: 14,
-    borderRadius: 10,
-    marginTop: 8,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  saveSettingsBtnText: {
-    color: COLORS.white,
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  successBanner: {
+  // Settings Tab
+  alertSuccess: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
@@ -1957,40 +2004,77 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 16,
   },
-  successBannerText: {
+  alertSuccessText: {
     color: '#065F46',
     fontWeight: '700',
     fontSize: 14,
     flex: 1,
   },
-  // Modals
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+  settingCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 20,
+    marginBottom: 16,
+  },
+  settingCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 16,
+  },
+  settingIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
   },
-  modalContent: {
-    width: '100%',
-    maxWidth: 440,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    maxHeight: '90%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  modalTitle: {
-    fontSize: 17,
+  settingCardTitle: {
+    fontSize: 16,
     fontWeight: '800',
     color: '#0F172A',
   },
-  modalInput: {
+  settingCardSub: {
+    fontSize: 13,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  formRowInline: {
+    flexDirection: 'row',
+    gap: 14,
+    flexWrap: 'wrap',
+  },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#334155',
+    marginBottom: 6,
+  },
+  inputPrefixWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+  },
+  inputPrefixText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#64748B',
+    marginRight: 6,
+  },
+  inputPrefixField: {
+    flex: 1,
+    paddingVertical: 10,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  standardField: {
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#CBD5E1',
@@ -1999,35 +2083,101 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 14,
     color: '#0F172A',
-    marginBottom: 12,
   },
-  submitDriverBtn: {
+  tiersGrid: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: COLORS.primary,
-    paddingVertical: 12,
-    borderRadius: 8,
-    marginTop: 8,
+    gap: 14,
+    flexWrap: 'wrap',
   },
-  submitDriverBtnText: {
-    color: COLORS.white,
+  tierGridBox: {
+    flex: 1,
+    minWidth: 260,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    padding: 14,
+  },
+  tierHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  tierHeading: {
     fontSize: 14,
     fontWeight: '800',
+    color: '#0F172A',
   },
-  assignOrderMeta: {
+  tierPillStandard: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#2563EB',
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  tierNote: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 6,
+    lineHeight: 16,
+  },
+  saveSettingsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: COLORS.primary,
+    paddingVertical: 14,
+    borderRadius: 10,
+    marginTop: 8,
+  },
+  saveSettingsButtonText: {
+    color: COLORS.white,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  // Modals
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 440,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    maxHeight: '90%',
+  },
+  modalCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  modalCardTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  modalMetaBox: {
     backgroundColor: '#F8FAFC',
     padding: 12,
     borderRadius: 8,
     marginBottom: 14,
   },
-  assignOrderTitle: {
+  modalMetaTitle: {
     fontSize: 15,
     fontWeight: '800',
     color: '#0F172A',
   },
-  assignOrderSub: {
+  modalMetaSub: {
     fontSize: 13,
     color: '#64748B',
     marginTop: 2,
@@ -2038,7 +2188,7 @@ const styles = StyleSheet.create({
     color: '#334155',
     marginBottom: 10,
   },
-  driverSelectItem: {
+  driverOptionItem: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 10,
@@ -2047,7 +2197,7 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
     marginBottom: 8,
   },
-  driverSelectAvatar: {
+  driverOptionAvatar: {
     width: 36,
     height: 36,
     borderRadius: 18,
@@ -2055,21 +2205,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  driverSelectName: {
+  driverOptionName: {
     fontSize: 14,
     fontWeight: '700',
     color: '#0F172A',
   },
-  driverSelectVehicle: {
+  driverOptionVehicle: {
     fontSize: 12,
     color: '#64748B',
   },
-  driverSelectAssignedCount: {
+  driverOptionActiveCount: {
     fontSize: 12,
     fontWeight: '700',
     color: '#2563EB',
   },
-  statusOptionItem: {
+  statusSelectRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
@@ -2078,19 +2228,45 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
-  statusDot: {
+  statusSelectDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
     marginRight: 10,
   },
-  statusOptionLabel: {
+  statusSelectLabel: {
     flex: 1,
     fontSize: 14,
     fontWeight: '600',
     color: '#0F172A',
   },
-  emptyCard: {
+  modalInputField: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: '#0F172A',
+    marginBottom: 12,
+  },
+  submitDriverButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: COLORS.primary,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  submitDriverButtonText: {
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  emptyBox: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,

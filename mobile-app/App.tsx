@@ -304,7 +304,7 @@ function MainApp() {
     }
   };
 
-  const showHeader = currentScreen !== 'splash' && currentScreen !== 'login';
+  const showHeader = currentScreen !== 'splash' && currentScreen !== 'login' && currentScreen !== 'admin' && currentScreen !== 'delivery';
   const showBottomNav = currentScreen !== 'splash' && currentScreen !== 'login' && currentScreen !== 'admin' && currentScreen !== 'delivery';
   // Show header back button whenever there is a previous screen to go back to and we are not on root home
   const showBackBtn = screenStack.length > 1 && currentScreen !== 'home';
