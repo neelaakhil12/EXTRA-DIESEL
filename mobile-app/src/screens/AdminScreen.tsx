@@ -420,7 +420,7 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
                 style={styles.mobileMenuToggle}
                 onPress={() => setMobileMenuOpen(!mobileMenuOpen)}
               >
-                <Ionicons name={mobileMenuOpen ? 'close' : 'menu'} size={24} color={COLORS.white} />
+                <Ionicons name={mobileMenuOpen ? 'close' : 'menu'} size={24} color="#0F172A" />
               </TouchableOpacity>
             )}
           </View>
@@ -448,7 +448,7 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
             <Ionicons
               name={activeTab === 'dashboard' ? 'grid' : 'grid-outline'}
               size={19}
-              color={activeTab === 'dashboard' ? COLORS.white : '#94A3B8'}
+              color={activeTab === 'dashboard' ? COLORS.white : '#64748B'}
             />
             <Text style={[styles.sidebarNavText, activeTab === 'dashboard' && styles.sidebarNavTextActive]}>
               Dashboard
@@ -467,13 +467,15 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
             <Ionicons
               name={activeTab === 'orders' ? 'receipt' : 'receipt-outline'}
               size={19}
-              color={activeTab === 'orders' ? COLORS.white : '#94A3B8'}
+              color={activeTab === 'orders' ? COLORS.white : '#64748B'}
             />
             <Text style={[styles.sidebarNavText, activeTab === 'orders' && styles.sidebarNavTextActive]}>
               Orders Management
             </Text>
-            <View style={styles.sidebarBadge}>
-              <Text style={styles.sidebarBadgeText}>{orders.length}</Text>
+            <View style={[styles.sidebarBadge, activeTab === 'orders' && styles.sidebarBadgeActive]}>
+              <Text style={[styles.sidebarBadgeText, activeTab === 'orders' && styles.sidebarBadgeTextActive]}>
+                {orders.length}
+              </Text>
             </View>
           </TouchableOpacity>
 
@@ -489,13 +491,25 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
             <Ionicons
               name={activeTab === 'delivery' ? 'bicycle' : 'bicycle-outline'}
               size={19}
-              color={activeTab === 'delivery' ? COLORS.white : '#94A3B8'}
+              color={activeTab === 'delivery' ? COLORS.white : '#64748B'}
             />
             <Text style={[styles.sidebarNavText, activeTab === 'delivery' && styles.sidebarNavTextActive]}>
               Delivery Fleet
             </Text>
-            <View style={[styles.sidebarBadge, { backgroundColor: '#059669' }]}>
-              <Text style={styles.sidebarBadgeText}>{deliveryBoys.length}</Text>
+            <View
+              style={[
+                styles.sidebarBadge,
+                activeTab === 'delivery' ? styles.sidebarBadgeActive : { backgroundColor: '#ECFDF5' },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.sidebarBadgeText,
+                  activeTab === 'delivery' ? styles.sidebarBadgeTextActive : { color: '#059669' },
+                ]}
+              >
+                {deliveryBoys.length}
+              </Text>
             </View>
           </TouchableOpacity>
 
@@ -511,7 +525,7 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
             <Ionicons
               name={activeTab === 'settings' ? 'settings-sharp' : 'settings-outline'}
               size={19}
-              color={activeTab === 'settings' ? COLORS.white : '#94A3B8'}
+              color={activeTab === 'settings' ? COLORS.white : '#64748B'}
             />
             <Text style={[styles.sidebarNavText, activeTab === 'settings' && styles.sidebarNavTextActive]}>
               Global Settings
@@ -527,9 +541,9 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
                 onPress={() => onNavigate('home')}
                 activeOpacity={0.8}
               >
-                <Ionicons name="globe-outline" size={16} color="#94A3B8" />
+                <Ionicons name="globe-outline" size={16} color="#64748B" />
                 <Text style={styles.visitSiteText}>View Live Website</Text>
-                <Ionicons name="arrow-forward" size={14} color="#64748B" />
+                <Ionicons name="arrow-forward" size={14} color="#94A3B8" />
               </TouchableOpacity>
 
               {/* Admin Profile Details */}
@@ -1285,18 +1299,19 @@ const styles = StyleSheet.create({
   // Sidebar
   sidebar: {
     width: 280,
-    backgroundColor: '#0B1120',
+    backgroundColor: '#FFFFFF',
     borderRightWidth: 1,
-    borderRightColor: '#1E293B',
+    borderRightColor: '#E2E8F0',
     paddingVertical: 22,
     paddingHorizontal: 16,
     justifyContent: 'space-between',
   },
   mobileSidebar: {
     width: '100%',
+    backgroundColor: '#FFFFFF',
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#1E293B',
+    borderBottomColor: '#E2E8F0',
   },
   sidebarBrand: {
     marginBottom: 24,
@@ -1314,17 +1329,17 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   sidebarLogoImg: {
-    width: 190,
-    height: 58,
+    width: 195,
+    height: 60,
   },
   onlineStatusPill: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
     gap: 6,
-    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    backgroundColor: '#ECFDF5',
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.25)',
+    borderColor: '#A7F3D0',
     paddingHorizontal: 9,
     paddingVertical: 3.5,
     borderRadius: 12,
@@ -1336,7 +1351,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#10B981',
   },
   onlineStatusText: {
-    color: '#10B981',
+    color: '#065F46',
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.5,
@@ -1353,7 +1368,7 @@ const styles = StyleSheet.create({
   navSectionLabel: {
     fontSize: 10.5,
     fontWeight: '800',
-    color: '#475569',
+    color: '#94A3B8',
     letterSpacing: 1,
     marginBottom: 12,
     marginLeft: 6,
@@ -1369,11 +1384,16 @@ const styles = StyleSheet.create({
   },
   sidebarNavItemActive: {
     backgroundColor: COLORS.primary,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
   },
   sidebarNavText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#94A3B8',
+    color: '#334155',
     flex: 1,
   },
   sidebarNavTextActive: {
@@ -1381,19 +1401,25 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   sidebarBadge: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: '#F1F5F9',
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 10,
   },
+  sidebarBadgeActive: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+  },
   sidebarBadgeText: {
-    color: COLORS.white,
+    color: '#475569',
     fontSize: 11,
     fontWeight: '800',
   },
+  sidebarBadgeTextActive: {
+    color: COLORS.white,
+  },
   sidebarFooter: {
     borderTopWidth: 1,
-    borderTopColor: '#1E293B',
+    borderTopColor: '#F1F5F9',
     paddingTop: 16,
     marginTop: 20,
     gap: 12,
@@ -1402,13 +1428,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#1E293B',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     paddingVertical: 9,
     paddingHorizontal: 12,
     borderRadius: 8,
   },
   visitSiteText: {
-    color: '#CBD5E1',
+    color: '#334155',
     fontSize: 13,
     fontWeight: '700',
     flex: 1,
@@ -1423,17 +1451,17 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#334155',
+    backgroundColor: '#FEE2E2',
     justifyContent: 'center',
     alignItems: 'center',
   },
   adminAvatarText: {
-    color: COLORS.white,
+    color: COLORS.primary,
     fontSize: 12,
     fontWeight: '800',
   },
   adminUserName: {
-    color: COLORS.white,
+    color: '#0F172A',
     fontSize: 13,
     fontWeight: '700',
   },
