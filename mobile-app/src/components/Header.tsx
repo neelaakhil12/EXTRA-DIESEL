@@ -30,6 +30,8 @@ interface HeaderProps {
   onLogout?: () => void;
   userRole?: string;
   liveFuelRate?: number;
+  currentLocationText?: string;
+  onLocationPress?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -48,6 +50,8 @@ export const Header: React.FC<HeaderProps> = ({
   onLogout,
   userRole = 'customer',
   liveFuelRate = 94.50,
+  currentLocationText,
+  onLocationPress,
 }) => {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -124,6 +128,22 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Right Actions: Live Price, Notifications, User Profile */}
           <View style={styles.desktopRightActions}>
+            {/* Location Selector Pill */}
+            <TouchableOpacity
+              style={styles.desktopLocationPill}
+              onPress={onLocationPress}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="location" size={15} color={COLORS.primary} />
+              <View style={{ maxWidth: 140 }}>
+                <Text style={styles.desktopLocationLabel}>Delivering To:</Text>
+                <Text style={styles.desktopLocationVal} numberOfLines={1}>
+                  {currentLocationText || 'Plot 42, Hitech City'}
+                </Text>
+              </View>
+              <Text style={styles.desktopLocationChangeText}>Change</Text>
+            </TouchableOpacity>
+
             {/* Live Diesel Price Pill */}
             <View style={styles.desktopRateBadge}>
               <View style={styles.livePulseDot} />
@@ -220,7 +240,11 @@ export const Header: React.FC<HeaderProps> = ({
       <StatusBar barStyle="dark-content" />
       <View style={styles.homeHeader}>
         {/* Left: Location Pin & Site Selector */}
-        <TouchableOpacity style={styles.locationContainer} activeOpacity={0.7}>
+        <TouchableOpacity
+          style={styles.locationContainer}
+          onPress={onLocationPress}
+          activeOpacity={0.7}
+        >
           <View style={styles.locationIconWrap}>
             <Ionicons name="location" size={18} color={COLORS.primary} />
           </View>
@@ -230,7 +254,7 @@ export const Header: React.FC<HeaderProps> = ({
               <Ionicons name="chevron-down" size={13} color={COLORS.primary} />
             </View>
             <Text style={styles.locationSiteName} numberOfLines={1}>
-              Plot 42, Hitech City
+              {currentLocationText || 'Plot 42, Hitech City'}
             </Text>
           </View>
         </TouchableOpacity>
@@ -539,6 +563,34 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
+  },
+  desktopLocationPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  desktopLocationLabel: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: '#64748B',
+    textTransform: 'uppercase',
+  },
+  desktopLocationVal: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  desktopLocationChangeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.primary,
+    marginLeft: 4,
   },
   desktopRateBadge: {
     flexDirection: 'row',

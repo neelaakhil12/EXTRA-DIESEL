@@ -1,0 +1,12 @@
+{
+  "dieselRate": 94.50,
+  "currency": "INR",
+  "unit": "Liter",
+  "fuelType": "BS-VI High Speed Diesel",
+  "city": "Hyderabad",
+  "tier1MaxLiters": 500,
+  "deliveryChargeUpTo500": 350,
+  "deliveryChargeAbove500": 0,
+  "taxRatePercent": 5,
+  "updatedAt": "2026-11-23T04:30:00.000Z"
+}

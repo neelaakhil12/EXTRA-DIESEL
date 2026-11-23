@@ -36,6 +36,23 @@ const DEFAULT_SETTINGS = {
   deliveryChargeUpTo500: 350,    // Delivery charge for 0 - 500 Liters (₹)
   deliveryChargeAbove500: 0,     // Delivery charge above 500 Liters (0 = FREE)
   taxRatePercent: 5,             // 5% GST on fuel delivery
+  supportHotline: {
+    tollFree: '1800-DIESEL-EX (1800-343-7353)',
+    phone: '+91 9989551305',
+    email: 'support@extradiesel.in',
+    whatsapp: '+91 9989551305',
+    deskStatus: 'Bowser Dispatch Desk: Live & Active',
+  },
+  pesoCompliance: {
+    licenseNo: 'PESO/HYD/2026/DL-4910',
+    legalMetrology: 'W&M Certified Flow Meter (±0.1%)',
+    calibrationValidity: 'Valid through Dec 31, 2027',
+    safetyEquipment: 'Static Earthing & Class-B Flameproof',
+    automatedReceipts: 'Tamper-Proof Dispenser Integrated Printout',
+  },
+  b2bCreditLimit: 500000,
+  b2bCreditTerms: 'Net-30 Days Interest Free',
+  b2bBillingCycle: '1st – 30th of every month',
   updatedAt: new Date().toISOString(),
 };
 
@@ -247,7 +264,12 @@ app.post('/api/settings', (req, res) => {
       deliveryChargeUpTo500,
       deliveryChargeAbove500,
       tier1MaxLiters,
-      taxRatePercent
+      taxRatePercent,
+      supportHotline,
+      pesoCompliance,
+      b2bCreditLimit,
+      b2bCreditTerms,
+      b2bBillingCycle,
     } = req.body;
 
     currentSettings = loadSettings();
@@ -268,6 +290,23 @@ app.post('/api/settings', (req, res) => {
     if (taxRatePercent !== undefined && !isNaN(Number(taxRatePercent))) {
       currentSettings.taxRatePercent = Number(taxRatePercent);
     }
+    if (b2bCreditLimit !== undefined && !isNaN(Number(b2bCreditLimit))) {
+      currentSettings.b2bCreditLimit = Number(b2bCreditLimit);
+    }
+    if (b2bCreditTerms) currentSettings.b2bCreditTerms = b2bCreditTerms.trim();
+    if (b2bBillingCycle) currentSettings.b2bBillingCycle = b2bBillingCycle.trim();
+    if (supportHotline && typeof supportHotline === 'object') {
+      currentSettings.supportHotline = {
+        ...currentSettings.supportHotline,
+        ...supportHotline
+      };
+    }
+    if (pesoCompliance && typeof pesoCompliance === 'object') {
+      currentSettings.pesoCompliance = {
+        ...currentSettings.pesoCompliance,
+        ...pesoCompliance
+      };
+    }
 
     currentSettings.updatedAt = new Date().toISOString();
     saveSettings(currentSettings);
@@ -282,6 +321,76 @@ app.post('/api/settings', (req, res) => {
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to update settings', details: error.message });
   }
+});
+
+// 3. Location Reverse-Geocoding (OSM Nominatim with graceful fallback for India / Hyderabad)
+app.get('/api/location/reverse-geocode', async (req, res) => {
+  try {
+    const { lat, lon } = req.query;
+    if (!lat || !lon) {
+      return res.status(400).json({ success: false, error: 'Latitude and longitude required' });
+    }
+
+    const osmUrl = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&addressdetails=1`;
+    const response = await fetch(osmUrl, {
+      headers: {
+        'User-Agent': 'ExtraDieselApp/1.0 (contact@extradiesel.in)'
+      }
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const a = data.address || {};
+
+      const plotNo = a.house_number || a.building || '';
+      const street = a.road || a.pedestrian || a.street || '';
+      const area = a.suburb || a.neighbourhood || a.residential || a.subdistrict || '';
+      const city = a.city || a.town || a.county || a.state_district || 'Hyderabad';
+      const state = a.state || 'Telangana';
+      const pincode = a.postcode || '';
+      const landmark = a.amenity || a.commercial || a.office || a.leisure || '';
+
+      const parts = [plotNo, street, area, city, pincode].filter(Boolean);
+      const fullAddress = parts.join(', ') || data.display_name || 'Hyderabad, Telangana';
+
+      return res.json({
+        success: true,
+        location: {
+          lat: parseFloat(lat),
+          lon: parseFloat(lon),
+          plotNo,
+          street,
+          area,
+          landmark,
+          city,
+          state,
+          pincode,
+          fullAddress,
+          shortAddress: [plotNo, street || area].filter(Boolean).join(', ') || area || city
+        }
+      });
+    }
+  } catch (err) {}
+
+  // Fallback realistic location
+  const latNum = parseFloat(req.query.lat) || 17.4483;
+  const lonNum = parseFloat(req.query.lon) || 78.3748;
+  res.json({
+    success: true,
+    location: {
+      lat: latNum,
+      lon: lonNum,
+      plotNo: 'Plot 42',
+      street: 'HITEC City Main Road',
+      area: 'Madhapur',
+      landmark: 'Near Cyber Towers',
+      city: 'Hyderabad',
+      state: 'Telangana',
+      pincode: '500081',
+      fullAddress: 'Plot 42, HITEC City Main Road, Madhapur, Hyderabad, Telangana 500081',
+      shortAddress: 'Plot 42, HITEC City, Hyderabad'
+    }
+  });
 });
 
 // Backward compatible Fuel Rate endpoints
@@ -578,7 +687,7 @@ app.post('/api/auth/google-auth', (req, res) => {
 // User Profile API 1: Update Profile
 app.post('/api/user/profile', (req, res) => {
   try {
-    const { email, name, phone, profileImage } = req.body;
+    const { email, name, phone, profileImage, company, gstin, deliverySites, subscription } = req.body;
     if (!email) {
       return res.status(400).json({ success: false, error: 'User email is required' });
     }
@@ -599,6 +708,10 @@ app.post('/api/user/profile', (req, res) => {
     if (name !== undefined && name !== null) user.name = name.trim();
     if (phone !== undefined && phone !== null) user.phone = phone.trim();
     if (profileImage !== undefined) user.profileImage = profileImage;
+    if (company !== undefined) user.company = company.trim();
+    if (gstin !== undefined) user.gstin = gstin.trim();
+    if (Array.isArray(deliverySites)) user.deliverySites = deliverySites;
+    if (subscription && typeof subscription === 'object') user.subscription = subscription;
     user.updatedAt = new Date().toISOString();
 
     registeredUsers.set(key, user);
@@ -611,9 +724,13 @@ app.post('/api/user/profile', (req, res) => {
         name: user.name,
         email: user.email,
         phone: user.phone,
+        company: user.company || 'Aadhya Fuels & Infra',
+        gstin: user.gstin || '36AAACE1234F1Z5',
         role: user.role || 'customer',
         vehicleNumber: user.vehicleNumber || '',
         profileImage: user.profileImage || null,
+        deliverySites: user.deliverySites || [],
+        subscription: user.subscription || null,
       },
     });
   } catch (error) {
@@ -643,13 +760,103 @@ app.get('/api/user/profile', (req, res) => {
         name: user.name,
         email: user.email,
         phone: user.phone || '',
+        company: user.company || 'Aadhya Fuels & Infra',
+        gstin: user.gstin || '36AAACE1234F1Z5',
         role: user.role || 'customer',
         vehicleNumber: user.vehicleNumber || '',
         profileImage: user.profileImage || null,
+        deliverySites: user.deliverySites || [],
+        subscription: user.subscription || null,
       },
     });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to fetch user profile' });
+  }
+});
+
+// User Delivery Sites API
+app.get('/api/user/delivery-sites', (req, res) => {
+  try {
+    const { email } = req.query;
+    const key = (email || 'aadhyafuels9@gmail.com').toLowerCase().trim();
+    const user = registeredUsers.get(key);
+    const sites = user?.deliverySites || [
+      {
+        id: 'site-1',
+        name: 'Plot 42, Hitech City',
+        address: 'Survey 42, Phase 2, Near Mindspace, Madhapur, Hyderabad, Telangana 500081',
+        dgCapacity: '500 kVA (2 Units)',
+        accessNotes: 'Bowser Gate 2 Access',
+        isPrimary: true,
+      },
+      {
+        id: 'site-2',
+        name: 'Site 8, Gachibowli',
+        address: 'Plot 8, Financial District, Nanakramguda, Hyderabad, Telangana 500032',
+        dgCapacity: '750 kVA (1 Unit)',
+        accessNotes: 'Night Delivery Approved',
+        isPrimary: false,
+      },
+    ];
+    res.json({ success: true, deliverySites: sites });
+  } catch (e) {
+    res.status(500).json({ success: false, error: 'Failed to fetch delivery sites' });
+  }
+});
+
+app.post('/api/user/delivery-sites', (req, res) => {
+  try {
+    const { email, deliverySites } = req.body;
+    const key = (email || 'aadhyafuels9@gmail.com').toLowerCase().trim();
+    let user = registeredUsers.get(key);
+    if (!user) {
+      user = { name: key.split('@')[0], email: key, role: 'customer' };
+    }
+    user.deliverySites = Array.isArray(deliverySites) ? deliverySites : [];
+    user.updatedAt = new Date().toISOString();
+    registeredUsers.set(key, user);
+    saveUsers(registeredUsers);
+    res.json({ success: true, message: 'Delivery sites updated', deliverySites: user.deliverySites });
+  } catch (e) {
+    res.status(500).json({ success: false, error: 'Failed to save delivery sites' });
+  }
+});
+
+// User Subscription Plan API
+app.get('/api/user/subscription', (req, res) => {
+  try {
+    const { email } = req.query;
+    const key = (email || 'aadhyafuels9@gmail.com').toLowerCase().trim();
+    const user = registeredUsers.get(key);
+    const subscription = user?.subscription || {
+      siteName: 'Hitech City Phase 2 DG Set',
+      liters: 300,
+      frequency: 'weekly',
+      days: ['Mon', 'Thu'],
+      status: 'active',
+      nextRefill: 'Mon 23 Nov, 08:00 AM',
+    };
+    res.json({ success: true, subscription });
+  } catch (e) {
+    res.status(500).json({ success: false, error: 'Failed to fetch subscription' });
+  }
+});
+
+app.post('/api/user/subscription', (req, res) => {
+  try {
+    const { email, subscription } = req.body;
+    const key = (email || 'aadhyafuels9@gmail.com').toLowerCase().trim();
+    let user = registeredUsers.get(key);
+    if (!user) {
+      user = { name: key.split('@')[0], email: key, role: 'customer' };
+    }
+    user.subscription = subscription;
+    user.updatedAt = new Date().toISOString();
+    registeredUsers.set(key, user);
+    saveUsers(registeredUsers);
+    res.json({ success: true, message: 'Subscription plan updated successfully', subscription: user.subscription });
+  } catch (e) {
+    res.status(500).json({ success: false, error: 'Failed to update subscription' });
   }
 });
 

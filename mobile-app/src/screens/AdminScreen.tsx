@@ -106,6 +106,26 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
   const [tier1FeeInput, setTier1FeeInput] = useState<string>('350');
   const [tier2FeeInput, setTier2FeeInput] = useState<string>('0');
   const [tier1MaxLitersInput, setTier1MaxLitersInput] = useState<string>('500');
+
+  // B2B Corporate Fuel Credit Line Settings
+  const [creditLimitInput, setCreditLimitInput] = useState<string>('500000');
+  const [creditTermsInput, setCreditTermsInput] = useState<string>('Net-30 Days Interest Free');
+  const [creditBillingCycleInput, setCreditBillingCycleInput] = useState<string>('1st – 30th of every month');
+
+  // Support Hotline Settings
+  const [hotlineTollFree, setHotlineTollFree] = useState<string>('1800-DIESEL-EX (1800-343-7353)');
+  const [hotlinePhone, setHotlinePhone] = useState<string>('+91 9989551305');
+  const [hotlineEmail, setHotlineEmail] = useState<string>('support@extradiesel.in');
+  const [hotlineWhatsApp, setHotlineWhatsApp] = useState<string>('+91 9989551305');
+  const [hotlineDeskStatus, setHotlineDeskStatus] = useState<string>('Bowser Dispatch Desk: Live & Active');
+
+  // PESO Compliance Settings
+  const [pesoLicenseNo, setPesoLicenseNo] = useState<string>('PESO/HYD/2026/DL-4910');
+  const [pesoLegalMetrology, setPesoLegalMetrology] = useState<string>('W&M Certified Flow Meter (±0.1%)');
+  const [pesoCalibrationValidity, setPesoCalibrationValidity] = useState<string>('Valid through Dec 31, 2027');
+  const [pesoSafetyEquipment, setPesoSafetyEquipment] = useState<string>('Static Earthing & Class-B Flameproof');
+  const [pesoAutomatedReceipts, setPesoAutomatedReceipts] = useState<string>('Tamper-Proof Dispenser Integrated Printout');
+
   const [isSavingSettings, setIsSavingSettings] = useState<boolean>(false);
   const [settingsSuccessMessage, setSettingsSuccessMessage] = useState<string>('');
 
@@ -145,6 +165,29 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
         if (s.deliveryChargeUpTo500 !== undefined) setTier1FeeInput(s.deliveryChargeUpTo500.toString());
         if (s.deliveryChargeAbove500 !== undefined) setTier2FeeInput(s.deliveryChargeAbove500.toString());
         if (s.tier1MaxLiters !== undefined) setTier1MaxLitersInput(s.tier1MaxLiters.toString());
+
+        // Fuel Credit Line
+        if (s.b2bCreditLimit !== undefined) setCreditLimitInput(s.b2bCreditLimit.toString());
+        if (s.b2bCreditTerms) setCreditTermsInput(s.b2bCreditTerms);
+        if (s.b2bBillingCycle) setCreditBillingCycleInput(s.b2bBillingCycle);
+
+        // Support Hotline
+        if (s.supportHotline) {
+          if (s.supportHotline.tollFree) setHotlineTollFree(s.supportHotline.tollFree);
+          if (s.supportHotline.phone) setHotlinePhone(s.supportHotline.phone);
+          if (s.supportHotline.email) setHotlineEmail(s.supportHotline.email);
+          if (s.supportHotline.whatsapp) setHotlineWhatsApp(s.supportHotline.whatsapp);
+          if (s.supportHotline.deskStatus) setHotlineDeskStatus(s.supportHotline.deskStatus);
+        }
+
+        // PESO Compliance
+        if (s.pesoCompliance) {
+          if (s.pesoCompliance.licenseNo) setPesoLicenseNo(s.pesoCompliance.licenseNo);
+          if (s.pesoCompliance.legalMetrology) setPesoLegalMetrology(s.pesoCompliance.legalMetrology);
+          if (s.pesoCompliance.calibrationValidity) setPesoCalibrationValidity(s.pesoCompliance.calibrationValidity);
+          if (s.pesoCompliance.safetyEquipment) setPesoSafetyEquipment(s.pesoCompliance.safetyEquipment);
+          if (s.pesoCompliance.automatedReceipts) setPesoAutomatedReceipts(s.pesoCompliance.automatedReceipts);
+        }
       }
     } catch (e) {
       console.error('Failed to load admin data:', e);
@@ -175,7 +218,7 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
     }
   };
 
-  // Update Global Settings (Rate & Delivery Tier Charges)
+  // Update Global Settings (Rate, Delivery Tiers, Credit Line, Hotline, PESO)
   const handleSaveSettings = async () => {
     const rateNum = parseFloat(dieselRateInput);
     if (isNaN(rateNum) || rateNum <= 0) {
@@ -186,6 +229,7 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
     const tier1Fee = parseFloat(tier1FeeInput);
     const tier2Fee = parseFloat(tier2FeeInput);
     const tier1Max = parseInt(tier1MaxLitersInput, 10);
+    const creditLim = parseFloat(creditLimitInput);
 
     setIsSavingSettings(true);
     setSettingsSuccessMessage('');
@@ -200,12 +244,29 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
           deliveryChargeUpTo500: isNaN(tier1Fee) ? 350 : tier1Fee,
           deliveryChargeAbove500: isNaN(tier2Fee) ? 0 : tier2Fee,
           tier1MaxLiters: isNaN(tier1Max) ? 500 : tier1Max,
+          b2bCreditLimit: isNaN(creditLim) ? 500000 : creditLim,
+          b2bCreditTerms: creditTermsInput.trim() || 'Net-30 Days Interest Free',
+          b2bBillingCycle: creditBillingCycleInput.trim() || '1st – 30th of every month',
+          supportHotline: {
+            tollFree: hotlineTollFree.trim(),
+            phone: hotlinePhone.trim(),
+            email: hotlineEmail.trim(),
+            whatsapp: hotlineWhatsApp.trim(),
+            deskStatus: hotlineDeskStatus.trim(),
+          },
+          pesoCompliance: {
+            licenseNo: pesoLicenseNo.trim(),
+            legalMetrology: pesoLegalMetrology.trim(),
+            calibrationValidity: pesoCalibrationValidity.trim(),
+            safetyEquipment: pesoSafetyEquipment.trim(),
+            automatedReceipts: pesoAutomatedReceipts.trim(),
+          },
         }),
       });
 
       const data = await res.json();
       if (data.success) {
-        setSettingsSuccessMessage('Settings updated successfully! Live rate and delivery fees are now active.');
+        setSettingsSuccessMessage('All global settings, fuel pricing, credit line, hotline & PESO compliance saved successfully!');
         setTimeout(() => setSettingsSuccessMessage(''), 5000);
         loadAdminData();
       } else {
@@ -1076,6 +1137,189 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
                     value={tier1MaxLitersInput}
                     onChangeText={setTier1MaxLitersInput}
                     placeholder="500"
+                  />
+                </View>
+              </View>
+
+              {/* B2B Fuel Credit Line Card */}
+              <View style={styles.settingCard}>
+                <View style={styles.settingCardHeader}>
+                  <View style={[styles.settingIconBox, { backgroundColor: '#F0FDF4' }]}>
+                    <Ionicons name="card" size={22} color="#16A34A" />
+                  </View>
+                  <View>
+                    <Text style={styles.settingCardTitle}>B2B Corporate Credit Line & Net Terms</Text>
+                    <Text style={styles.settingCardSub}>Set default commercial fuel credit limit, interest-free days, and billing cycle</Text>
+                  </View>
+                </View>
+
+                <View style={styles.formRowInline}>
+                  <View style={{ flex: 1, minWidth: 200 }}>
+                    <Text style={styles.fieldLabel}>Commercial Credit Limit (₹)</Text>
+                    <View style={styles.inputPrefixWrap}>
+                      <Text style={styles.inputPrefixText}>₹</Text>
+                      <TextInput
+                        style={styles.inputPrefixField}
+                        keyboardType="number-pad"
+                        value={creditLimitInput}
+                        onChangeText={setCreditLimitInput}
+                        placeholder="500000"
+                      />
+                    </View>
+                  </View>
+
+                  <View style={{ flex: 1, minWidth: 200 }}>
+                    <Text style={styles.fieldLabel}>Payment Terms</Text>
+                    <TextInput
+                      style={styles.standardField}
+                      value={creditTermsInput}
+                      onChangeText={setCreditTermsInput}
+                      placeholder="Net-30 Days Interest Free"
+                    />
+                  </View>
+                </View>
+
+                <View style={{ marginTop: 14 }}>
+                  <Text style={styles.fieldLabel}>Monthly Billing Cycle</Text>
+                  <TextInput
+                    style={styles.standardField}
+                    value={creditBillingCycleInput}
+                    onChangeText={setCreditBillingCycleInput}
+                    placeholder="1st – 30th of every month"
+                  />
+                </View>
+              </View>
+
+              {/* 24/7 Support Hotline Card */}
+              <View style={styles.settingCard}>
+                <View style={styles.settingCardHeader}>
+                  <View style={[styles.settingIconBox, { backgroundColor: '#FEF3C7' }]}>
+                    <Ionicons name="headset" size={22} color="#D97706" />
+                  </View>
+                  <View>
+                    <Text style={styles.settingCardTitle}>24/7 Priority Support & Dispatch Hotline</Text>
+                    <Text style={styles.settingCardSub}>Live contact desk details shown on user app, website & bowser tracking</Text>
+                  </View>
+                </View>
+
+                <View style={styles.formRowInline}>
+                  <View style={{ flex: 1, minWidth: 200 }}>
+                    <Text style={styles.fieldLabel}>Toll-Free Helpline</Text>
+                    <TextInput
+                      style={styles.standardField}
+                      value={hotlineTollFree}
+                      onChangeText={setHotlineTollFree}
+                      placeholder="1800-DIESEL-EX (1800-343-7353)"
+                    />
+                  </View>
+
+                  <View style={{ flex: 1, minWidth: 200 }}>
+                    <Text style={styles.fieldLabel}>Emergency Phone</Text>
+                    <TextInput
+                      style={styles.standardField}
+                      value={hotlinePhone}
+                      onChangeText={setHotlinePhone}
+                      placeholder="+91 9989551305"
+                    />
+                  </View>
+                </View>
+
+                <View style={[styles.formRowInline, { marginTop: 14 }]}>
+                  <View style={{ flex: 1, minWidth: 200 }}>
+                    <Text style={styles.fieldLabel}>Support Email</Text>
+                    <TextInput
+                      style={styles.standardField}
+                      value={hotlineEmail}
+                      onChangeText={setHotlineEmail}
+                      placeholder="support@extradiesel.in"
+                    />
+                  </View>
+
+                  <View style={{ flex: 1, minWidth: 200 }}>
+                    <Text style={styles.fieldLabel}>WhatsApp Dispatch Desk</Text>
+                    <TextInput
+                      style={styles.standardField}
+                      value={hotlineWhatsApp}
+                      onChangeText={setHotlineWhatsApp}
+                      placeholder="+91 9989551305"
+                    />
+                  </View>
+                </View>
+
+                <View style={{ marginTop: 14 }}>
+                  <Text style={styles.fieldLabel}>Live Desk Status Banner</Text>
+                  <TextInput
+                    style={styles.standardField}
+                    value={hotlineDeskStatus}
+                    onChangeText={setHotlineDeskStatus}
+                    placeholder="Bowser Dispatch Desk: Live & Active"
+                  />
+                </View>
+              </View>
+
+              {/* PESO & Safety Compliance Card */}
+              <View style={styles.settingCard}>
+                <View style={styles.settingCardHeader}>
+                  <View style={[styles.settingIconBox, { backgroundColor: '#F3E8FF' }]}>
+                    <Ionicons name="shield-checkmark" size={22} color="#7C3AED" />
+                  </View>
+                  <View>
+                    <Text style={styles.settingCardTitle}>PESO & Legal Metrology Compliance</Text>
+                    <Text style={styles.settingCardSub}>Regulatory certifications, flow meter calibrations, and safety specs</Text>
+                  </View>
+                </View>
+
+                <View style={styles.formRowInline}>
+                  <View style={{ flex: 1, minWidth: 200 }}>
+                    <Text style={styles.fieldLabel}>PESO License Number</Text>
+                    <TextInput
+                      style={styles.standardField}
+                      value={pesoLicenseNo}
+                      onChangeText={setPesoLicenseNo}
+                      placeholder="PESO/HYD/2026/DL-4910"
+                    />
+                  </View>
+
+                  <View style={{ flex: 1, minWidth: 200 }}>
+                    <Text style={styles.fieldLabel}>Legal Metrology Flow Meter</Text>
+                    <TextInput
+                      style={styles.standardField}
+                      value={pesoLegalMetrology}
+                      onChangeText={setPesoLegalMetrology}
+                      placeholder="W&M Certified Flow Meter (±0.1%)"
+                    />
+                  </View>
+                </View>
+
+                <View style={[styles.formRowInline, { marginTop: 14 }]}>
+                  <View style={{ flex: 1, minWidth: 200 }}>
+                    <Text style={styles.fieldLabel}>Calibration Validity</Text>
+                    <TextInput
+                      style={styles.standardField}
+                      value={pesoCalibrationValidity}
+                      onChangeText={setPesoCalibrationValidity}
+                      placeholder="Valid through Dec 31, 2027"
+                    />
+                  </View>
+
+                  <View style={{ flex: 1, minWidth: 200 }}>
+                    <Text style={styles.fieldLabel}>Safety Equipment Standard</Text>
+                    <TextInput
+                      style={styles.standardField}
+                      value={pesoSafetyEquipment}
+                      onChangeText={setPesoSafetyEquipment}
+                      placeholder="Static Earthing & Class-B Flameproof"
+                    />
+                  </View>
+                </View>
+
+                <View style={{ marginTop: 14 }}>
+                  <Text style={styles.fieldLabel}>Automated Dispenser Receipts</Text>
+                  <TextInput
+                    style={styles.standardField}
+                    value={pesoAutomatedReceipts}
+                    onChangeText={setPesoAutomatedReceipts}
+                    placeholder="Tamper-Proof Dispenser Integrated Printout"
                   />
                 </View>
               </View>

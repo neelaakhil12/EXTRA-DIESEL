@@ -27,6 +27,7 @@ import { SubscriptionScreen } from './src/screens/SubscriptionScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { AdminScreen } from './src/screens/AdminScreen';
 import { DeliveryDashboardScreen } from './src/screens/DeliveryDashboardScreen';
+import { LocationModal, SavedLocation } from './src/components/LocationModal';
 import { APP_CONFIG } from './src/constants/config';
 
 export default function App() {
@@ -75,6 +76,21 @@ function MainApp() {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(Platform.OS === 'web');
   const [activeTrackingOrderId, setActiveTrackingOrderId] = useState<string>('ED20261116-8941');
   const [liveFuelRate, setLiveFuelRate] = useState<number>(94.50);
+
+  // Delivery Location State (Modal popup on app & web load)
+  const [deliveryLocation, setDeliveryLocation] = useState<SavedLocation>({
+    siteName: 'Plot 42, Hitech City',
+    plotNo: 'Plot 42',
+    street: 'Survey 42, Phase 2, Near Mindspace',
+    landmark: 'Opposite Mindspace West Gate',
+    area: 'Madhapur',
+    city: 'Hyderabad',
+    pincode: '500081',
+    fullAddress: 'Plot 42, Survey 42, Phase 2, Near Mindspace, Madhapur, Hyderabad - 500081',
+    shortAddress: 'Plot 42, Hitech City, Madhapur',
+    siteType: 'dg_set',
+  });
+  const [showLocationModal, setShowLocationModal] = useState<boolean>(true);
   const [currentUser, setCurrentUser] = useState<{
     name: string;
     email: string;
@@ -341,6 +357,8 @@ function MainApp() {
             isLoggedIn={isLoggedIn}
             onLoginPress={() => navigateTo('login')}
             onLogout={handleLogout}
+            currentLocationText={deliveryLocation.shortAddress || deliveryLocation.fullAddress}
+            onLocationPress={() => setShowLocationModal(true)}
           />
         )}
 
@@ -386,7 +404,10 @@ function MainApp() {
           )}
 
           {currentScreen === 'subscription' && (
-            <SubscriptionScreen onNavigate={(screen) => navigateTo(screen)} />
+            <SubscriptionScreen
+              onNavigate={(screen) => navigateTo(screen)}
+              userEmail={currentUser.email}
+            />
           )}
 
           {currentScreen === 'profile' && (
@@ -472,6 +493,17 @@ function MainApp() {
             </View>
           </View>
         </Modal>
+
+        {/* Global Delivery Location Pin Modal (Prompts on open & accessible via Header pill) */}
+        <LocationModal
+          visible={showLocationModal}
+          onClose={() => setShowLocationModal(false)}
+          onSaveLocation={(loc) => {
+            setDeliveryLocation(loc);
+            setShowLocationModal(false);
+          }}
+          currentLocation={deliveryLocation}
+        />
       </View>
     </DeviceFrame>
   );
