@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Linking, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Linking, Platform, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 import { ScreenName } from '../types';
@@ -14,6 +14,8 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
   orderId = 'ED20261116-8941',
   onNavigate,
 }) => {
+  const { width } = useWindowDimensions();
+  const isDesktop = Platform.OS === 'web' && width >= 768;
   const driverName = 'Ramesh Kumar';
   const driverPhone = '+919876543210';
   const bowserNo = 'TS 09 ED 7721';
@@ -31,7 +33,10 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={[styles.content, isDesktop && { maxWidth: 860, width: '100%', alignSelf: 'center', paddingVertical: 24 }]}
+    >
       {/* Order Status Banner */}
       <View style={styles.statusBanner}>
         <View style={styles.statusBadge}>

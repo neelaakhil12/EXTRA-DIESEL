@@ -8,29 +8,160 @@ import {
   Modal,
   Platform,
   Linking,
+  Image,
+  TextInput,
+  ActivityIndicator,
+  Alert,
+  useWindowDimensions,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 import { ScreenName } from '../types';
+import { APP_CONFIG } from '../constants/config';
 
 interface ProfileScreenProps {
   user?: {
     name: string;
     email: string;
     phone: string;
+    profileImage?: string;
   };
   onLogout: () => void;
   onNavigate: (screen: ScreenName) => void;
+  onUpdateUser?: (updated: { name?: string; phone?: string; profileImage?: string }) => void;
 }
 
-type ActiveModal = 'sites' | 'credit' | 'compliance' | 'support' | null;
+type ActiveModal = 'sites' | 'credit' | 'compliance' | 'support' | 'avatar' | 'editProfile' | null;
 
-export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onLogout, onNavigate }) => {
+const AVATAR_PRESETS = [
+  { id: '1', label: 'Executive', uri: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80' },
+  { id: '2', label: 'Operations', uri: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80' },
+  { id: '3', label: 'Logistics', uri: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80' },
+  { id: '4', label: 'Fleet Lead', uri: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&auto=format&fit=crop&q=80' },
+  { id: '5', label: 'Fuel Head', uri: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=200&auto=format&fit=crop&q=80' },
+  { id: '6', label: 'Site Admin', uri: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&auto=format&fit=crop&q=80' },
+];
+
+export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onLogout, onNavigate, onUpdateUser }) => {
+  const { width } = useWindowDimensions();
+  const isDesktop = Platform.OS === 'web' && width >= 768;
+
   const userName = user?.name || 'Akhil Kumar';
   const userPhone = user?.phone || '+91 98765 43210';
   const userEmail = user?.email || 'akhil@extradiesel.com';
+  const profileImage = user?.profileImage;
 
   const [activeModal, setActiveModal] = useState<ActiveModal>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Edit details form state
+  const [tempName, setTempName] = useState(userName);
+  const [tempPhone, setTempPhone] = useState(userPhone);
+
+  const getInitials = (name?: string) => {
+    if (!name || !name.trim()) return 'ED';
+    const parts = name.trim().split(' ').filter(Boolean);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return name.slice(0, 2).toUpperCase();
+  };
+
+  // Save updated profile to backend database (server/data/users.json)
+  const saveProfileToDatabase = async (updates: { name?: string; phone?: string; profileImage?: string | null }) => {
+    try {
+      setIsSaving(true);
+      const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'https://gtmining.xyz';
+      const payload = {
+        email: userEmail,
+        name: updates.name !== undefined ? updates.name : userName,
+        phone: updates.phone !== undefined ? updates.phone : userPhone,
+        profileImage: updates.profileImage !== undefined ? updates.profileImage : (profileImage || null),
+      };
+
+      const res = await fetch(`${baseUrl}/api/user/profile`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      setIsSaving(false);
+
+      if (data.success && data.user) {
+        if (onUpdateUser) {
+          onUpdateUser({
+            name: data.user.name,
+            phone: data.user.phone,
+            profileImage: data.user.profileImage,
+          });
+        }
+        setActiveModal(null);
+      } else {
+        Alert.alert('Error', data.error || 'Failed to update profile');
+      }
+    } catch (e: any) {
+      setIsSaving(false);
+      Alert.alert('Network Notice', 'Profile saved locally. Syncing with server.');
+      if (onUpdateUser) {
+        onUpdateUser(updates as any);
+      }
+      setActiveModal(null);
+    }
+  };
+
+  // Launch File Picker on Web or ImagePicker on Native
+  const handlePickImage = async () => {
+    try {
+      setIsSaving(true);
+      if (Platform.OS === 'web') {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.onchange = (e: any) => {
+          const file = e.target?.files?.[0];
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+              const base64 = event.target?.result as string;
+              await saveProfileToDatabase({ profileImage: base64 });
+            };
+            reader.readAsDataURL(file);
+          } else {
+            setIsSaving(false);
+          }
+        };
+        input.click();
+      } else {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Needed', 'Please allow photo gallery access to upload a profile photo.');
+          setIsSaving(false);
+          return;
+        }
+
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ['images'],
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.7,
+          base64: true,
+        });
+
+        if (!result.canceled && result.assets && result.assets[0]) {
+          const asset = result.assets[0];
+          const imageUri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+          await saveProfileToDatabase({ profileImage: imageUri });
+        } else {
+          setIsSaving(false);
+        }
+      }
+    } catch (err: any) {
+      setIsSaving(false);
+      Alert.alert('Upload Error', err?.message || 'Could not pick image');
+    }
+  };
 
   const menuItems = [
     {
@@ -66,12 +197,29 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onLogout, on
   ];
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Profile Card */}
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={[styles.content, isDesktop && styles.desktopContent]}
+    >
+      {/* Profile Card with Photo & Edit Button */}
       <View style={styles.profileCard}>
-        <View style={styles.avatarCircle}>
-          <Ionicons name="person" size={32} color={COLORS.primary} />
-        </View>
+        <TouchableOpacity
+          style={styles.avatarWrap}
+          onPress={() => setActiveModal('avatar')}
+          activeOpacity={0.8}
+        >
+          {profileImage ? (
+            <Image source={{ uri: profileImage }} style={styles.avatarImage} />
+          ) : (
+            <View style={styles.avatarCircle}>
+              <Text style={styles.avatarInitialsText}>{getInitials(userName)}</Text>
+            </View>
+          )}
+          <View style={styles.cameraBadge}>
+            <Ionicons name="camera" size={13} color="#FFFFFF" />
+          </View>
+        </TouchableOpacity>
+
         <View style={styles.profileInfo}>
           <View style={styles.nameRow}>
             <Text style={styles.profileName}>{userName}</Text>
@@ -82,6 +230,19 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onLogout, on
           </View>
           <Text style={styles.profilePhone}>{userPhone}</Text>
           <Text style={styles.profileCompany}>{userEmail}</Text>
+
+          <TouchableOpacity
+            style={styles.editProfilePill}
+            onPress={() => {
+              setTempName(userName);
+              setTempPhone(userPhone);
+              setActiveModal('editProfile');
+            }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="create-outline" size={13} color={COLORS.primary} />
+            <Text style={styles.editProfilePillText}>Edit Profile Details</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -389,6 +550,195 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onLogout, on
           </View>
         </View>
       </Modal>
+
+      {/* ================= MODAL 5: CHANGE / UPLOAD PROFILE PHOTO ================= */}
+      <Modal
+        visible={activeModal === 'avatar'}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => {
+          if (!isSaving) setActiveModal(null);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalTitleRow}>
+                <View style={[styles.modalIconCircle, { backgroundColor: '#FEE2E2' }]}>
+                  <Ionicons name="camera" size={18} color={COLORS.primary} />
+                </View>
+                <View>
+                  <Text style={styles.modalTitle}>Profile Photo</Text>
+                  <Text style={styles.modalSubtitle}>Syncs across Mobile App & Website</Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={styles.closeBtn}
+                onPress={() => {
+                  if (!isSaving) setActiveModal(null);
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close" size={20} color={COLORS.dark} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+              {/* Primary: Upload from Device */}
+              <TouchableOpacity
+                style={styles.uploadPrimaryBtn}
+                onPress={handlePickImage}
+                disabled={isSaving}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="cloud-upload" size={20} color={COLORS.white} />
+                <Text style={styles.uploadPrimaryBtnText}>
+                  {Platform.OS === 'web' ? 'Upload Photo from Computer' : 'Choose Photo from Gallery'}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Or Choose Corporate Preset */}
+              <Text style={styles.avatarPresetSectionHeading}>Or Select a Business Avatar</Text>
+              <View style={styles.avatarPresetsGrid}>
+                {AVATAR_PRESETS.map((preset) => {
+                  const isSelected = profileImage === preset.uri;
+                  return (
+                    <TouchableOpacity
+                      key={preset.id}
+                      style={[styles.presetAvatarItem, isSelected && styles.presetAvatarItemSelected]}
+                      onPress={() => saveProfileToDatabase({ profileImage: preset.uri })}
+                      disabled={isSaving}
+                      activeOpacity={0.8}
+                    >
+                      <Image source={{ uri: preset.uri }} style={styles.presetAvatarImg} />
+                      <Text style={[styles.presetAvatarLabel, isSelected && styles.presetAvatarLabelSelected]}>
+                        {preset.label}
+                      </Text>
+                      {isSelected && (
+                        <View style={styles.presetCheckmarkBadge}>
+                          <Ionicons name="checkmark" size={10} color="#FFFFFF" />
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Remove Photo (Reset to Initials) */}
+              {profileImage ? (
+                <TouchableOpacity
+                  style={styles.removePhotoBtn}
+                  onPress={() => saveProfileToDatabase({ profileImage: null })}
+                  disabled={isSaving}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="trash-outline" size={17} color={COLORS.danger} />
+                  <Text style={styles.removePhotoText}>Remove Profile Photo</Text>
+                </TouchableOpacity>
+              ) : null}
+
+              {isSaving && (
+                <View style={styles.savingOverlay}>
+                  <ActivityIndicator size="small" color={COLORS.primary} />
+                  <Text style={styles.savingText}>Saving to database...</Text>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================= MODAL 6: EDIT PROFILE DETAILS ================= */}
+      <Modal
+        visible={activeModal === 'editProfile'}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => {
+          if (!isSaving) setActiveModal(null);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalTitleRow}>
+                <View style={[styles.modalIconCircle, { backgroundColor: '#EFF6FF' }]}>
+                  <Ionicons name="person" size={18} color="#2563EB" />
+                </View>
+                <View>
+                  <Text style={styles.modalTitle}>Edit Profile</Text>
+                  <Text style={styles.modalSubtitle}>Update your personal details</Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={styles.closeBtn}
+                onPress={() => {
+                  if (!isSaving) setActiveModal(null);
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close" size={20} color={COLORS.dark} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 380 }}>
+              {/* Full Name Input */}
+              <Text style={styles.editInputLabel}>Full Name</Text>
+              <View style={styles.editInputWrap}>
+                <Ionicons name="person-outline" size={18} color="#64748B" style={{ marginRight: 8 }} />
+                <TextInput
+                  style={styles.editTextInput}
+                  value={tempName}
+                  onChangeText={setTempName}
+                  placeholder="Enter full name"
+                  placeholderTextColor="#94A3B8"
+                />
+              </View>
+
+              {/* Phone Input */}
+              <Text style={styles.editInputLabel}>Phone Number</Text>
+              <View style={styles.editInputWrap}>
+                <Ionicons name="call-outline" size={18} color="#64748B" style={{ marginRight: 8 }} />
+                <TextInput
+                  style={styles.editTextInput}
+                  value={tempPhone}
+                  onChangeText={setTempPhone}
+                  placeholder="Enter phone number"
+                  placeholderTextColor="#94A3B8"
+                  keyboardType="phone-pad"
+                />
+              </View>
+
+              {/* Verified Email (Read-only) */}
+              <Text style={styles.editInputLabel}>Email Address (Account ID)</Text>
+              <View style={[styles.editInputWrap, { backgroundColor: '#F1F5F9' }]}>
+                <Ionicons name="lock-closed-outline" size={18} color="#94A3B8" style={{ marginRight: 8 }} />
+                <Text style={styles.editReadonlyText}>{userEmail}</Text>
+                <View style={styles.verifiedMiniTag}>
+                  <Ionicons name="checkmark-circle" size={12} color="#10B981" />
+                  <Text style={styles.verifiedMiniText}>Verified</Text>
+                </View>
+              </View>
+
+              {/* Save Button */}
+              <TouchableOpacity
+                style={styles.saveChangesBtn}
+                onPress={() => saveProfileToDatabase({ name: tempName, phone: tempPhone })}
+                disabled={isSaving}
+                activeOpacity={0.85}
+              >
+                {isSaving ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Ionicons name="save-outline" size={18} color={COLORS.white} />
+                    <Text style={styles.saveChangesBtnText}>Save Changes</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 };
@@ -611,6 +961,20 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.dark,
   },
+  modalSubtitle: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '500',
+    marginTop: 1,
+  },
+  modalIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 6,
+  },
   closeBtn: {
     padding: 6,
     backgroundColor: '#F1F5F9',
@@ -818,5 +1182,224 @@ const styles = StyleSheet.create({
   contactSub: {
     fontSize: 11,
     color: COLORS.muted,
+  },
+  desktopContent: {
+    maxWidth: 960,
+    width: '100%',
+    alignSelf: 'center',
+    paddingVertical: 24,
+  },
+  avatarWrap: {
+    position: 'relative',
+    marginRight: 14,
+  },
+  avatarImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 2,
+    borderColor: COLORS.primary,
+  },
+  avatarInitialsText: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: COLORS.primary,
+  },
+  cameraBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: COLORS.primary,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  editProfilePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+    backgroundColor: '#FEF2F2',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    marginTop: 6,
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+  },
+  editProfilePillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  uploadPrimaryBtn: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: COLORS.primary,
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginBottom: 16,
+    elevation: 2,
+  },
+  uploadPrimaryBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  avatarPresetSectionHeading: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 10,
+  },
+  avatarPresetsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginBottom: 16,
+  },
+  presetAvatarItem: {
+    width: '30%',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 8,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    position: 'relative',
+  },
+  presetAvatarItemSelected: {
+    borderColor: COLORS.primary,
+    backgroundColor: '#FEF2F2',
+  },
+  presetAvatarImg: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    marginBottom: 4,
+  },
+  presetAvatarLabel: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  presetAvatarLabelSelected: {
+    color: COLORS.primary,
+    fontWeight: '800',
+  },
+  presetCheckmarkBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  removePhotoBtn: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+    backgroundColor: '#FFF5F5',
+    borderRadius: 10,
+    marginBottom: 8,
+  },
+  removePhotoText: {
+    color: COLORS.danger,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  savingOverlay: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+  },
+  savingText: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  editInputLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#334155',
+    marginBottom: 6,
+    marginTop: 4,
+  },
+  editInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  editTextInput: {
+    flex: 1,
+    fontSize: 13.5,
+    color: '#0F172A',
+    outlineStyle: 'none' as any,
+  },
+  editReadonlyText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  verifiedMiniTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  verifiedMiniText: {
+    fontSize: 10,
+    color: '#15803D',
+    fontWeight: '700',
+  },
+  saveChangesBtn: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: COLORS.primary,
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginTop: 8,
+    marginBottom: 12,
+    elevation: 2,
+  },
+  saveChangesBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

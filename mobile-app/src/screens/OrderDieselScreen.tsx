@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Platform, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 import { ScreenName } from '../types';
@@ -11,6 +11,8 @@ interface OrderDieselScreenProps {
 }
 
 export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({ onOrderSuccess, onNavigate }) => {
+  const { width } = useWindowDimensions();
+  const isDesktop = Platform.OS === 'web' && width >= 768;
   const [liters, setLiters] = useState<number>(200);
   const [vehicleType, setVehicleType] = useState<string>('DG Set');
   const [deliveryType, setDeliveryType] = useState<'one-time' | 'subscription'>('one-time');
@@ -67,7 +69,10 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({ onOrderSuc
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={[styles.content, isDesktop && { maxWidth: 860, width: '100%', alignSelf: 'center', paddingVertical: 24 }]}
+    >
       {/* Location Selector */}
       <View style={styles.card}>
         <View style={styles.cardHeader}>

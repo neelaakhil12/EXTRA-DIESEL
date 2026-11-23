@@ -93,7 +93,8 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: '25mb' }));
+app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
 // 1. AWS S3 Client Configuration (using provided IAM User or EC2 Role)
 const s3Client = new S3Client({
@@ -245,7 +246,12 @@ app.post('/api/auth/register', (req, res) => {
     res.json({
       success: true,
       message: 'Account created successfully',
-      user: { name: user.name, email: user.email, phone: user.phone },
+      user: {
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        profileImage: user.profileImage || null,
+      },
     });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to register account', details: error.message });
@@ -287,6 +293,7 @@ app.post('/api/auth/google-auth', (req, res) => {
         name: existingUser.name,
         email: existingUser.email,
         phone: existingUser.phone || '',
+        profileImage: existingUser.profileImage || null,
       },
     });
   } catch (error) {
@@ -362,10 +369,89 @@ app.post('/api/auth/login', (req, res) => {
     res.json({
       success: true,
       message: 'Logged in successfully',
-      user: { name: user.name, email: user.email, phone: user.phone },
+      user: {
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        profileImage: user.profileImage || null,
+      },
     });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Login failed', details: error.message });
+  }
+});
+
+// User Profile API 1: Update Profile (Name, Phone, Profile Image Avatar) - Persisted to database
+app.post('/api/user/profile', (req, res) => {
+  try {
+    const { email, name, phone, profileImage } = req.body;
+    if (!email) {
+      return res.status(400).json({ success: false, error: 'User email is required' });
+    }
+
+    const key = email.toLowerCase().trim();
+    let user = registeredUsers.get(key);
+
+    if (!user) {
+      user = {
+        name: (name && name.trim()) || key.split('@')[0],
+        email: key,
+        phone: phone || '',
+        createdAt: new Date().toISOString(),
+      };
+    }
+
+    if (name !== undefined && name !== null) user.name = name.trim();
+    if (phone !== undefined && phone !== null) user.phone = phone.trim();
+    if (profileImage !== undefined) user.profileImage = profileImage;
+    user.updatedAt = new Date().toISOString();
+
+    registeredUsers.set(key, user);
+    saveUsers(registeredUsers);
+    console.log(`[User Profile] Saved updated profile for ${user.email} (Avatar length: ${profileImage ? profileImage.length : 0})`);
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      user: {
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        profileImage: user.profileImage || null,
+      },
+    });
+  } catch (error) {
+    console.error('[User Profile Error]', error);
+    res.status(500).json({ success: false, error: 'Failed to update profile', details: error.message });
+  }
+});
+
+// User Profile API 2: Fetch Profile Data by Email
+app.get('/api/user/profile', (req, res) => {
+  try {
+    const { email } = req.query;
+    if (!email) {
+      return res.status(400).json({ success: false, error: 'Email query parameter is required' });
+    }
+
+    const key = email.toLowerCase().trim();
+    const user = registeredUsers.get(key);
+
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    res.json({
+      success: true,
+      user: {
+        name: user.name,
+        email: user.email,
+        phone: user.phone || '',
+        profileImage: user.profileImage || null,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to fetch user profile' });
   }
 });
 
@@ -544,6 +630,19 @@ app.post('/api/fuel-rate', (req, res) => {
     res.status(500).json({ success: false, error: 'Failed to update fuel rate', details: error.message });
   }
 });
+
+// Serve exported React Native Web Build (Full Desktop & Mobile Web)
+const DIST_PATH = path.join(__dirname, '../../mobile-app/dist');
+if (fs.existsSync(DIST_PATH)) {
+  console.log(`[Static] Serving web frontend from ${DIST_PATH}`);
+  app.use(express.static(DIST_PATH));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) {
+      return next();
+    }
+    res.sendFile(path.join(DIST_PATH, 'index.html'));
+  });
+}
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Extra Diesel AWS Backend running on port ${PORT}`);

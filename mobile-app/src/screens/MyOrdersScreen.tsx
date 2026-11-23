@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 import { ScreenName } from '../types';
@@ -21,6 +21,8 @@ interface MyOrdersScreenProps {
 }
 
 export const MyOrdersScreen: React.FC<MyOrdersScreenProps> = ({ onNavigate, onSelectOrder }) => {
+  const { width } = useWindowDimensions();
+  const isDesktop = Platform.OS === 'web' && width >= 768;
   const [tab, setTab] = useState<'all' | 'pending' | 'delivered'>('all');
   const [orders, setOrders] = useState<OrderItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -53,7 +55,10 @@ export const MyOrdersScreen: React.FC<MyOrdersScreenProps> = ({ onNavigate, onSe
   });
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={[styles.content, isDesktop && { maxWidth: 1000, width: '100%', alignSelf: 'center', paddingVertical: 24 }]}
+    >
       {/* Tabs */}
       <View style={styles.tabContainer}>
         {(['all', 'pending', 'delivered'] as const).map((t) => (

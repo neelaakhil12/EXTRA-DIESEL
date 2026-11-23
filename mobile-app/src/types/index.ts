@@ -7,6 +7,7 @@ export interface User {
   email?: string;
   role: UserRole;
   avatar?: string;
+  profileImage?: string;
   isB2BVerified?: boolean;
   companyName?: string;
   gstin?: string;

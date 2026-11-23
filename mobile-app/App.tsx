@@ -25,6 +25,7 @@ import { TrackOrderScreen } from './src/screens/TrackOrderScreen';
 import { MyOrdersScreen } from './src/screens/MyOrdersScreen';
 import { SubscriptionScreen } from './src/screens/SubscriptionScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
+import { APP_CONFIG } from './src/constants/config';
 
 export default function App() {
   return (
@@ -35,17 +36,54 @@ export default function App() {
 }
 
 function MainApp() {
-  // Navigation stack state for seamless back button & gesture navigation history
-  const [screenStack, setScreenStack] = useState<ScreenName[]>(['splash']);
+  // Navigation stack: On Web starts at 'home' like real websites, on Mobile App starts at 'splash'
+  const [screenStack, setScreenStack] = useState<ScreenName[]>(
+    Platform.OS === 'web' ? ['home'] : ['splash']
+  );
   const currentScreen = screenStack[screenStack.length - 1];
 
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(Platform.OS === 'web');
   const [activeTrackingOrderId, setActiveTrackingOrderId] = useState<string>('ED20261116-8941');
-  const [currentUser, setCurrentUser] = useState({
+  const [currentUser, setCurrentUser] = useState<{
+    name: string;
+    email: string;
+    phone: string;
+    profileImage?: string;
+  }>({
     name: 'Akhil Kumar',
     email: 'akhil@extradiesel.com',
     phone: '+91 98765 43210',
+    profileImage: undefined,
   });
+
+  // Sync fresh profile from database whenever user email or login status changes
+  useEffect(() => {
+    const syncProfile = async () => {
+      try {
+        if (!currentUser.email) return;
+        const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'https://gtmining.xyz';
+        const res = await fetch(`${baseUrl}/api/user/profile?email=${encodeURIComponent(currentUser.email)}`);
+        const data = await res.json();
+        if (data.success && data.user) {
+          setCurrentUser((prev) => ({
+            ...prev,
+            name: data.user.name || prev.name,
+            phone: data.user.phone || prev.phone,
+            profileImage: data.user.profileImage || prev.profileImage,
+          }));
+        }
+      } catch (e) {}
+    };
+
+    syncProfile();
+  }, [currentUser.email, isLoggedIn]);
+
+  const handleUpdateUser = (updatedData: { name?: string; phone?: string; profileImage?: string }) => {
+    setCurrentUser((prev) => ({
+      ...prev,
+      ...updatedData,
+    }));
+  };
 
   // Navigate forward with history tracking
   const navigateTo = (screen: ScreenName) => {
@@ -121,8 +159,8 @@ function MainApp() {
   };
 
   // Handle successful login / signup
-  const handleLoginSuccess = (userData: { name: string; email: string; phone: string }) => {
-    setCurrentUser(userData);
+  const handleLoginSuccess = (userData: { name: string; email: string; phone: string; profileImage?: string }) => {
+    setCurrentUser((prev) => ({ ...prev, ...userData }));
     setIsLoggedIn(true);
     setScreenStack(['home']);
   };
@@ -201,10 +239,16 @@ function MainApp() {
           <Header
             title={getHeaderTitle()}
             userName={currentUser.name}
+            userAvatar={currentUser.profileImage}
             showBack={showBackBtn}
             onBack={goBack}
             onNotificationPress={() => setShowNotifications(true)}
             onProfilePress={() => navigateTo('profile')}
+            currentScreen={currentScreen}
+            onNavigate={(screen) => navigateTo(screen)}
+            isLoggedIn={isLoggedIn}
+            onLoginPress={() => navigateTo('login')}
+            onLogout={handleLogout}
           />
         )}
 
@@ -258,6 +302,7 @@ function MainApp() {
               user={currentUser}
               onLogout={handleLogout}
               onNavigate={(screen) => navigateTo(screen)}
+              onUpdateUser={handleUpdateUser}
             />
           )}
         </View>

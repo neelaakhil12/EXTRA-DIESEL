@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Platform, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 import { ScreenName } from '../types';
@@ -9,6 +9,8 @@ interface SubscriptionScreenProps {
 }
 
 export const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({ onNavigate }) => {
+  const { width } = useWindowDimensions();
+  const isDesktop = Platform.OS === 'web' && width >= 768;
   const [frequency, setFrequency] = useState<'weekly' | 'bi-weekly' | 'monthly'>('weekly');
   const [liters, setLiters] = useState<number>(300);
   const [selectedDays, setSelectedDays] = useState<string[]>(['Mon', 'Thu']);
@@ -34,7 +36,10 @@ export const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({ onNaviga
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={[styles.content, isDesktop && { maxWidth: 860, width: '100%', alignSelf: 'center', paddingVertical: 24 }]}
+    >
       {/* Highlight Banner */}
       <View style={styles.banner}>
         <View style={styles.bannerIcon}>

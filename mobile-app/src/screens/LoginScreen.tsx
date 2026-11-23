@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   Image,
   StatusBar,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -34,6 +35,8 @@ interface LoginScreenProps {
 }
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip }) => {
+  const { width } = useWindowDimensions();
+  const isDesktop = Platform.OS === 'web' && width >= 768;
   const insets = useSafeAreaInsets();
   const topSafeHeight = Platform.OS === 'android'
     ? Math.max(insets.top, StatusBar.currentHeight || 28) + 8
@@ -399,7 +402,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
       <View style={[styles.topSafeAreaBar, { height: topSafeHeight }]} />
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          isDesktop && { maxWidth: 460, width: '100%', alignSelf: 'center', paddingVertical: 40 },
+        ]}
         showsVerticalScrollIndicator={true}
         keyboardShouldPersistTaps="handled"
         automaticallyAdjustKeyboardInsets={true}

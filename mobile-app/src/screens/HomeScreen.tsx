@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Platform, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 import { ScreenName } from '../types';
@@ -10,6 +10,8 @@ interface HomeScreenProps {
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
+  const { width } = useWindowDimensions();
+  const isDesktop = Platform.OS === 'web' && width >= 768;
   const [fuelRate, setFuelRate] = useState<number>(94.50);
   const [rateCity, setRateCity] = useState<string>('Hyderabad');
 
@@ -33,54 +35,68 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
   }, []);
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Live Rate Ticker */}
-      <View style={styles.rateCard}>
-        <View style={styles.rateLeft}>
-          <View style={styles.fuelIcon}>
-            <Ionicons name="flame" size={24} color={COLORS.secondary} />
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={[styles.content, isDesktop && styles.desktopContent]}
+    >
+      {/* Top Banner Row: On Desktop side-by-side, on Mobile stacked */}
+      <View style={[styles.topRow, isDesktop && styles.desktopTopRow]}>
+        {/* Doorstep Diesel Delivery Banner */}
+        <View style={[styles.heroBanner, isDesktop && styles.desktopHeroBanner]}>
+          <View style={styles.heroTextContainer}>
+            <Text style={styles.heroBadge}>FREE DELIVERY ON 200L+</Text>
+            <Text style={[styles.heroTitle, isDesktop && styles.desktopHeroTitle]}>
+              Doorstep Diesel Delivery Platform
+            </Text>
+            <Text style={styles.heroSubtitle}>
+              100% pure BS-VI fuel delivered directly to your generators, fleets, machinery & commercial sites.
+            </Text>
+            <TouchableOpacity
+              style={styles.heroBtn}
+              onPress={() => onNavigate('order')}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.heroBtnText}>Order Now</Text>
+              <Ionicons name="arrow-forward" size={16} color={COLORS.primary} />
+            </TouchableOpacity>
           </View>
-          <View>
-            <Text style={styles.rateSubtitle}>Today's Diesel Rate</Text>
-            <Text style={styles.rateTitle}>BS-VI High Speed</Text>
-          </View>
+          <Image
+            source={require('../../assets/images/order-truck-thumb.png')}
+            style={[styles.heroImage, isDesktop && styles.desktopHeroImage]}
+            resizeMode="contain"
+          />
         </View>
-        <View style={styles.rateRight}>
-          <Text style={styles.rateValue}>₹{fuelRate.toFixed(2)}</Text>
-          <Text style={styles.rateUnit}>per Liter</Text>
-        </View>
-      </View>
 
-      {/* Hero Banner */}
-      <View style={styles.heroBanner}>
-        <View style={styles.heroTextContainer}>
-          <Text style={styles.heroBadge}>FREE DELIVERY ON 200L+</Text>
-          <Text style={styles.heroTitle}>Doorstep Diesel Delivery</Text>
-          <Text style={styles.heroSubtitle}>Automated meter printout • 100% pure fuel</Text>
-          <TouchableOpacity
-            style={styles.heroBtn}
-            onPress={() => onNavigate('order')}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.heroBtnText}>Order Now</Text>
-            <Ionicons name="arrow-forward" size={16} color={COLORS.primary} />
-          </TouchableOpacity>
+        {/* Live Rate Ticker Card */}
+        <View style={[styles.rateCard, isDesktop && styles.desktopRateCard]}>
+          <View style={styles.rateLeft}>
+            <View style={styles.fuelIcon}>
+              <Ionicons name="flame" size={26} color={COLORS.secondary} />
+            </View>
+            <View>
+              <Text style={styles.rateSubtitle}>Today's Live Rate ({rateCity})</Text>
+              <Text style={styles.rateTitle}>BS-VI High Speed</Text>
+              <View style={styles.pesoMiniBadge}>
+                <Ionicons name="shield-checkmark" size={12} color="#10B981" />
+                <Text style={styles.pesoMiniText}>PESO Verified</Text>
+              </View>
+            </View>
+          </View>
+          <View style={styles.rateRight}>
+            <Text style={styles.rateValue}>₹{fuelRate.toFixed(2)}</Text>
+            <Text style={styles.rateUnit}>per Liter</Text>
+          </View>
         </View>
-        <Image
-          source={require('../../assets/images/order-truck-thumb.png')}
-          style={styles.heroImage}
-          resizeMode="contain"
-        />
       </View>
 
       {/* Section Title */}
       <Text style={styles.sectionHeading}>Our Services</Text>
 
-      {/* 2x2 Service Cards Grid */}
-      <View style={styles.grid}>
+      {/* Services Grid: 4-in-a-row on Desktop, 2x2 on Mobile */}
+      <View style={[styles.grid, isDesktop && styles.desktopGrid]}>
         {/* Card 1: Order Diesel */}
         <TouchableOpacity
-          style={styles.serviceCard}
+          style={[styles.serviceCard, isDesktop && styles.desktopServiceCard]}
           onPress={() => onNavigate('order')}
           activeOpacity={0.85}
         >
@@ -96,7 +112,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
 
         {/* Card 2: My Orders */}
         <TouchableOpacity
-          style={styles.serviceCard}
+          style={[styles.serviceCard, isDesktop && styles.desktopServiceCard]}
           onPress={() => onNavigate('orders')}
           activeOpacity={0.85}
         >
@@ -112,7 +128,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
 
         {/* Card 3: Subscription */}
         <TouchableOpacity
-          style={styles.serviceCard}
+          style={[styles.serviceCard, isDesktop && styles.desktopServiceCard]}
           onPress={() => onNavigate('subscription')}
           activeOpacity={0.85}
         >
@@ -128,7 +144,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
 
         {/* Card 4: Live Track */}
         <TouchableOpacity
-          style={styles.serviceCard}
+          style={[styles.serviceCard, isDesktop && styles.desktopServiceCard]}
           onPress={() => onNavigate('track')}
           activeOpacity={0.85}
         >
@@ -318,6 +334,68 @@ const styles = StyleSheet.create({
   },
   cardArrow: {
     alignSelf: 'flex-end',
+  },
+  topRow: {
+    marginBottom: 16,
+  },
+  desktopTopRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 20,
+    marginBottom: 24,
+  },
+  desktopContent: {
+    maxWidth: 1240,
+    width: '100%',
+    alignSelf: 'center',
+    paddingHorizontal: 28,
+    paddingVertical: 24,
+  },
+  desktopHeroBanner: {
+    flex: 1.6,
+    marginBottom: 0,
+    padding: 24,
+  },
+  desktopHeroTitle: {
+    fontSize: 22,
+    lineHeight: 28,
+  },
+  desktopHeroImage: {
+    width: 140,
+    height: 120,
+  },
+  desktopRateCard: {
+    flex: 1,
+    marginBottom: 0,
+    justifyContent: 'center',
+    padding: 24,
+  },
+  pesoMiniBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginTop: 6,
+    alignSelf: 'flex-start',
+  },
+  pesoMiniText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  desktopGrid: {
+    flexDirection: 'row',
+    flexWrap: 'nowrap',
+    gap: 16,
+    marginBottom: 28,
+  },
+  desktopServiceCard: {
+    width: undefined,
+    flex: 1,
+    padding: 20,
   },
   assuranceCard: {
     backgroundColor: '#ECFDF5',

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
@@ -11,7 +11,14 @@ interface BottomNavProps {
 }
 
 export const BottomNav: React.FC<BottomNavProps> = ({ currentScreen, onNavigate }) => {
+  const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const isDesktop = Platform.OS === 'web' && width >= 768;
+
+  // On desktop view, full-width top Navbar handles navigation, so hide bottom tab bar
+  if (isDesktop) {
+    return null;
+  }
 
   // Dynamic bottom padding:
   // - With Android 3-Button Navigation (Square/Circle/Triangle): insets.bottom is ~48-56dp.

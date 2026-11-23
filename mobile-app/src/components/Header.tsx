@@ -1,29 +1,54 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, StatusBar, Platform } from 'react-native';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  StatusBar,
+  Platform,
+  Image,
+  useWindowDimensions,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
+import { ScreenName } from '../types';
 
 interface HeaderProps {
   title?: string;
   userName?: string;
+  userAvatar?: string;
   showBack?: boolean;
   onBack?: () => void;
   showNotification?: boolean;
   onNotificationPress?: () => void;
   onProfilePress?: () => void;
+  currentScreen?: ScreenName;
+  onNavigate?: (screen: ScreenName) => void;
+  isLoggedIn?: boolean;
+  onLoginPress?: () => void;
+  onLogout?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   title,
-  userName,
+  userName = 'Akhil Kumar',
+  userAvatar,
   showBack = false,
   onBack,
   showNotification = true,
   onNotificationPress,
   onProfilePress,
+  currentScreen = 'home',
+  onNavigate,
+  isLoggedIn = true,
+  onLoginPress,
+  onLogout,
 }) => {
+  const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const isDesktop = Platform.OS === 'web' && width >= 768;
+
   const dynamicPaddingTop = Platform.OS === 'android'
     ? Math.max(insets.top, StatusBar.currentHeight || 28) + 8
     : Math.max(insets.top, 14);
@@ -36,7 +61,125 @@ export const Header: React.FC<HeaderProps> = ({
     }
     return name.slice(0, 2).toUpperCase();
   };
-  // If it's an inner screen with a title (e.g. Order Diesel, Track, History, etc.)
+
+  /* =========================================================================
+     1. DESKTOP FULL-SCREEN NAVBAR (When viewed on Laptop / Desktop Browser)
+     ========================================================================= */
+  if (isDesktop) {
+    const navLinks: { screen: ScreenName; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+      { screen: 'home', label: 'Home', icon: 'home-outline' },
+      { screen: 'order', label: 'Order Diesel', icon: 'funnel-outline' },
+      { screen: 'track', label: 'Live Track', icon: 'location-outline' },
+      { screen: 'orders', label: 'Order History', icon: 'receipt-outline' },
+      { screen: 'subscription', label: 'Subscriptions', icon: 'calendar-outline' },
+    ];
+
+    return (
+      <View style={styles.desktopNavbar}>
+        <View style={styles.desktopNavInner}>
+          {/* Brand Logo & Tagline */}
+          <TouchableOpacity
+            onPress={() => onNavigate?.('home')}
+            style={styles.desktopBrandWrap}
+            activeOpacity={0.8}
+          >
+            <View style={styles.desktopBrandIcon}>
+              <Ionicons name="flame" size={24} color={COLORS.primary} />
+            </View>
+            <View>
+              <Text style={styles.desktopBrandTitle}>
+                EXTRA <Text style={styles.desktopBrandAccent}>DIESEL</Text>
+              </Text>
+              <Text style={styles.desktopBrandTagline}>PESO Certified Bowser Delivery</Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Navigation Links */}
+          <View style={styles.desktopNavLinks}>
+            {navLinks.map((link) => {
+              const isActive = currentScreen === link.screen;
+              return (
+                <TouchableOpacity
+                  key={link.screen}
+                  onPress={() => onNavigate?.(link.screen)}
+                  style={[styles.desktopNavLink, isActive && styles.desktopNavLinkActive]}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name={link.icon}
+                    size={17}
+                    color={isActive ? COLORS.primary : '#475569'}
+                  />
+                  <Text style={[styles.desktopNavLinkText, isActive && styles.desktopNavLinkTextActive]}>
+                    {link.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* Right Actions: Live Price, Notifications, User Profile */}
+          <View style={styles.desktopRightActions}>
+            {/* Live Diesel Price Pill */}
+            <View style={styles.desktopRateBadge}>
+              <View style={styles.livePulseDot} />
+              <Text style={styles.desktopRateLabel}>Diesel:</Text>
+              <Text style={styles.desktopRatePrice}>₹94.50/L</Text>
+            </View>
+
+            {/* Notification Bell */}
+            <TouchableOpacity
+              onPress={onNotificationPress}
+              style={styles.desktopIconBtn}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="notifications-outline" size={20} color={COLORS.dark} />
+              <View style={styles.notificationDot} />
+            </TouchableOpacity>
+
+            {/* User Account / Profile */}
+            {isLoggedIn ? (
+              <TouchableOpacity
+                onPress={onProfilePress}
+                style={styles.desktopUserButton}
+                activeOpacity={0.75}
+              >
+                {userAvatar ? (
+                  <Image source={{ uri: userAvatar }} style={styles.desktopUserAvatar} />
+                ) : (
+                  <View style={styles.desktopUserAvatarFallback}>
+                    <Text style={styles.desktopAvatarInitials}>{getInitials(userName)}</Text>
+                  </View>
+                )}
+                <View style={styles.desktopUserNameWrap}>
+                  <Text style={styles.desktopUserName} numberOfLines={1}>
+                    {userName}
+                  </Text>
+                  <Text style={styles.desktopUserSub}>Verified Account</Text>
+                </View>
+                <Ionicons name="chevron-down" size={14} color="#64748B" />
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                onPress={onLoginPress}
+                style={styles.desktopSignInBtn}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.desktopSignInText}>Sign In</Text>
+                <Ionicons name="log-in-outline" size={18} color={COLORS.white} />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  /* =========================================================================
+     2. MOBILE HEADER (When viewed on Mobile Device or Mobile Web Browser)
+     ========================================================================= */
+
+  // If inner screen with title (e.g. Order Diesel, Track, History, etc.)
   if (title) {
     return (
       <View style={[styles.container, { paddingTop: dynamicPaddingTop }]}>
@@ -67,7 +210,7 @@ export const Header: React.FC<HeaderProps> = ({
     );
   }
 
-  // Home Screen: Modern App Location & Profile Bar (like Blinkit / Swiggy / Uber)
+  // Home Screen: Mobile Location & Profile Bar
   return (
     <View style={[styles.container, { paddingTop: dynamicPaddingTop }]}>
       <StatusBar barStyle="dark-content" />
@@ -88,7 +231,7 @@ export const Header: React.FC<HeaderProps> = ({
           </View>
         </TouchableOpacity>
 
-        {/* Right: Notification & Profile Button */}
+        {/* Right: Notification & Profile Avatar Button */}
         <View style={styles.rightActions}>
           <TouchableOpacity
             onPress={onNotificationPress}
@@ -104,7 +247,11 @@ export const Header: React.FC<HeaderProps> = ({
             style={styles.avatarButton}
             activeOpacity={0.7}
           >
-            <Text style={styles.avatarText}>{getInitials(userName)}</Text>
+            {userAvatar ? (
+              <Image source={{ uri: userAvatar }} style={styles.mobileAvatarImg} />
+            ) : (
+              <Text style={styles.avatarText}>{getInitials(userName)}</Text>
+            )}
             <View style={styles.onlineBadge} />
           </TouchableOpacity>
         </View>
@@ -128,6 +275,7 @@ export const Header: React.FC<HeaderProps> = ({
 };
 
 const styles = StyleSheet.create({
+  // Mobile Container Styles
   container: {
     backgroundColor: COLORS.white,
     paddingBottom: 10,
@@ -140,27 +288,25 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 6,
   },
-  // Home Header Style
   homeHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    alignItems: 'center',
+    paddingVertical: 4,
   },
   locationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
     flex: 1,
-    marginRight: 10,
   },
   locationIconWrap: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#FEE2E2',
+    backgroundColor: '#FEF2F2',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 10,
   },
   locationTextWrap: {
     flex: 1,
@@ -174,18 +320,18 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
     color: COLORS.primary,
-    letterSpacing: 0.6,
+    letterSpacing: 0.8,
   },
   locationSiteName: {
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: '700',
     color: COLORS.dark,
     marginTop: 1,
   },
   rightActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
   iconCircle: {
     width: 38,
@@ -196,6 +342,7 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
   },
   notificationDot: {
     position: 'absolute',
@@ -210,15 +357,21 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: COLORS.dark,
+    backgroundColor: '#0F172A',
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
+    overflow: 'visible',
   },
   avatarText: {
     color: COLORS.white,
     fontSize: 13,
     fontWeight: '800',
+  },
+  mobileAvatarImg: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
   },
   onlineBadge: {
     position: 'absolute',
@@ -227,25 +380,26 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: COLORS.green,
+    backgroundColor: '#10B981',
     borderWidth: 2,
     borderColor: COLORS.white,
   },
   brandStrip: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
     backgroundColor: '#F8FAFC',
+    borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 10,
+    marginTop: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#F1F5F9',
   },
   brandBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 6,
   },
   brandText: {
     fontSize: 12,
@@ -262,20 +416,21 @@ const styles = StyleSheet.create({
     gap: 4,
     backgroundColor: '#ECFDF5',
     paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
+    paddingVertical: 3,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
   },
   complianceText: {
-    fontSize: 10,
+    fontSize: 10.5,
     fontWeight: '700',
-    color: COLORS.greenDark,
+    color: '#065F46',
   },
-  // Inner Screens Header Style
   innerHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 4,
+    alignItems: 'center',
+    paddingVertical: 8,
   },
   backButton: {
     width: 38,
@@ -292,8 +447,186 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   titleText: {
-    color: COLORS.dark,
     fontSize: 17,
     fontWeight: '800',
+    color: COLORS.dark,
+  },
+
+  /* =========================================================================
+     Desktop Navbar Styles
+     ========================================================================= */
+  desktopNavbar: {
+    width: '100%',
+    backgroundColor: COLORS.white,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 3,
+    zIndex: 100,
+  },
+  desktopNavInner: {
+    maxWidth: 1240,
+    width: '100%',
+    marginHorizontal: 'auto' as any,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+  },
+  desktopBrandWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  desktopBrandIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#FEE2E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  desktopBrandTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: COLORS.dark,
+    letterSpacing: 0.5,
+  },
+  desktopBrandAccent: {
+    color: COLORS.primary,
+  },
+  desktopBrandTagline: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  desktopNavLinks: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  desktopNavLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+  },
+  desktopNavLinkActive: {
+    backgroundColor: '#FEE2E2',
+  },
+  desktopNavLinkText: {
+    fontSize: 13.5,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  desktopNavLinkTextActive: {
+    color: COLORS.primary,
+    fontWeight: '800',
+  },
+  desktopRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  desktopRateBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 6,
+  },
+  livePulseDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#D97706',
+  },
+  desktopRateLabel: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#92400E',
+  },
+  desktopRatePrice: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#78350F',
+  },
+  desktopIconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  desktopUserButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#F8FAFC',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  desktopUserAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+  },
+  desktopUserAvatarFallback: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#0F172A',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  desktopAvatarInitials: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  desktopUserNameWrap: {
+    maxWidth: 120,
+  },
+  desktopUserName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.dark,
+  },
+  desktopUserSub: {
+    fontSize: 10,
+    color: '#10B981',
+    fontWeight: '600',
+  },
+  desktopSignInBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: COLORS.primary,
+    paddingVertical: 9,
+    paddingHorizontal: 18,
+    borderRadius: 10,
+  },
+  desktopSignInText: {
+    color: COLORS.white,
+    fontSize: 13.5,
+    fontWeight: '700',
   },
 });
