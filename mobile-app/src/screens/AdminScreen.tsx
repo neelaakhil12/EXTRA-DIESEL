@@ -126,6 +126,15 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
   const [pesoSafetyEquipment, setPesoSafetyEquipment] = useState<string>('Static Earthing & Class-B Flameproof');
   const [pesoAutomatedReceipts, setPesoAutomatedReceipts] = useState<string>('Tamper-Proof Dispenser Integrated Printout');
 
+  // Vehicle Fleet Showcase Images (Home Banner)
+  const [vehicleImagesList, setVehicleImagesList] = useState<string[]>([
+    'https://extradiesel.in/assets/images/vehicle-bowser-1.jpeg',
+    'https://extradiesel.in/assets/images/vehicle-bowser-2.jpeg',
+  ]);
+  const [newVehicleImageUrl, setNewVehicleImageUrl] = useState<string>('');
+  const [editingVehicleIndex, setEditingVehicleIndex] = useState<number | null>(null);
+  const [editingVehicleValue, setEditingVehicleValue] = useState<string>('');
+
   const [isSavingSettings, setIsSavingSettings] = useState<boolean>(false);
   const [settingsSuccessMessage, setSettingsSuccessMessage] = useState<string>('');
 
@@ -212,6 +221,11 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
           if (s.pesoCompliance.calibrationValidity) setPesoCalibrationValidity(s.pesoCompliance.calibrationValidity);
           if (s.pesoCompliance.safetyEquipment) setPesoSafetyEquipment(s.pesoCompliance.safetyEquipment);
           if (s.pesoCompliance.automatedReceipts) setPesoAutomatedReceipts(s.pesoCompliance.automatedReceipts);
+        }
+
+        // Vehicle Fleet Showcase Images
+        if (s.vehicleImages && Array.isArray(s.vehicleImages) && s.vehicleImages.length > 0) {
+          setVehicleImagesList(s.vehicleImages);
         }
       }
     } catch (e) {
@@ -408,12 +422,13 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
             safetyEquipment: pesoSafetyEquipment.trim(),
             automatedReceipts: pesoAutomatedReceipts.trim(),
           },
+          vehicleImages: vehicleImagesList,
         }),
       });
 
       const data = await res.json();
       if (data.success) {
-        setSettingsSuccessMessage('All global settings, fuel pricing, credit line, hotline & PESO compliance saved successfully!');
+        setSettingsSuccessMessage('All global settings, fuel pricing, fleet images, credit line & hotline saved successfully!');
         setTimeout(() => setSettingsSuccessMessage(''), 5000);
         loadAdminData();
       } else {
@@ -424,6 +439,34 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
     } finally {
       setIsSavingSettings(false);
     }
+  };
+
+  // Fleet Images Management Handlers
+  const handleAddVehicleImage = () => {
+    if (!newVehicleImageUrl.trim()) return;
+    setVehicleImagesList((prev) => [...prev, newVehicleImageUrl.trim()]);
+    setNewVehicleImageUrl('');
+  };
+
+  const handleDeleteVehicleImage = (index: number) => {
+    setVehicleImagesList((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleStartEditVehicleImage = (index: number) => {
+    setEditingVehicleIndex(index);
+    setEditingVehicleValue(vehicleImagesList[index] || '');
+  };
+
+  const handleSaveEditVehicleImage = () => {
+    if (editingVehicleIndex === null) return;
+    if (!editingVehicleValue.trim()) return;
+    setVehicleImagesList((prev) => {
+      const copy = [...prev];
+      copy[editingVehicleIndex] = editingVehicleValue.trim();
+      return copy;
+    });
+    setEditingVehicleIndex(null);
+    setEditingVehicleValue('');
   };
 
   // Create Delivery Boy
@@ -1416,6 +1459,88 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
                       onChangeText={setRateCityInput}
                       placeholder="Hyderabad"
                     />
+                  </View>
+                </View>
+              </View>
+
+              {/* Vehicle Fleet Showcase (Home Banner Images) Card */}
+              <View style={styles.settingCard}>
+                <View style={styles.settingCardHeader}>
+                  <View style={[styles.settingIconBox, { backgroundColor: '#EFF6FF' }]}>
+                    <Ionicons name="images" size={22} color="#2563EB" />
+                  </View>
+                  <View>
+                    <Text style={styles.settingCardTitle}>Vehicle Fleet Showcase (Home Banner Images)</Text>
+                    <Text style={styles.settingCardSub}>Edit, delete, and add bowser vehicle photos that rotate in the Home Screen banner</Text>
+                  </View>
+                </View>
+
+                {/* List of current vehicle photos */}
+                <View style={styles.vehicleListContainer}>
+                  {vehicleImagesList.map((imgUri, idx) => (
+                    <View key={idx} style={styles.vehicleImageRow}>
+                      <Image source={{ uri: imgUri }} style={styles.vehicleThumbnail} resizeMode="cover" />
+                      <View style={{ flex: 1, marginHorizontal: 12 }}>
+                        {editingVehicleIndex === idx ? (
+                          <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                            <TextInput
+                              style={[styles.standardField, { flex: 1, paddingVertical: 6 }]}
+                              value={editingVehicleValue}
+                              onChangeText={setEditingVehicleValue}
+                              placeholder="Image URL"
+                            />
+                            <TouchableOpacity style={styles.smallActionBtn} onPress={handleSaveEditVehicleImage}>
+                              <Ionicons name="checkmark" size={16} color={COLORS.white} />
+                            </TouchableOpacity>
+                            <TouchableOpacity style={[styles.smallActionBtn, { backgroundColor: '#94A3B8' }]} onPress={() => setEditingVehicleIndex(null)}>
+                              <Ionicons name="close" size={16} color={COLORS.white} />
+                            </TouchableOpacity>
+                          </View>
+                        ) : (
+                          <View>
+                            <Text style={styles.vehicleImageName}>Vehicle Bowser #{idx + 1}</Text>
+                            <Text style={styles.vehicleImageUrlText} numberOfLines={1}>{imgUri}</Text>
+                          </View>
+                        )}
+                      </View>
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        {editingVehicleIndex !== idx && (
+                          <TouchableOpacity
+                            style={styles.actionIconBtn}
+                            onPress={() => handleStartEditVehicleImage(idx)}
+                          >
+                            <Ionicons name="pencil-outline" size={17} color="#2563EB" />
+                          </TouchableOpacity>
+                        )}
+                        <TouchableOpacity
+                          style={[styles.actionIconBtn, { borderColor: '#FEE2E2', backgroundColor: '#FEF2F2' }]}
+                          onPress={() => handleDeleteVehicleImage(idx)}
+                        >
+                          <Ionicons name="trash-outline" size={17} color="#DC2626" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+
+                {/* Add New Image Input */}
+                <View style={{ marginTop: 14 }}>
+                  <Text style={styles.fieldLabel}>Add New Vehicle Image URL</Text>
+                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                    <TextInput
+                      style={[styles.standardField, { flex: 1 }]}
+                      value={newVehicleImageUrl}
+                      onChangeText={setNewVehicleImageUrl}
+                      placeholder="https://extradiesel.in/assets/images/... or image URL"
+                    />
+                    <TouchableOpacity
+                      style={styles.addVehicleBtn}
+                      onPress={handleAddVehicleImage}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="add" size={18} color={COLORS.white} />
+                      <Text style={styles.addVehicleBtnText}>Add Image</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
               </View>
@@ -3126,5 +3251,66 @@ const styles = StyleSheet.create({
     color: '#059669',
     fontWeight: '600',
     textAlign: 'center',
+  },
+  vehicleListContainer: {
+    gap: 10,
+    marginTop: 10,
+  },
+  vehicleImageRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 10,
+    borderRadius: 12,
+  },
+  vehicleThumbnail: {
+    width: 68,
+    height: 50,
+    borderRadius: 8,
+    backgroundColor: '#E2E8F0',
+  },
+  vehicleImageName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  vehicleImageUrlText: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  smallActionBtn: {
+    backgroundColor: COLORS.primary,
+    width: 30,
+    height: 30,
+    borderRadius: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  actionIconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addVehicleBtn: {
+    backgroundColor: COLORS.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 6,
+  },
+  addVehicleBtnText: {
+    color: COLORS.white,
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

@@ -9,65 +9,67 @@ interface HomeScreenProps {
   onNavigate: (screen: ScreenName) => void;
 }
 
+const DEFAULT_VEHICLE_IMAGES = [
+  require('../../assets/images/vehicle-bowser-1.jpeg'),
+  require('../../assets/images/vehicle-bowser-2.jpeg'),
+];
+
 export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
   const { width } = useWindowDimensions();
   const isDesktop = Platform.OS === 'web' && width >= 768;
   const [fuelRate, setFuelRate] = useState<number>(94.50);
   const [rateCity, setRateCity] = useState<string>('Hyderabad');
+  const [vehicleImages, setVehicleImages] = useState<any[]>(DEFAULT_VEHICLE_IMAGES);
+  const [vehicleImgIdx, setVehicleImgIdx] = useState<number>(0);
 
-  // Fetch real-time dynamic diesel price from live backend
+  // Fetch real-time dynamic diesel price and fleet showcase images from live backend
   useEffect(() => {
-    const fetchRate = async () => {
+    const fetchData = async () => {
       try {
         const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'https://extradiesel.in';
-        const res = await fetch(`${baseUrl}/api/fuel-rate`);
+        const res = await fetch(`${baseUrl}/api/settings`);
         const data = await res.json();
-        if (data.rate && !isNaN(Number(data.rate))) {
-          setFuelRate(Number(data.rate));
-          if (data.city) setRateCity(data.city);
+        if (data.success && data.settings) {
+          const s = data.settings;
+          if (s.dieselRate && !isNaN(Number(s.dieselRate))) {
+            setFuelRate(Number(s.dieselRate));
+          }
+          if (s.city) setRateCity(s.city);
+          if (s.vehicleImages && Array.isArray(s.vehicleImages) && s.vehicleImages.length > 0) {
+            const parsedImages = s.vehicleImages.map((img: string) => {
+              if (typeof img === 'string' && (img.startsWith('http') || img.startsWith('data:'))) {
+                return { uri: img };
+              }
+              return DEFAULT_VEHICLE_IMAGES[0];
+            });
+            setVehicleImages(parsedImages);
+          }
         }
       } catch (err) {
         // Fallback default
       }
     };
 
-    fetchRate();
+    fetchData();
   }, []);
+
+  // Automatically cycle vehicle photos every 1.5 seconds
+  useEffect(() => {
+    if (vehicleImages.length <= 1) return;
+    const timer = setInterval(() => {
+      setVehicleImgIdx((prev) => (prev + 1) % vehicleImages.length);
+    }, 1500);
+    return () => clearInterval(timer);
+  }, [vehicleImages.length]);
 
   return (
     <ScrollView
       style={styles.container}
       contentContainerStyle={[styles.content, isDesktop && styles.desktopContent]}
     >
-      {/* Top Banner Row: On Desktop side-by-side, on Mobile stacked */}
+      {/* Top Banner Row: Live Rate FIRST (prominently highlighted at the top), then Fleet Banner */}
       <View style={[styles.topRow, isDesktop && styles.desktopTopRow]}>
-        {/* Doorstep Diesel Delivery Banner */}
-        <View style={[styles.heroBanner, isDesktop && styles.desktopHeroBanner]}>
-          <View style={styles.heroTextContainer}>
-            <Text style={styles.heroBadge}>FREE DELIVERY ON 200L+</Text>
-            <Text style={[styles.heroTitle, isDesktop && styles.desktopHeroTitle]}>
-              Doorstep Diesel Delivery Platform
-            </Text>
-            <Text style={styles.heroSubtitle}>
-              100% pure BS-VI fuel delivered directly to your generators, fleets, machinery & commercial sites.
-            </Text>
-            <TouchableOpacity
-              style={styles.heroBtn}
-              onPress={() => onNavigate('order')}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.heroBtnText}>Order Now</Text>
-              <Ionicons name="arrow-forward" size={16} color={COLORS.primary} />
-            </TouchableOpacity>
-          </View>
-          <Image
-            source={require('../../assets/images/order-truck-thumb.png')}
-            style={[styles.heroImage, isDesktop && styles.desktopHeroImage]}
-            resizeMode="contain"
-          />
-        </View>
-
-        {/* Live Rate Ticker Card */}
+        {/* 1. Live Diesel Rate Card (Top Highlight) */}
         <View style={[styles.rateCard, isDesktop && styles.desktopRateCard]}>
           <View style={styles.rateLeft}>
             <View style={styles.fuelIcon}>
@@ -75,7 +77,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
             </View>
             <View>
               <Text style={styles.rateSubtitle}>Today's Live Rate ({rateCity})</Text>
-              <Text style={styles.rateTitle}>BS-VI High Speed</Text>
+              <Text style={styles.rateTitle}>BS-VI High Speed Diesel</Text>
               <View style={styles.pesoMiniBadge}>
                 <Ionicons name="shield-checkmark" size={12} color="#10B981" />
                 <Text style={styles.pesoMiniText}>PESO Verified</Text>
@@ -85,6 +87,40 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
           <View style={styles.rateRight}>
             <Text style={styles.rateValue}>₹{fuelRate.toFixed(2)}</Text>
             <Text style={styles.rateUnit}>per Liter</Text>
+          </View>
+        </View>
+
+        {/* 2. Our Vehicles Animated Banner (Positioned directly below the live price) */}
+        <View style={[styles.heroBanner, isDesktop && styles.desktopHeroBanner]}>
+          <View style={styles.heroTextContainer}>
+            <View style={styles.vehicleHeaderRow}>
+              <Text style={styles.heroBadge}>OUR FLEET</Text>
+              <View style={styles.liveVehicleDotWrap}>
+                <View style={styles.liveVehicleDot} />
+                <Text style={styles.liveVehicleText}>Smart Bowser</Text>
+              </View>
+            </View>
+            <Text style={[styles.heroTitle, isDesktop && styles.desktopHeroTitle]}>
+              Our Vehicles
+            </Text>
+            <Text style={styles.heroSubtitle}>
+              PESO-Certified Smart Mobile Bowsers for On-Demand Doorstep Fueling
+            </Text>
+            <TouchableOpacity
+              style={styles.heroBtn}
+              onPress={() => onNavigate('order')}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.heroBtnText}>Order Now</Text>
+              <Ionicons name="arrow-forward" size={16} color={COLORS.white} />
+            </TouchableOpacity>
+          </View>
+          <View style={[styles.vehicleImgFrame, isDesktop && styles.desktopVehicleImgFrame]}>
+            <Image
+              source={vehicleImages[vehicleImgIdx] || DEFAULT_VEHICLE_IMAGES[0]}
+              style={styles.vehicleImg}
+              resizeMode="cover"
+            />
           </View>
         </View>
       </View>
@@ -287,10 +323,57 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-  heroImage: {
-    width: 90,
-    height: 90,
-    marginLeft: 8,
+  vehicleHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  liveVehicleDotWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  liveVehicleDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10B981',
+  },
+  liveVehicleText: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: '#065F46',
+  },
+  vehicleImgFrame: {
+    width: 130,
+    height: 105,
+    borderRadius: 14,
+    overflow: 'hidden',
+    marginLeft: 10,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F1F5F9',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  desktopVehicleImgFrame: {
+    width: 210,
+    height: 135,
+    borderRadius: 16,
+  },
+  vehicleImg: {
+    width: '100%',
+    height: '100%',
   },
   sectionHeading: {
     fontSize: 18,

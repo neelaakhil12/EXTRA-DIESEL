@@ -15,6 +15,10 @@
       "package": "com.extradiesel.app",
       "usesCleartextTraffic": true,
       "softwareKeyboardLayoutMode": "pan",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#D50000",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -32,6 +36,12 @@
         "@react-native-google-signin/google-signin",
         {
           "iosUrlScheme": "com.googleusercontent.apps.818952981825-0rcecfahu2vqunp0pjc6ufep70oknq35"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Extra Diesel to use your location to deliver diesel directly to your bowser site."
         }
       ]
     ],

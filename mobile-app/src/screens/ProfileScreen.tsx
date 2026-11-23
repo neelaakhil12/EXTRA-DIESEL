@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   Alert,
   useWindowDimensions,
+  BackHandler,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
@@ -417,21 +418,28 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onLogout, on
   const availableCredit = Math.max(0, creditLimit - usedCredit);
   const creditUsagePercent = creditLimit > 0 ? Math.min(100, Math.round((availableCredit / creditLimit) * 100)) : 100;
 
-  // Navigation Sub-header
+  // Listen for hardware back or swipe back to close sub-screen
+  useEffect(() => {
+    const onBackPress = () => {
+      if (isShowingSiteForm) {
+        setIsShowingSiteForm(false);
+        return true;
+      }
+      if (activeSubScreen !== null) {
+        setActiveSubScreen(null);
+        return true;
+      }
+      return false;
+    };
+
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, [activeSubScreen, isShowingSiteForm]);
+
+  // Navigation Sub-header (Clean header without back arrow, handled by nav buttons & gestures)
   const renderSubHeader = (title: string, subtitle?: string) => (
     <View style={styles.subHeaderBar}>
-      <TouchableOpacity
-        style={styles.backButton}
-        onPress={() => {
-          setIsShowingSiteForm(false);
-          setActiveSubScreen(null);
-        }}
-        activeOpacity={0.7}
-      >
-        <Ionicons name="arrow-back" size={22} color={COLORS.dark} />
-        <Text style={styles.backButtonText}>Profile</Text>
-      </TouchableOpacity>
-      <View style={{ flex: 1, marginLeft: 8 }}>
+      <View style={{ flex: 1 }}>
         <Text style={styles.subHeaderTitle}>{title}</Text>
         {subtitle ? <Text style={styles.subHeaderSub}>{subtitle}</Text> : null}
       </View>

@@ -14,6 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 import { APP_CONFIG } from '../constants/config';
+import * as Location from 'expo-location';
 
 export interface SavedLocation {
   plotNo: string;
@@ -62,48 +63,114 @@ export const LocationModal: React.FC<LocationModalProps> = ({
   const [statusMessage, setStatusMessage] = useState('');
 
   const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'https://extradiesel.in';
+  const mapboxToken = APP_CONFIG.MAPBOX_ACCESS_TOKEN;
 
-  // "Locate Me" GPS Reverse Geocoding
-  const handleLocateMe = () => {
+  // Apply location details from coordinates
+  const applyCoordinatesLocation = async (latitude: number, longitude: number) => {
+    try {
+      setStatusMessage('Detecting street, area & landmark...');
+
+      // 1. Try server reverse geocode
+      const res = await fetch(
+        `${baseUrl}/api/location/reverse-geocode?lat=${latitude}&lon=${longitude}`
+      );
+      const data = await res.json();
+
+      if (data.success && data.location) {
+        const loc = data.location;
+        if (loc.plotNo) setPlotNo(loc.plotNo);
+        if (loc.street) setStreet(loc.street);
+        if (loc.area) setArea(loc.area);
+        if (loc.landmark) setLandmark(loc.landmark);
+        if (loc.city) setCity(loc.city);
+        if (loc.pincode) setPincode(loc.pincode);
+        setStatusMessage('Exact GPS location detected successfully!');
+        setTimeout(() => setStatusMessage(''), 3000);
+        return;
+      }
+    } catch (e) {
+      console.warn('Backend geocoding failed, trying Mapbox directly');
+    }
+
+    // 2. Direct Mapbox fallback
+    try {
+      const mbRes = await fetch(
+        `https://api.mapbox.com/geocoding/v5/mapbox.places/${longitude},${latitude}.json?access_token=${mapboxToken}&types=address,poi,neighborhood,locality,place,postcode`
+      );
+      if (mbRes.ok) {
+        const mbData = await mbRes.json();
+        if (mbData.features && mbData.features.length > 0) {
+          const feat = mbData.features[0];
+          const ctx = feat.context || [];
+
+          if (feat.address) setPlotNo(feat.address);
+          if (feat.text) setStreet(feat.text);
+
+          ctx.forEach((c: any) => {
+            if (c.id.startsWith('postcode')) setPincode(c.text);
+            else if (c.id.startsWith('neighborhood') || c.id.startsWith('locality')) setArea(c.text);
+            else if (c.id.startsWith('place')) setCity(c.text);
+          });
+
+          setStatusMessage('Location pinned accurately via GPS!');
+          setTimeout(() => setStatusMessage(''), 3000);
+          return;
+        }
+      }
+    } catch (e2) {
+      console.warn('Mapbox fallback failed');
+    }
+
+    setStatusMessage(`GPS Location pinned (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`);
+    setTimeout(() => setStatusMessage(''), 3000);
+  };
+
+  // "Locate Me" GPS Reverse Geocoding (Native Mobile GPS + Web Geolocation)
+  const handleLocateMe = async () => {
     setIsLocating(true);
     setStatusMessage('Fetching GPS location...');
 
+    // Mobile App Native GPS via expo-location
+    if (Platform.OS !== 'web') {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          setIsLocating(false);
+          setStatusMessage('Location permission denied. Please enter address manually.');
+          setTimeout(() => setStatusMessage(''), 4000);
+          return;
+        }
+
+        const loc = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        });
+
+        await applyCoordinatesLocation(loc.coords.latitude, loc.coords.longitude);
+      } catch (err: any) {
+        setStatusMessage('GPS detection failed. Please enter address manually.');
+        setTimeout(() => setStatusMessage(''), 4000);
+      } finally {
+        setIsLocating(false);
+      }
+      return;
+    }
+
+    // Web Browser Geolocation
     if (typeof navigator !== 'undefined' && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         async (pos) => {
           try {
-            const { latitude, longitude } = pos.coords;
-            setStatusMessage('Detecting street & landmark...');
-
-            const res = await fetch(
-              `${baseUrl}/api/location/reverse-geocode?lat=${latitude}&lon=${longitude}`
-            );
-            const data = await res.json();
-
-            if (data.success && data.location) {
-              const loc = data.location;
-              if (loc.plotNo) setPlotNo(loc.plotNo);
-              if (loc.street) setStreet(loc.street);
-              if (loc.area) setArea(loc.area);
-              if (loc.landmark) setLandmark(loc.landmark);
-              if (loc.city) setCity(loc.city);
-              if (loc.pincode) setPincode(loc.pincode);
-              setStatusMessage('GPS location detected successfully!');
-              setTimeout(() => setStatusMessage(''), 3000);
-            }
-          } catch (e) {
-            setStatusMessage('Using nearby Hyderabad site coordinates.');
-            setTimeout(() => setStatusMessage(''), 3000);
+            await applyCoordinatesLocation(pos.coords.latitude, pos.coords.longitude);
           } finally {
             setIsLocating(false);
           }
         },
         (error) => {
           setIsLocating(false);
-          setStatusMessage('Location permission denied or unavailable. Please enter site details below.');
+          setStatusMessage('Location permission denied or unavailable in browser.');
           setTimeout(() => setStatusMessage(''), 4000);
         },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
       );
     } else {
       setIsLocating(false);

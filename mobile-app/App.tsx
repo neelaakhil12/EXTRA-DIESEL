@@ -18,7 +18,9 @@ import { DeviceFrame } from './src/components/DeviceFrame';
 import { Header } from './src/components/Header';
 import { BottomNav } from './src/components/BottomNav';
 import { SplashScreen } from './src/screens/SplashScreen';
+import { WelcomeScreen } from './src/screens/WelcomeScreen';
 import { LoginScreen } from './src/screens/LoginScreen';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { OrderDieselScreen } from './src/screens/OrderDieselScreen';
 import { TrackOrderScreen } from './src/screens/TrackOrderScreen';
@@ -73,7 +75,8 @@ function MainApp() {
   const [screenStack, setScreenStack] = useState<ScreenName[]>([getInitialScreen()]);
   const currentScreen = screenStack[screenStack.length - 1];
 
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(Platform.OS === 'web');
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+  const [sessionChecked, setSessionChecked] = useState<boolean>(false);
   const [activeTrackingOrderId, setActiveTrackingOrderId] = useState<string>('ED20261116-8941');
   const [liveFuelRate, setLiveFuelRate] = useState<number>(94.50);
 
@@ -105,6 +108,35 @@ function MainApp() {
     role: 'customer',
     profileImage: undefined,
   });
+
+  // Restore persistent login session from AsyncStorage / localStorage
+  useEffect(() => {
+    const restoreSession = async () => {
+      try {
+        let stored: string | null = null;
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          stored = localStorage.getItem('ed_user_session');
+        }
+        if (!stored) {
+          stored = await AsyncStorage.getItem('ed_user_session');
+        }
+
+        if (stored) {
+          const user = JSON.parse(stored);
+          if (user && user.email) {
+            setCurrentUser((prev) => ({ ...prev, ...user }));
+            setIsLoggedIn(true);
+          }
+        }
+      } catch (err) {
+        console.warn('Session restore error:', err);
+      } finally {
+        setSessionChecked(true);
+      }
+    };
+
+    restoreSession();
+  }, []);
 
   // Fetch live fuel rate for header
   useEffect(() => {
@@ -237,17 +269,17 @@ function MainApp() {
     }
   }, []);
 
-  // Handle splash completion (revealed Login button pressed)
-  const handleGetStarted = () => {
+  // Handle splash completion
+  const handleSplashFinish = () => {
     if (isLoggedIn) {
       setScreenStack(['home']);
     } else {
-      setScreenStack(['login']);
+      setScreenStack(['welcome']);
     }
   };
 
   // Handle successful login / signup (Routes Customer to Home, Delivery Boy to Fleet, and only Web /admin to Admin)
-  const handleLoginSuccess = (userData: {
+  const handleLoginSuccess = async (userData: {
     name: string;
     email: string;
     phone: string;
@@ -257,6 +289,13 @@ function MainApp() {
   }) => {
     setCurrentUser((prev) => ({ ...prev, ...userData }));
     setIsLoggedIn(true);
+
+    try {
+      await AsyncStorage.setItem('ed_user_session', JSON.stringify(userData));
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        localStorage.setItem('ed_user_session', JSON.stringify(userData));
+      }
+    } catch (e) {}
 
     if (userData.role === 'delivery') {
       setScreenStack(['delivery']);
@@ -297,13 +336,17 @@ function MainApp() {
         style: 'destructive',
         onPress: async () => {
           try {
+            await AsyncStorage.removeItem('ed_user_session');
+            if (Platform.OS === 'web' && typeof window !== 'undefined') {
+              localStorage.removeItem('ed_user_session');
+            }
             if (Platform.OS !== 'web') {
               const { GoogleSignin } = require('@react-native-google-signin/google-signin');
               await GoogleSignin.signOut();
             }
           } catch (e) {}
           setIsLoggedIn(false);
-          setScreenStack(['login']);
+          setScreenStack(['welcome']);
         },
       },
     ]);
@@ -330,10 +373,10 @@ function MainApp() {
     }
   };
 
-  const showHeader = currentScreen !== 'splash' && currentScreen !== 'login' && currentScreen !== 'admin' && currentScreen !== 'delivery';
-  const showBottomNav = currentScreen !== 'splash' && currentScreen !== 'login' && currentScreen !== 'admin' && currentScreen !== 'delivery';
-  // Show header back button whenever there is a previous screen to go back to and we are not on root home
-  const showBackBtn = screenStack.length > 1 && currentScreen !== 'home';
+  const showHeader = currentScreen !== 'splash' && currentScreen !== 'welcome' && currentScreen !== 'login' && currentScreen !== 'admin' && currentScreen !== 'delivery';
+  const showBottomNav = currentScreen !== 'splash' && currentScreen !== 'welcome' && currentScreen !== 'login' && currentScreen !== 'admin' && currentScreen !== 'delivery';
+  // No back arrow buttons in header; app relies on Android nav buttons & system swipe gestures
+  const showBackBtn = false;
 
   const [showNotifications, setShowNotifications] = useState(false);
 
@@ -375,7 +418,14 @@ function MainApp() {
         {/* Main Screen Content */}
         <View style={styles.screenContent}>
           {currentScreen === 'splash' && (
-            <SplashScreen onGetStarted={handleGetStarted} />
+            <SplashScreen onFinish={handleSplashFinish} />
+          )}
+
+          {currentScreen === 'welcome' && (
+            <WelcomeScreen
+              onLoginPress={() => navigateTo('login')}
+              onExplorePress={handleSkipLogin}
+            />
           )}
 
           {currentScreen === 'login' && (

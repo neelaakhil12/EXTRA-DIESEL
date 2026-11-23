@@ -68,6 +68,7 @@ export interface Subscription {
 
 export type ScreenName = 
   | 'splash' 
+  | 'welcome'
   | 'login' 
   | 'home' 
   | 'order' 

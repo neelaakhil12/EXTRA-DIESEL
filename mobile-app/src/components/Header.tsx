@@ -205,25 +205,15 @@ export const Header: React.FC<HeaderProps> = ({
       <View style={[styles.container, { paddingTop: dynamicPaddingTop }]}>
         <StatusBar barStyle="dark-content" />
         <View style={styles.innerHeader}>
-          {showBack ? (
-            <TouchableOpacity onPress={onBack} style={styles.backButton} activeOpacity={0.7}>
-              <Ionicons name="arrow-back" size={20} color={COLORS.dark} />
-            </TouchableOpacity>
-          ) : (
-            <View style={{ width: 38 }} />
-          )}
-
           <View style={styles.titleContainer}>
             <Text style={styles.titleText}>{title}</Text>
           </View>
 
-          {showNotification ? (
+          {showNotification && (
             <TouchableOpacity onPress={onNotificationPress} style={styles.iconCircle} activeOpacity={0.7}>
               <Ionicons name="notifications-outline" size={19} color={COLORS.dark} />
               <View style={styles.notificationDot} />
             </TouchableOpacity>
-          ) : (
-            <View style={{ width: 38 }} />
           )}
         </View>
       </View>

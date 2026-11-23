@@ -53,6 +53,10 @@ const DEFAULT_SETTINGS = {
   b2bCreditLimit: 500000,
   b2bCreditTerms: 'Net-30 Days Interest Free',
   b2bBillingCycle: '1st – 30th of every month',
+  vehicleImages: [
+    'https://extradiesel.in/assets/images/vehicle-bowser-1.jpeg',
+    'https://extradiesel.in/assets/images/vehicle-bowser-2.jpeg',
+  ],
   updatedAt: new Date().toISOString(),
 };
 
@@ -246,6 +250,7 @@ app.post('/api/settings', (req, res) => {
       b2bCreditLimit,
       b2bCreditTerms,
       b2bBillingCycle,
+      vehicleImages,
     } = req.body;
 
     currentSettings = loadSettings();
@@ -283,6 +288,9 @@ app.post('/api/settings', (req, res) => {
         ...pesoCompliance
       };
     }
+    if (vehicleImages && Array.isArray(vehicleImages)) {
+      currentSettings.vehicleImages = vehicleImages.filter(Boolean);
+    }
 
     currentSettings.updatedAt = new Date().toISOString();
     saveSettings(currentSettings);
@@ -299,7 +307,7 @@ app.post('/api/settings', (req, res) => {
   }
 });
 
-// 3. Location Reverse-Geocoding (OSM Nominatim with graceful fallback for India / Hyderabad)
+// 3. Location Reverse-Geocoding (Mapbox Geocoding API with OSM Nominatim fallback for pinpoint accuracy)
 app.get('/api/location/reverse-geocode', async (req, res) => {
   try {
     const { lat, lon } = req.query;
@@ -307,66 +315,131 @@ app.get('/api/location/reverse-geocode', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Latitude and longitude required' });
     }
 
-    const osmUrl = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&addressdetails=1`;
-    const response = await fetch(osmUrl, {
-      headers: {
-        'User-Agent': 'ExtraDieselApp/1.0 (contact@extradiesel.in)'
+    const latFloat = parseFloat(lat);
+    const lonFloat = parseFloat(lon);
+
+    // Primary: Mapbox Places API (Accurate down to rooftop/street level across India)
+    const mapboxToken = process.env.MAPBOX_ACCESS_TOKEN;
+    try {
+      const mbUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${lonFloat},${latFloat}.json?access_token=${mapboxToken}&types=address,poi,neighborhood,locality,place,postcode`;
+      const mbRes = await fetch(mbUrl);
+      if (mbRes.ok) {
+        const mbData = await mbRes.json();
+        if (mbData.features && mbData.features.length > 0) {
+          const feat = mbData.features[0];
+          const ctx = feat.context || [];
+
+          let plotNo = feat.address || '';
+          let street = feat.text || '';
+          let landmark = '';
+          let area = '';
+          let city = 'Hyderabad';
+          let state = 'Telangana';
+          let pincode = '';
+
+          ctx.forEach(c => {
+            if (c.id.startsWith('postcode')) pincode = c.text;
+            else if (c.id.startsWith('neighborhood') || c.id.startsWith('locality')) area = c.text;
+            else if (c.id.startsWith('place')) city = c.text;
+            else if (c.id.startsWith('region')) state = c.text;
+          });
+
+          // If the feature is a POI or establishment, use it as landmark / plot
+          if (feat.place_type && feat.place_type.includes('poi')) {
+            landmark = feat.text;
+          }
+
+          const fullAddress = feat.place_name || [plotNo, street, area, city, pincode].filter(Boolean).join(', ');
+          const shortAddress = [street, area || city].filter(Boolean).join(', ') || city;
+
+          return res.json({
+            success: true,
+            location: {
+              lat: latFloat,
+              lon: lonFloat,
+              plotNo,
+              street,
+              area: area || city,
+              landmark,
+              city,
+              state,
+              pincode,
+              fullAddress,
+              shortAddress
+            }
+          });
+        }
       }
-    });
+    } catch (mbErr) {
+      console.warn('[Reverse Geocode] Mapbox error, falling back to OSM:', mbErr.message);
+    }
 
-    if (response.ok) {
-      const data = await response.json();
-      const a = data.address || {};
-
-      const plotNo = a.house_number || a.building || '';
-      const street = a.road || a.pedestrian || a.street || '';
-      const area = a.suburb || a.neighbourhood || a.residential || a.subdistrict || '';
-      const city = a.city || a.town || a.county || a.state_district || 'Hyderabad';
-      const state = a.state || 'Telangana';
-      const pincode = a.postcode || '';
-      const landmark = a.amenity || a.commercial || a.office || a.leisure || '';
-
-      const parts = [plotNo, street, area, city, pincode].filter(Boolean);
-      const fullAddress = parts.join(', ') || data.display_name || 'Hyderabad, Telangana';
-
-      return res.json({
-        success: true,
-        location: {
-          lat: parseFloat(lat),
-          lon: parseFloat(lon),
-          plotNo,
-          street,
-          area,
-          landmark,
-          city,
-          state,
-          pincode,
-          fullAddress,
-          shortAddress: [plotNo, street || area].filter(Boolean).join(', ') || area || city
+    // Secondary: OpenStreetMap Nominatim
+    try {
+      const osmUrl = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${encodeURIComponent(latFloat)}&lon=${encodeURIComponent(lonFloat)}&addressdetails=1`;
+      const response = await fetch(osmUrl, {
+        headers: {
+          'User-Agent': 'ExtraDieselApp/1.0 (contact@extradiesel.in)',
+          'Accept-Language': 'en'
         }
       });
-    }
-  } catch (err) {}
 
-  // Fallback realistic location
-  const latNum = parseFloat(req.query.lat) || 17.4483;
-  const lonNum = parseFloat(req.query.lon) || 78.3748;
-  res.json({
-    success: true,
-    location: {
-      lat: latNum,
-      lon: lonNum,
-      plotNo: 'Plot 42',
-      street: 'HITEC City Main Road',
-      area: 'Madhapur',
-      landmark: 'Near Cyber Towers',
-      city: 'Hyderabad',
-      state: 'Telangana',
-      pincode: '500081',
-      fullAddress: 'Plot 42, HITEC City Main Road, Madhapur, Hyderabad, Telangana 500081',
-      shortAddress: 'Plot 42, HITEC City, Hyderabad'
+      if (response.ok) {
+        const data = await response.json();
+        const a = data.address || {};
+
+        const plotNo = a.house_number || a.building || '';
+        const street = a.road || a.pedestrian || a.street || '';
+        const area = a.suburb || a.neighbourhood || a.residential || a.subdistrict || '';
+        const city = a.city || a.town || a.county || a.state_district || 'Hyderabad';
+        const state = a.state || 'Telangana';
+        const pincode = a.postcode || '';
+        const landmark = a.amenity || a.commercial || a.office || a.leisure || '';
+
+        const parts = [plotNo, street, area, city, pincode].filter(Boolean);
+        const fullAddress = parts.join(', ') || data.display_name || `${city}, ${state}`;
+
+        return res.json({
+          success: true,
+          location: {
+            lat: latFloat,
+            lon: lonFloat,
+            plotNo,
+            street,
+            area,
+            landmark,
+            city,
+            state,
+            pincode,
+            fullAddress,
+            shortAddress: [plotNo, street || area].filter(Boolean).join(', ') || area || city
+          }
+        });
+      }
+    } catch (osmErr) {
+      console.warn('[Reverse Geocode] OSM Nominatim error:', osmErr.message);
     }
-  });
+
+    // Fallback using coordinates (Never a hardcoded fake location)
+    res.json({
+      success: true,
+      location: {
+        lat: latFloat,
+        lon: lonFloat,
+        plotNo: '',
+        street: `Site Coordinates (${latFloat.toFixed(4)}, ${lonFloat.toFixed(4)})`,
+        area: 'Location Detected',
+        landmark: '',
+        city: 'Hyderabad',
+        state: 'Telangana',
+        pincode: '',
+        fullAddress: `GPS Location (${latFloat.toFixed(5)}, ${lonFloat.toFixed(5)}), Hyderabad, Telangana`,
+        shortAddress: `GPS Site (${latFloat.toFixed(4)}, ${lonFloat.toFixed(4)})`
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: 'Reverse geocode failed', details: err.message });
+  }
 });
 
 // Backward compatible Fuel Rate endpoints
