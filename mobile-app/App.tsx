@@ -77,7 +77,7 @@ function MainApp() {
   const [activeTrackingOrderId, setActiveTrackingOrderId] = useState<string>('ED20261116-8941');
   const [liveFuelRate, setLiveFuelRate] = useState<number>(94.50);
 
-  // Delivery Location State (Modal popup on app & web load)
+  // Delivery Location State (Modal popup appears ONLY after login on the Home screen)
   const [deliveryLocation, setDeliveryLocation] = useState<SavedLocation>({
     siteName: 'Plot 42, Hitech City',
     plotNo: 'Plot 42',
@@ -90,7 +90,7 @@ function MainApp() {
     shortAddress: 'Plot 42, Hitech City, Madhapur',
     siteType: 'dg_set',
   });
-  const [showLocationModal, setShowLocationModal] = useState<boolean>(true);
+  const [showLocationModal, setShowLocationModal] = useState<boolean>(false);
   const [currentUser, setCurrentUser] = useState<{
     name: string;
     email: string;
@@ -102,7 +102,7 @@ function MainApp() {
     name: 'Akhil Kumar',
     email: 'aadhyafuels9@gmail.com',
     phone: '+91 98765 43210',
-    role: 'admin',
+    role: 'customer',
     profileImage: undefined,
   });
 
@@ -246,7 +246,7 @@ function MainApp() {
     }
   };
 
-  // Handle successful login / signup (Automatically routes Admin, Delivery Boy, or Customer)
+  // Handle successful login / signup (Routes Customer to Home, Delivery Boy to Fleet, and only Web /admin to Admin)
   const handleLoginSuccess = (userData: {
     name: string;
     email: string;
@@ -258,18 +258,28 @@ function MainApp() {
     setCurrentUser((prev) => ({ ...prev, ...userData }));
     setIsLoggedIn(true);
 
-    if (userData.role === 'admin') {
-      setScreenStack(['admin']);
-    } else if (userData.role === 'delivery') {
+    if (userData.role === 'delivery') {
       setScreenStack(['delivery']);
+    } else if (
+      Platform.OS === 'web' &&
+      typeof window !== 'undefined' &&
+      (window.location.pathname === '/admin' || window.location.pathname.startsWith('/admin')) &&
+      userData.role === 'admin'
+    ) {
+      setScreenStack(['admin']);
     } else {
+      // In Mobile App and Main Website: Always route users to Customer Home Screen
       setScreenStack(['home']);
+      // Prompt for delivery location ONLY after landing on Home
+      setTimeout(() => setShowLocationModal(true), 600);
     }
   };
 
   // Handle guest mode / skip login
   const handleSkipLogin = () => {
     setScreenStack(['home']);
+    // Prompt for delivery location after entering Home as guest
+    setTimeout(() => setShowLocationModal(true), 600);
   };
 
   // Handle order placed
@@ -419,7 +429,7 @@ function MainApp() {
             />
           )}
 
-          {currentScreen === 'admin' && (
+          {currentScreen === 'admin' && Platform.OS === 'web' && (
             <AdminScreen
               onNavigate={(screen) => navigateTo(screen)}
               currentUser={currentUser}
@@ -494,9 +504,9 @@ function MainApp() {
           </View>
         </Modal>
 
-        {/* Global Delivery Location Pin Modal (Prompts on open & accessible via Header pill) */}
+        {/* Global Delivery Location Pin Modal (Prompts only on Home screen after login, and accessible via Header pill) */}
         <LocationModal
-          visible={showLocationModal}
+          visible={showLocationModal && currentScreen === 'home'}
           onClose={() => setShowLocationModal(false)}
           onSaveLocation={(loc) => {
             setDeliveryLocation(loc);

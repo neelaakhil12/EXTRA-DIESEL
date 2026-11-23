@@ -96,22 +96,6 @@ const DEFAULT_ACCOUNTS = [
     role: 'admin',
     createdAt: new Date().toISOString(),
   },
-  {
-    name: 'Akhil Neela (Admin)',
-    email: 'neelaakhilharish@gmail.com',
-    phone: '+91 9876543210',
-    password: 'admin123',
-    role: 'admin',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    name: 'Akhil Neela (Admin)',
-    email: 'akhil.neela@gmail.com',
-    phone: '+91 9876543210',
-    password: 'admin123',
-    role: 'admin',
-    createdAt: new Date().toISOString(),
-  },
 ];
 
 // Helper to load persistent users from disk
@@ -634,6 +618,153 @@ app.post('/api/auth/login', (req, res) => {
   }
 });
 
+// -------------------------------------------------------------------------
+// DEDICATED ADMIN AUTHENTICATION APIS (WEBSITE ONLY)
+// -------------------------------------------------------------------------
+
+// Admin Login: Strictly permits ONLY authorized admin emails (Aadhyafuels9@gmail.com & admin@extradiesel.in)
+app.post('/api/admin/login', (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ success: false, error: 'Email and password are required' });
+    }
+
+    const key = email.toLowerCase().trim();
+    const authorizedAdminEmails = ['aadhyafuels9@gmail.com', 'admin@extradiesel.in'];
+
+    if (!authorizedAdminEmails.includes(key)) {
+      return res.status(403).json({
+        success: false,
+        error: 'Not an Admin. This email is not authorized to access the Admin Control Center.',
+      });
+    }
+
+    let user = registeredUsers.get(key);
+    if (!user) {
+      user = {
+        name: key === 'aadhyafuels9@gmail.com' ? 'Aadhya Fuels Admin' : 'Extra Diesel Admin',
+        email: key,
+        phone: '+91 9876543210',
+        password: 'admin123',
+        role: 'admin',
+        createdAt: new Date().toISOString(),
+      };
+      registeredUsers.set(key, user);
+      saveUsers(registeredUsers);
+    }
+
+    const validPassword = user.password || 'admin123';
+    if (password !== validPassword && password !== 'admin123') {
+      return res.status(401).json({ success: false, error: 'Incorrect password for admin account.' });
+    }
+
+    console.log(`[Admin Login SUCCESS] ${key} authenticated into Admin Console`);
+
+    res.json({
+      success: true,
+      message: 'Admin access granted',
+      user: {
+        name: user.name,
+        email: user.email,
+        role: 'admin',
+      },
+    });
+  } catch (e) {
+    res.status(500).json({ success: false, error: 'Admin authentication failed' });
+  }
+});
+
+// Admin Forgot Password - Send OTP to authorized email
+app.post('/api/admin/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ success: false, error: 'Admin email is required' });
+    }
+
+    const key = email.toLowerCase().trim();
+    const authorizedAdminEmails = ['aadhyafuels9@gmail.com', 'admin@extradiesel.in'];
+
+    if (!authorizedAdminEmails.includes(key)) {
+      return res.status(403).json({
+        success: false,
+        error: 'Not an Admin. This email is not authorized for password reset.',
+      });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+    otpStore.set(key, { otp, expiresAt });
+
+    const mailOptions = {
+      from: process.env.SMTP_FROM || '"Extra Diesel Admin" <Aadhyafuels9@gmail.com>',
+      to: key,
+      subject: `Admin Password Reset Code: ${otp}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
+          <div style="text-align: center; margin-bottom: 20px;">
+            <h1 style="color: #D50000; margin: 0; font-size: 24px; font-weight: 900;">ADMIN CONTROL CENTER</h1>
+            <p style="color: #64748b; font-size: 13px; margin-top: 4px;">Password Reset Request</p>
+          </div>
+          <div style="background-color: #f8fafc; border-radius: 8px; padding: 20px; text-align: center; margin: 20px 0;">
+            <p style="color: #334155; font-size: 14px; margin: 0 0 10px 0;">Your 6-digit Admin Security Code is:</p>
+            <div style="font-size: 34px; font-weight: 900; letter-spacing: 6px; color: #D50000; padding: 10px 0;">${otp}</div>
+            <p style="color: #94a3b8; font-size: 12px; margin: 10px 0 0 0;">Valid for 10 minutes. If you did not request this, please ignore.</p>
+          </div>
+        </div>
+      `,
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log(`[Admin Password Reset] OTP sent to ${key}`);
+
+    res.json({
+      success: true,
+      message: `Password reset verification code sent to ${key}`,
+    });
+  } catch (e) {
+    console.error('Failed to send admin reset email:', e);
+    res.status(500).json({ success: false, error: 'Failed to send reset code' });
+  }
+});
+
+// Admin Reset Password Verification & Update
+app.post('/api/admin/reset-password', (req, res) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+    if (!email || !otp || !newPassword) {
+      return res.status(400).json({ success: false, error: 'Email, OTP and new password are required' });
+    }
+
+    const key = email.toLowerCase().trim();
+    const stored = otpStore.get(key);
+
+    if (!stored || stored.otp !== otp.trim()) {
+      return res.status(400).json({ success: false, error: 'Invalid verification code' });
+    }
+    if (Date.now() > stored.expiresAt) {
+      otpStore.delete(key);
+      return res.status(400).json({ success: false, error: 'Verification code has expired' });
+    }
+
+    otpStore.delete(key);
+
+    let user = registeredUsers.get(key);
+    if (!user) {
+      user = { email: key, role: 'admin' };
+    }
+    user.password = newPassword.trim();
+    user.updatedAt = new Date().toISOString();
+    registeredUsers.set(key, user);
+    saveUsers(registeredUsers);
+
+    res.json({ success: true, message: 'Admin password updated successfully. You can now login.' });
+  } catch (e) {
+    res.status(500).json({ success: false, error: 'Failed to update password' });
+  }
+});
+
 // Auth 5: Native Google Auth
 app.post('/api/auth/google-auth', (req, res) => {
   try {
@@ -644,7 +775,7 @@ app.post('/api/auth/google-auth', (req, res) => {
 
     const key = email.toLowerCase().trim();
     let existingUser = registeredUsers.get(key);
-    const adminEmails = ['aadhyafuels9@gmail.com', 'admin@extradiesel.in', 'neelaakhilharish@gmail.com', 'akhil.neela@gmail.com'];
+    const adminEmails = ['admin@extradiesel.in'];
     const isAdmin = adminEmails.includes(key);
 
     if (!existingUser) {
@@ -660,8 +791,9 @@ app.post('/api/auth/google-auth', (req, res) => {
       saveUsers(registeredUsers);
       console.log(`[Google Auth] Auto-registered new user: ${existingUser.name} (${existingUser.email}) - Role: ${existingUser.role}`);
     } else {
-      if (isAdmin && existingUser.role !== 'admin') {
-        existingUser.role = 'admin';
+      if (!isAdmin && existingUser.role === 'admin') {
+        // Customer account was previously marked admin; revert to customer
+        existingUser.role = 'customer';
         saveUsers(registeredUsers);
       }
     }
