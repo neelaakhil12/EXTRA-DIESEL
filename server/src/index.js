@@ -61,7 +61,7 @@ function saveSettings(settings) {
 
 let currentSettings = loadSettings();
 
-// Default admin and sample delivery boy accounts
+// Default admin accounts (credentials for admin login)
 const DEFAULT_ACCOUNTS = [
   {
     name: 'Aadhya Fuels Admin',
@@ -93,15 +93,6 @@ const DEFAULT_ACCOUNTS = [
     phone: '+91 9876543210',
     password: 'admin123',
     role: 'admin',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    name: 'Ramesh Kumar',
-    email: 'delivery@extradiesel.in',
-    phone: '+91 9123456789',
-    password: 'driver123',
-    vehicleNumber: 'TS 09 UB 4521',
-    role: 'delivery',
     createdAt: new Date().toISOString(),
   },
 ];
@@ -143,83 +134,19 @@ function saveUsers(map) {
   }
 }
 
-// Initial seed orders if orders.json is empty
-const SEED_ORDERS = [
-  {
-    id: 'ED20261122-1084',
-    email: 'neelaakhilharish@gmail.com',
-    name: 'Akhil Harish',
-    phone: '+91 9876543210',
-    date: '23 Nov 2026 • 09:15 AM',
-    liters: 500,
-    fuelRate: 94.50,
-    deliveryFee: 0,
-    tax: 2362.50,
-    total: 49612.50,
-    status: 'delivered',
-    statusText: 'Delivered',
-    address: 'Plot 42, Hitech City, Hyderabad',
-    assignedTo: 'delivery@extradiesel.in',
-    assignedToName: 'Ramesh Kumar',
-    vehicleNumber: 'TS 09 UB 4521',
-    deliveredAt: '2026-11-23T04:15:00.000Z',
-    createdAt: '2026-11-23T03:45:00.000Z',
-  },
-  {
-    id: 'ED20261123-2491',
-    email: 'customer@extradiesel.in',
-    name: 'GVK One Infra Site',
-    phone: '+91 9988776655',
-    date: '23 Nov 2026 • 10:00 AM',
-    liters: 250,
-    fuelRate: 94.50,
-    deliveryFee: 350,
-    tax: 1198.75,
-    total: 25173.75,
-    status: 'out_for_delivery',
-    statusText: 'Out for Delivery',
-    address: 'Road No 1, Banjara Hills, Hyderabad',
-    assignedTo: 'delivery@extradiesel.in',
-    assignedToName: 'Ramesh Kumar',
-    vehicleNumber: 'TS 09 UB 4521',
-    createdAt: '2026-11-23T04:30:00.000Z',
-  },
-  {
-    id: 'ED20261123-3921',
-    email: 'aadhyafuels9@gmail.com',
-    name: 'Cyber Towers DG Set',
-    phone: '+91 9876543210',
-    date: '23 Nov 2026 • 10:15 AM',
-    liters: 1000,
-    fuelRate: 94.50,
-    deliveryFee: 0,
-    tax: 4725.00,
-    total: 99225.00,
-    status: 'pending',
-    statusText: 'Order Placed - Pending Confirmation',
-    address: 'Cyber Towers Gate 3, Madhapur, Hyderabad',
-    assignedTo: null,
-    assignedToName: null,
-    vehicleNumber: null,
-    createdAt: '2026-11-23T04:45:00.000Z',
-  },
-];
-
 function loadOrders() {
   try {
     if (fs.existsSync(ORDERS_FILE)) {
       const data = fs.readFileSync(ORDERS_FILE, 'utf-8');
       const list = JSON.parse(data);
-      if (Array.isArray(list) && list.length > 0) {
+      if (Array.isArray(list)) {
         return list;
       }
     }
   } catch (e) {
     console.error('Error reading orders.json:', e);
   }
-  // Initialize with seed orders
-  saveOrders(SEED_ORDERS);
-  return SEED_ORDERS;
+  return [];
 }
 
 function saveOrders(orders) {

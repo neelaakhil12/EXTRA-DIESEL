@@ -95,8 +95,8 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
   const [newDriverName, setNewDriverName] = useState<string>('');
   const [newDriverEmail, setNewDriverEmail] = useState<string>('');
   const [newDriverPhone, setNewDriverPhone] = useState<string>('');
-  const [newDriverPassword, setNewDriverPassword] = useState<string>('driver123');
-  const [newDriverVehicle, setNewDriverVehicle] = useState<string>('Bowser TS 09 UB 4521');
+  const [newDriverPassword, setNewDriverPassword] = useState<string>('');
+  const [newDriverVehicle, setNewDriverVehicle] = useState<string>('');
   const [isSavingDriver, setIsSavingDriver] = useState<boolean>(false);
 
   // Global Settings Tab
@@ -239,7 +239,7 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
           email: newDriverEmail.toLowerCase().trim(),
           phone: newDriverPhone.trim(),
           password: newDriverPassword.trim(),
-          vehicleNumber: newDriverVehicle.trim() || 'Bowser TS 09 UB 4521',
+          vehicleNumber: newDriverVehicle.trim() || 'Bowser',
         }),
       });
 
@@ -250,7 +250,8 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
         setNewDriverName('');
         setNewDriverEmail('');
         setNewDriverPhone('');
-        setNewDriverPassword('driver123');
+        setNewDriverPassword('');
+        setNewDriverVehicle('');
         loadAdminData();
       } else {
         Alert.alert('Error', data.error || 'Failed to create delivery boy');
@@ -401,32 +402,34 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
       <View style={[styles.sidebar, !isDesktop && styles.mobileSidebar]}>
         {/* Brand Area */}
         <View style={styles.sidebarBrand}>
-          <View style={styles.brandLogoRow}>
-            <View style={styles.flameIconCircle}>
-              <Ionicons name="flame" size={20} color={COLORS.white} />
+          <View style={styles.brandHeaderTop}>
+            <View style={styles.brandLogoRow}>
+              <View style={styles.flameIconCircle}>
+                <Ionicons name="flame" size={20} color={COLORS.white} />
+              </View>
+              <View>
+                <Text style={styles.brandTitle}>
+                  EXTRA <Text style={{ color: '#FFB300' }}>DIESEL</Text>
+                </Text>
+                <Text style={styles.brandSubtitle}>CONTROL CENTER</Text>
+              </View>
             </View>
-            <View>
-              <Text style={styles.brandTitle}>
-                EXTRA <Text style={{ color: '#FFB300' }}>DIESEL</Text>
-              </Text>
-              <Text style={styles.brandSubtitle}>CONTROL CENTER</Text>
-            </View>
+
+            {!isDesktop && (
+              <TouchableOpacity
+                style={styles.mobileMenuToggle}
+                onPress={() => setMobileMenuOpen(!mobileMenuOpen)}
+              >
+                <Ionicons name={mobileMenuOpen ? 'close' : 'menu'} size={24} color={COLORS.white} />
+              </TouchableOpacity>
+            )}
           </View>
 
-          {/* Online System Status */}
+          {/* Online System Status Pill */}
           <View style={styles.onlineStatusPill}>
             <View style={styles.onlineDot} />
             <Text style={styles.onlineStatusText}>SYSTEM ONLINE</Text>
           </View>
-
-          {!isDesktop && (
-            <TouchableOpacity
-              style={styles.mobileMenuToggle}
-              onPress={() => setMobileMenuOpen(!mobileMenuOpen)}
-            >
-              <Ionicons name={mobileMenuOpen ? 'close' : 'menu'} size={24} color={COLORS.white} />
-            </TouchableOpacity>
-          )}
         </View>
 
         {/* Sidebar Navigation Items */}
@@ -668,30 +671,40 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
                   </TouchableOpacity>
                 </View>
 
-                {orders.slice(0, 5).map((order) => {
-                  const badge = getStatusBadgeStyle(order.status);
-                  return (
-                    <View key={order.id} style={styles.recentRow}>
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                          <Text style={styles.orderIdBold}>#{order.id}</Text>
-                          <View style={[styles.statusTag, { backgroundColor: badge.bg }]}>
-                            <Text style={[styles.statusTagText, { color: badge.text }]}>{badge.label}</Text>
+                {orders.length === 0 ? (
+                  <View style={styles.emptyRecentBox}>
+                    <Ionicons name="receipt-outline" size={42} color="#94A3B8" />
+                    <Text style={styles.emptyRecentTitle}>No Orders Placed Yet</Text>
+                    <Text style={styles.emptyRecentSub}>
+                      Customer orders placed via mobile app or website will appear here in real-time.
+                    </Text>
+                  </View>
+                ) : (
+                  orders.slice(0, 5).map((order) => {
+                    const badge = getStatusBadgeStyle(order.status);
+                    return (
+                      <View key={order.id} style={styles.recentRow}>
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <Text style={styles.orderIdBold}>#{order.id}</Text>
+                            <View style={[styles.statusTag, { backgroundColor: badge.bg }]}>
+                              <Text style={[styles.statusTagText, { color: badge.text }]}>{badge.label}</Text>
+                            </View>
                           </View>
+                          <Text style={styles.orderClientText}>{order.name} • {order.liters} Liters</Text>
+                          <Text style={styles.orderDateSub}>{order.date}</Text>
                         </View>
-                        <Text style={styles.orderClientText}>{order.name} • {order.liters} Liters</Text>
-                        <Text style={styles.orderDateSub}>{order.date}</Text>
-                      </View>
 
-                      <View style={{ alignItems: 'flex-end' }}>
-                        <Text style={styles.orderAmountBold}>₹{Number(order.total).toLocaleString('en-IN')}</Text>
-                        <Text style={styles.orderDriverSub}>
-                          {order.assignedToName ? `🚚 ${order.assignedToName}` : '⚠️ Unassigned'}
-                        </Text>
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={styles.orderAmountBold}>₹{Number(order.total).toLocaleString('en-IN')}</Text>
+                          <Text style={styles.orderDriverSub}>
+                            {order.assignedToName ? `🚚 ${order.assignedToName}` : '⚠️ Unassigned'}
+                          </Text>
+                        </View>
                       </View>
-                    </View>
-                  );
-                })}
+                    );
+                  })
+                )}
               </View>
             </View>
           )}
@@ -1209,7 +1222,7 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
               <Text style={styles.fieldLabel}>Password *</Text>
               <TextInput
                 style={styles.modalInputField}
-                placeholder="driver123"
+                placeholder="Set password (min. 6 characters)"
                 value={newDriverPassword}
                 onChangeText={setNewDriverPassword}
               />
@@ -1217,7 +1230,7 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
               <Text style={styles.fieldLabel}>Bowser Vehicle Number</Text>
               <TextInput
                 style={styles.modalInputField}
-                placeholder="TS 09 UB 4521"
+                placeholder="e.g. TS 09 UB 4521"
                 value={newDriverVehicle}
                 onChangeText={setNewDriverVehicle}
               />
@@ -1271,11 +1284,11 @@ const styles = StyleSheet.create({
   },
   // Sidebar
   sidebar: {
-    width: 260,
+    width: 280,
     backgroundColor: '#0B1120',
     borderRightWidth: 1,
     borderRightColor: '#1E293B',
-    paddingVertical: 20,
+    paddingVertical: 22,
     paddingHorizontal: 16,
     justifyContent: 'space-between',
   },
@@ -1286,11 +1299,14 @@ const styles = StyleSheet.create({
     borderBottomColor: '#1E293B',
   },
   sidebarBrand: {
+    marginBottom: 24,
+    paddingHorizontal: 4,
+  },
+  brandHeaderTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
-    paddingHorizontal: 4,
+    marginBottom: 10,
   },
   brandLogoRow: {
     flexDirection: 'row',
@@ -1321,11 +1337,14 @@ const styles = StyleSheet.create({
   onlineStatusPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
+    alignSelf: 'flex-start',
+    gap: 6,
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.25)',
+    paddingHorizontal: 9,
+    paddingVertical: 3.5,
+    borderRadius: 12,
   },
   onlineDot: {
     width: 6,
@@ -1335,8 +1354,9 @@ const styles = StyleSheet.create({
   },
   onlineStatusText: {
     color: '#10B981',
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: '800',
+    letterSpacing: 0.5,
   },
   mobileMenuToggle: {
     padding: 6,
@@ -2286,5 +2306,23 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 4,
     textAlign: 'center',
+  },
+  emptyRecentBox: {
+    paddingVertical: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyRecentTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#475569',
+    marginTop: 10,
+  },
+  emptyRecentSub: {
+    fontSize: 13,
+    color: '#94A3B8',
+    marginTop: 4,
+    textAlign: 'center',
+    maxWidth: 380,
   },
 });
