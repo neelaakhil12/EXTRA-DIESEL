@@ -38,6 +38,7 @@ mobile-app/.env.*
 *.pem
 *.csv
 *.zip
-*.jpeg
+WhatsApp*.jpeg
+!mobile-app/assets/images/**
 image copy*.png
 image-removebg*.png
