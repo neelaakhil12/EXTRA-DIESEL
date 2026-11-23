@@ -85,21 +85,17 @@ export const Header: React.FC<HeaderProps> = ({
     return (
       <View style={styles.desktopNavbar}>
         <View style={styles.desktopNavInner}>
-          {/* Brand Logo & Tagline */}
+          {/* Brand Logo Only (Website Logo) */}
           <TouchableOpacity
             onPress={() => onNavigate?.('home')}
             style={styles.desktopBrandWrap}
             activeOpacity={0.8}
           >
-            <View style={styles.desktopBrandIcon}>
-              <Ionicons name="flame" size={24} color={COLORS.primary} />
-            </View>
-            <View>
-              <Text style={styles.desktopBrandTitle}>
-                EXTRA <Text style={styles.desktopBrandAccent}>DIESEL</Text>
-              </Text>
-              <Text style={styles.desktopBrandTagline}>PESO Certified Bowser Delivery</Text>
-            </View>
+            <Image
+              source={require('../../assets/images/logo.png')}
+              style={styles.desktopBrandLogoImage}
+              resizeMode="contain"
+            />
           </TouchableOpacity>
 
           {/* Navigation Links */}
@@ -510,29 +506,11 @@ const styles = StyleSheet.create({
   desktopBrandWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    cursor: 'pointer' as any,
   },
-  desktopBrandIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: '#FEE2E2',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  desktopBrandTitle: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: COLORS.dark,
-    letterSpacing: 0.5,
-  },
-  desktopBrandAccent: {
-    color: COLORS.primary,
-  },
-  desktopBrandTagline: {
-    fontSize: 11,
-    color: '#64748B',
-    fontWeight: '600',
+  desktopBrandLogoImage: {
+    width: 145,
+    height: 46,
   },
   desktopNavLinks: {
     flexDirection: 'row',
