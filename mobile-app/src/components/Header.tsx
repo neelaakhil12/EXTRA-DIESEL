@@ -111,7 +111,7 @@ export const Header: React.FC<HeaderProps> = ({
                 >
                   <Ionicons
                     name={link.icon}
-                    size={19}
+                    size={17}
                     color={isActive ? COLORS.primary : '#475569'}
                   />
                   <Text style={[styles.desktopNavLinkText, isActive && styles.desktopNavLinkTextActive]}>
@@ -131,7 +131,7 @@ export const Header: React.FC<HeaderProps> = ({
               activeOpacity={0.75}
             >
               <Ionicons name="location" size={15} color={COLORS.primary} />
-              <View style={{ maxWidth: 140 }}>
+              <View style={{ maxWidth: 110 }}>
                 <Text style={styles.desktopLocationLabel}>Delivering To:</Text>
                 <Text style={styles.desktopLocationVal} numberOfLines={1}>
                   {currentLocationText || 'Plot 42, Hitech City'}
@@ -153,7 +153,7 @@ export const Header: React.FC<HeaderProps> = ({
               style={styles.desktopIconBtn}
               activeOpacity={0.7}
             >
-              <Ionicons name="notifications-outline" size={20} color={COLORS.dark} />
+              <Ionicons name="notifications-outline" size={18} color={COLORS.dark} />
               <View style={styles.notificationDot} />
             </TouchableOpacity>
 
@@ -493,8 +493,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 28,
-    paddingVertical: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   desktopBrandWrap: {
     flexDirection: 'row',
@@ -502,27 +502,27 @@ const styles = StyleSheet.create({
     cursor: 'pointer' as any,
   },
   desktopBrandLogoImage: {
-    width: 220,
-    height: 62,
+    width: 170,
+    height: 48,
   },
   desktopNavLinks: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 4,
   },
   desktopNavLink: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 12,
+    gap: 6,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderRadius: 10,
   },
   desktopNavLinkActive: {
     backgroundColor: '#FEE2E2',
   },
   desktopNavLinkText: {
-    fontSize: 15,
+    fontSize: 13.5,
     fontWeight: '700',
     color: '#475569',
   },
@@ -533,32 +533,32 @@ const styles = StyleSheet.create({
   desktopRightActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 8,
   },
   desktopLocationPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
   },
   desktopLocationLabel: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '700',
     color: '#64748B',
     textTransform: 'uppercase',
   },
   desktopLocationVal: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
     color: '#0F172A',
   },
   desktopLocationChangeText: {
-    fontSize: 11.5,
+    fontSize: 11,
     fontWeight: '700',
     color: COLORS.primary,
     marginLeft: 4,
@@ -569,10 +569,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEF3C7',
     borderWidth: 1,
     borderColor: '#FDE68A',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    gap: 7,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 5,
   },
   livePulseDot: {
     width: 8,
@@ -581,12 +581,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#D97706',
   },
   desktopRateLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: '#92400E',
   },
   desktopRatePrice: {
-    fontSize: 13.5,
+    fontSize: 12.5,
     fontWeight: '800',
     color: '#78350F',
   },
@@ -604,9 +604,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   desktopIconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 8,
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
@@ -617,42 +617,42 @@ const styles = StyleSheet.create({
   desktopUserButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
     backgroundColor: '#F8FAFC',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 12,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
   desktopUserAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
   },
   desktopUserAvatarFallback: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: '#0F172A',
     justifyContent: 'center',
     alignItems: 'center',
   },
   desktopAvatarInitials: {
     color: COLORS.white,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
   },
   desktopUserNameWrap: {
-    maxWidth: 130,
+    maxWidth: 95,
   },
   desktopUserName: {
-    fontSize: 13.5,
+    fontSize: 12,
     fontWeight: '700',
     color: COLORS.dark,
   },
   desktopUserSub: {
-    fontSize: 10,
+    fontSize: 9.5,
     color: '#10B981',
     fontWeight: '600',
   },
@@ -661,13 +661,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     backgroundColor: COLORS.primary,
-    paddingVertical: 9,
-    paddingHorizontal: 18,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
     borderRadius: 10,
   },
   desktopSignInText: {
     color: COLORS.white,
-    fontSize: 13.5,
+    fontSize: 13,
     fontWeight: '700',
   },
 });
