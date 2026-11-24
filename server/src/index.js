@@ -48,7 +48,7 @@ const DEFAULT_SETTINGS = {
     whatsapp: '+91 9989551305',
     deskStatus: 'Bowser Dispatch Desk: Live & Active',
   },
-  pesoCompliance: {
+  qualityCompliance: {
     licenseNo: 'LM/HYD/2026/FM-4910',
     legalMetrology: 'W&M Certified Flow Meter (±0.1%)',
     calibrationValidity: 'Valid through Dec 31, 2027',
@@ -273,6 +273,7 @@ app.post('/api/settings', (req, res) => {
       tier1MaxLiters,
       taxRatePercent,
       supportHotline,
+      qualityCompliance,
       pesoCompliance,
       b2bCreditLimit,
       b2bCreditTerms,
@@ -311,11 +312,13 @@ app.post('/api/settings', (req, res) => {
         ...supportHotline
       };
     }
-    if (pesoCompliance && typeof pesoCompliance === 'object') {
-      currentSettings.pesoCompliance = {
-        ...currentSettings.pesoCompliance,
-        ...pesoCompliance
+    const incomingCompliance = qualityCompliance || pesoCompliance;
+    if (incomingCompliance && typeof incomingCompliance === 'object') {
+      currentSettings.qualityCompliance = {
+        ...currentSettings.qualityCompliance,
+        ...incomingCompliance
       };
+      delete currentSettings.pesoCompliance;
     }
     if (vehicleImages && Array.isArray(vehicleImages)) {
       currentSettings.vehicleImages = vehicleImages.filter(Boolean);
