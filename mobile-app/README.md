@@ -20,7 +20,7 @@ This is the dedicated mobile application codebase for **Extra Diesel**, develope
 ## 📱 Implemented Screens
 
 1. **Splash Screen (`SplashScreen.tsx`):**
-   - Brand logo, PESO-certified badges, and "Get Started" action.
+   - Brand logo, Legal Metrology certified badges, and "Get Started" action.
 2. **Login Screen (`LoginScreen.tsx`):**
    - Indian (+91) phone input, 6-digit OTP verification, guest mode option.
 3. **Home Dashboard (`HomeScreen.tsx`):**

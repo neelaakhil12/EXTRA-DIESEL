@@ -755,7 +755,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
 
         {/* Footer info */}
         <View style={styles.footer}>
-          <Text style={styles.footerText}>PESO Certified Bowser Fuel Delivery</Text>
+          <Text style={styles.footerText}>Legal Metrology Certified Bowser Fuel Delivery</Text>
           <Text style={styles.footerSub}>Privacy Policy • Terms of Service</Text>
         </View>
       </ScrollView>

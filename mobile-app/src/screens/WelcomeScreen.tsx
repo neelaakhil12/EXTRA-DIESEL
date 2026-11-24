@@ -59,9 +59,9 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
             style={styles.tankerImage}
             resizeMode="cover"
           />
-          <View style={styles.pesoOverlayBadge}>
+          <View style={styles.badgeOverlay}>
             <Ionicons name="shield-checkmark" size={14} color="#10B981" />
-            <Text style={styles.pesoOverlayText}>PESO Certified Tanker Bowser</Text>
+            <Text style={styles.badgeOverlayText}>Legal Metrology Certified Bowser</Text>
           </View>
         </View>
 
@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  pesoOverlayBadge: {
+  badgeOverlay: {
     position: 'absolute',
     bottom: 12,
     left: 12,
@@ -153,7 +153,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)',
   },
-  pesoOverlayText: {
+  badgeOverlayText: {
     color: '#FFFFFF',
     fontSize: 11,
     fontWeight: '700',

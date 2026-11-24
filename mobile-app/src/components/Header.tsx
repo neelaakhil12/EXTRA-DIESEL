@@ -282,7 +282,7 @@ export const Header: React.FC<HeaderProps> = ({
 
         <View style={styles.complianceTag}>
           <Ionicons name="shield-checkmark" size={12} color={COLORS.greenDark} />
-          <Text style={styles.complianceText}>PESO Certified Bowser</Text>
+          <Text style={styles.complianceText}>Legal Metrology Certified</Text>
         </View>
       </View>
     </View>

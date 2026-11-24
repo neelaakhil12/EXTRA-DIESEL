@@ -10,6 +10,7 @@ interface HomeScreenProps {
 }
 
 const DEFAULT_VEHICLE_IMAGES = [
+  require('../../assets/images/tanker-welcome.png'),
   require('../../assets/images/vehicle-bowser-1.jpeg'),
   require('../../assets/images/vehicle-bowser-2.jpeg'),
 ];
@@ -38,8 +39,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
           if (s.vehicleImages && Array.isArray(s.vehicleImages) && s.vehicleImages.length > 0) {
             const parsedImages = s.vehicleImages.map((img: string) => {
               if (typeof img === 'string') {
-                if (img.includes('vehicle-bowser-1.jpeg')) return DEFAULT_VEHICLE_IMAGES[0];
-                if (img.includes('vehicle-bowser-2.jpeg')) return DEFAULT_VEHICLE_IMAGES[1];
+                if (img.includes('tanker-welcome')) return DEFAULT_VEHICLE_IMAGES[0];
+                if (img.includes('vehicle-bowser-1.jpeg')) return DEFAULT_VEHICLE_IMAGES[1];
+                if (img.includes('vehicle-bowser-2.jpeg')) return DEFAULT_VEHICLE_IMAGES[2];
                 if (img.startsWith('http') || img.startsWith('data:')) {
                   return { uri: img };
                 }
@@ -71,63 +73,77 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
       style={styles.container}
       contentContainerStyle={[styles.content, isDesktop && styles.desktopContent]}
     >
-      {/* Top Banner Row: Live Rate FIRST (prominently highlighted at the top), then Fleet Banner */}
-      <View style={[styles.topRow, isDesktop && styles.desktopTopRow]}>
-        {/* 1. Live Diesel Rate Card (Top Highlight) - Perfectly fitted without cut-off */}
-        <View style={[styles.rateCard, isDesktop && styles.desktopRateCard]}>
-          <View style={styles.rateLeft}>
-            <View style={styles.fuelIcon}>
-              <Ionicons name="flame" size={24} color={COLORS.secondary} />
-            </View>
-            <View style={styles.rateLeftTextWrap}>
+      {/* 1. Live Diesel Rate Card (Top Highlight) - Full width, clean, perfectly fitted on Desktop & Mobile */}
+      <View style={[styles.rateCard, isDesktop && styles.desktopRateCard]}>
+        <View style={styles.rateLeft}>
+          <View style={styles.fuelIcon}>
+            <Ionicons name="flame" size={isDesktop ? 26 : 22} color={COLORS.secondary} />
+          </View>
+          <View style={styles.rateLeftTextWrap}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Text style={styles.rateSubtitle}>Today's Live Rate ({rateCity})</Text>
-              <Text style={styles.rateTitle} numberOfLines={1}>BS-VI High Speed Diesel</Text>
-              <View style={styles.pesoMiniBadge}>
+              <View style={styles.qualityBadge}>
                 <Ionicons name="shield-checkmark" size={11} color="#10B981" />
-                <Text style={styles.pesoMiniText}>PESO Verified</Text>
+                <Text style={styles.qualityBadgeText}>Quality Assured</Text>
               </View>
             </View>
-          </View>
-          <View style={styles.rateRight}>
-            <Text style={styles.rateValue}>₹{fuelRate.toFixed(2)}</Text>
-            <Text style={styles.rateUnit}>per Liter</Text>
+            <Text style={[styles.rateTitle, isDesktop && { fontSize: 16 }]} numberOfLines={1}>
+              BS-VI High Speed Doorstep Diesel
+            </Text>
           </View>
         </View>
 
-        {/* 2. Our Vehicles Large Hero Showcase Banner with Overlay Tagline & Order Now Button */}
-        <View style={[styles.heroVehicleCard, isDesktop && styles.desktopHeroVehicleCard]}>
-          <Image
-            source={vehicleImages[vehicleImgIdx] || DEFAULT_VEHICLE_IMAGES[0]}
-            style={styles.heroVehicleImage}
-            resizeMode="cover"
-          />
-          <View style={styles.heroVehicleOverlay}>
-            <View style={styles.vehicleHeaderRow}>
-              <View style={styles.heroBadgeWrap}>
-                <Text style={styles.heroBadgeText}>OUR FLEET</Text>
-              </View>
-              <View style={styles.liveVehicleDotWrap}>
-                <View style={styles.liveVehicleDot} />
-                <Text style={styles.liveVehicleText}>PESO Certified Bowsers</Text>
-              </View>
-            </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+          <View style={styles.rateRight}>
+            <Text style={[styles.rateValue, isDesktop && { fontSize: 26 }]}>₹{fuelRate.toFixed(2)}</Text>
+            <Text style={styles.rateUnit}>per Liter (Incl. Taxes)</Text>
+          </View>
+          {isDesktop && (
+            <TouchableOpacity
+              style={styles.desktopRateOrderBtn}
+              onPress={() => onNavigate('order')}
+              activeOpacity={0.88}
+            >
+              <Text style={styles.desktopRateOrderBtnText}>Order Diesel</Text>
+              <Ionicons name="arrow-forward" size={15} color={COLORS.primary} />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
 
-            <View style={styles.heroVehicleBottom}>
-              <View style={{ flex: 1, marginRight: 12 }}>
-                <Text style={styles.heroVehicleTitle}>Our Smart Bowsers</Text>
-                <Text style={styles.heroVehicleSubtitle} numberOfLines={2}>
-                  Automated doorstep delivery for generators, machinery & fleets
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={styles.heroVehicleBtn}
-                onPress={() => onNavigate('order')}
-                activeOpacity={0.88}
-              >
-                <Text style={styles.heroVehicleBtnText}>Order Now</Text>
-                <Ionicons name="arrow-forward" size={15} color={COLORS.white} />
-              </TouchableOpacity>
+      {/* 2. Our Vehicles Hero Showcase Banner - Sleek, balanced height, not oversized */}
+      <View style={[styles.heroVehicleCard, isDesktop && styles.desktopHeroVehicleCard]}>
+        <Image
+          source={vehicleImages[vehicleImgIdx] || DEFAULT_VEHICLE_IMAGES[0]}
+          style={styles.heroVehicleImage}
+          resizeMode="cover"
+        />
+        <View style={styles.heroVehicleOverlay}>
+          <View style={styles.vehicleHeaderRow}>
+            <View style={styles.heroBadgeWrap}>
+              <Text style={styles.heroBadgeText}>OUR FLEET</Text>
             </View>
+            <View style={styles.liveVehicleDotWrap}>
+              <View style={styles.liveVehicleDot} />
+              <Text style={styles.liveVehicleText}>Legal Metrology Certified</Text>
+            </View>
+          </View>
+
+          <View style={styles.heroVehicleBottom}>
+            <View style={{ flex: 1, marginRight: 14 }}>
+              <Text style={[styles.heroVehicleTitle, isDesktop && { fontSize: 20 }]}>Our Smart Mobile Bowsers</Text>
+              <Text style={[styles.heroVehicleSubtitle, isDesktop && { fontSize: 13.5 }]} numberOfLines={2}>
+                Automated doorstep delivery for generators, machinery & commercial fleets
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.heroVehicleBtn}
+              onPress={() => onNavigate('order')}
+              activeOpacity={0.88}
+            >
+              <Text style={styles.heroVehicleBtnText}>Order Now</Text>
+              <Ionicons name="arrow-forward" size={15} color={COLORS.white} />
+            </TouchableOpacity>
           </View>
         </View>
       </View>
@@ -209,7 +225,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
           <Text style={styles.assuranceTitle}>Safety & Compliance Assured</Text>
         </View>
         <Text style={styles.assuranceText}>
-          Every delivery is licensed by PESO (Petroleum and Explosives Safety Organization) and measured using legal metrology flow meters.
+          Every delivery is calibrated and measured using government-stamped Legal Metrology flow meters for accurate, tamper-proof dispensing.
         </Text>
       </View>
     </ScrollView>
@@ -288,20 +304,21 @@ const styles = StyleSheet.create({
   },
   heroVehicleCard: {
     width: '100%',
-    height: 200,
-    borderRadius: 18,
+    height: 175,
+    borderRadius: 16,
     overflow: 'hidden',
     marginBottom: 20,
     position: 'relative',
     backgroundColor: '#0F172A',
-    elevation: 4,
+    elevation: 3,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 5,
   },
   desktopHeroVehicleCard: {
-    height: 280,
+    height: 185,
+    marginBottom: 24,
   },
   heroVehicleImage: {
     width: '100%',
@@ -444,10 +461,8 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   desktopTopRow: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    gap: 20,
-    marginBottom: 24,
+    width: '100%',
+    marginBottom: 20,
   },
   desktopContent: {
     maxWidth: 1240,
@@ -470,12 +485,32 @@ const styles = StyleSheet.create({
     height: 120,
   },
   desktopRateCard: {
-    flex: 1,
-    marginBottom: 0,
-    justifyContent: 'center',
-    padding: 24,
+    width: '100%',
+    paddingHorizontal: 28,
+    paddingVertical: 18,
+    marginBottom: 16,
+    borderRadius: 16,
   },
-  pesoMiniBadge: {
+  desktopRateOrderBtn: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+  },
+  desktopRateOrderBtnText: {
+    color: COLORS.primary,
+    fontSize: 13.5,
+    fontWeight: '800',
+  },
+  qualityBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -486,7 +521,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
     alignSelf: 'flex-start',
   },
-  pesoMiniText: {
+  qualityBadgeText: {
     fontSize: 10,
     fontWeight: '700',
     color: '#FFFFFF',

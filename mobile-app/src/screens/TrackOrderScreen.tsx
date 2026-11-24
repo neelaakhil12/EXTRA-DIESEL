@@ -357,7 +357,7 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
               <Text style={styles.driverVehicle}>🚚 {bowserNo}</Text>
               <View style={styles.ratingRow}>
                 <Ionicons name="shield-checkmark" size={14} color="#059669" />
-                <Text style={styles.ratingText}>PESO Certified Bowser Captain</Text>
+                <Text style={styles.ratingText}>Verified Bowser Captain</Text>
               </View>
             </View>
           </View>

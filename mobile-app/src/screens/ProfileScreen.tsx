@@ -38,7 +38,7 @@ interface TermItem {
 
 const DEFAULT_TERMS: TermItem[] = [
   { id: 'tc-1', title: '100% Pure BS-VI High-Speed Diesel', desc: 'All diesel delivered is sourced directly from authorized oil marketing terminal depots and meets strict BS-VI environmental and engine standards.' },
-  { id: 'tc-2', title: 'PESO-Certified Mobile Bowsers', desc: 'Deliveries are executed strictly via Petroleum and Explosives Safety Organisation (PESO) licensed smart bowsers with spark arrestors.' },
+  { id: 'tc-2', title: 'Legal Metrology Calibrated Smart Bowsers', desc: 'Deliveries are executed strictly via automated smart bowsers equipped with government-stamped Legal Metrology flow meters and spark arrestors.' },
   { id: 'tc-3', title: 'Legal Metrology Calibrated Metering', desc: 'Each smart bowser is equipped with an electronic flow meter calibrated and stamped by Legal Metrology (±0.1% accuracy).' },
   { id: 'tc-4', title: 'Minimum Order Quantity (MOQ)', desc: 'The minimum delivery volume per doorstep order is 100 Liters.' },
   { id: 'tc-5', title: 'Free Delivery Threshold', desc: 'Deliveries of 200 Liters and above enjoy zero delivery charges. Orders below 200L are subject to standard delivery fees.' },
@@ -53,7 +53,7 @@ const DEFAULT_TERMS: TermItem[] = [
   { id: 'tc-14', title: 'Free Order Cancellation', desc: 'Orders can be cancelled free of charge at any time prior to the bowser departing from the hub.' },
   { id: 'tc-15', title: 'On-Site Quality & Density Testing', desc: 'Customers are entitled to request an on-site hydrometer density check using our calibrated test equipment before discharge.' },
   { id: 'tc-16', title: 'Direct Refilling to Approved Receptors', desc: 'Fuel is dispensed directly into DG set fuel tanks, commercial vehicle fleets, agricultural machinery, or authorized storage.' },
-  { id: 'tc-17', title: 'No Loose Container Fueling', desc: 'In compliance with PESO rules, dispensing into open buckets, jerry cans, or unapproved plastic containers is strictly prohibited.' },
+  { id: 'tc-17', title: 'No Loose Container Fueling', desc: 'In compliance with safety and environmental regulations, dispensing into open buckets, jerry cans, or unapproved containers is strictly prohibited.' },
   { id: 'tc-18', title: 'Spill Prevention & Environmental Safety', desc: 'Our bowsers are equipped with emergency shut-off valves, automatic dry-break nozzles, and spill containment kits.' },
   { id: 'tc-19', title: 'Scheduled Recurring Refills', desc: 'Customers on weekly/monthly subscription refuels may pause, reschedule, or adjust quota up to 4 hours before the window.' },
   { id: 'tc-20', title: '24/7 Bowser Dispatch & Support Helpline', desc: 'For emergency fueling or delivery assistance, reach our 24x7 control room via 1800-DIESEL-EX or WhatsApp support.' },
@@ -132,7 +132,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onLogout, on
   });
 
   const [pesoSettings, setPesoSettings] = useState({
-    licenseNo: 'PESO/HYD/2026/DL-4910',
+    licenseNo: 'LM/HYD/2026/FM-4910',
     legalMetrology: 'W&M Certified Flow Meter (±0.1%)',
     calibrationValidity: 'Valid through Dec 31, 2027',
     safetyEquipment: 'Static Earthing & Class-B Flameproof',
@@ -764,7 +764,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onLogout, on
           <View style={{ flex: 1, marginLeft: 12 }}>
             <Text style={styles.termsHeroTitle}>Extra Diesel Service Agreement</Text>
             <Text style={styles.termsHeroSub}>
-              PESO-Certified, Legal Metrology Calibrated Doorstep Fuel Delivery
+              Government-Calibrated, Legal Metrology Certified Doorstep Fuel Delivery
             </Text>
           </View>
         </View>
