@@ -331,18 +331,39 @@ export const LocationModal: React.FC<LocationModalProps> = ({
   };
 
   const handleConfirm = () => {
-    const parts = [plotNo, street, landmark ? `Near ${landmark}` : '', area, city, pincode].filter(Boolean);
+    // Strip any raw Plus Codes (e.g. 8G7W+54M)
+    const isPlusCode = (t: string) => /^[A-Z0-9]{4,8}\+[A-Z0-9]{2,4}/i.test((t || '').trim());
+    const cleanPlot = isPlusCode(plotNo) ? '' : plotNo.trim();
+    const cleanStreet = isPlusCode(street) ? '' : street.trim();
+    const cleanArea = isPlusCode(area) ? '' : area.trim();
+    const cleanLm = landmark.trim();
+    const cleanCt = city.trim() || 'Hyderabad';
+    const cleanPin = pincode.trim();
+
+    const parts = [cleanPlot, cleanStreet, cleanLm ? `Near ${cleanLm}` : '', cleanArea, cleanCt, cleanPin].filter(Boolean);
     const full = parts.join(', ');
 
+    // Prefer Colony / Area in short display so user always sees their exact locality
+    let short = '';
+    if (cleanPlot && cleanStreet) {
+      short = `${cleanPlot}, ${cleanStreet}`;
+    } else if (cleanStreet && cleanArea) {
+      short = `${cleanStreet}, ${cleanArea.split(',')[0]}`;
+    } else if (cleanArea) {
+      short = cleanArea;
+    } else {
+      short = cleanCt;
+    }
+
     const saved: SavedLocation = {
-      plotNo: plotNo.trim(),
-      street: street.trim(),
-      area: area.trim(),
-      landmark: landmark.trim(),
-      city: city.trim(),
-      pincode: pincode.trim(),
+      plotNo: cleanPlot,
+      street: cleanStreet,
+      area: cleanArea,
+      landmark: cleanLm,
+      city: cleanCt,
+      pincode: cleanPin,
       fullAddress: full,
-      shortAddress: [plotNo, street || area].filter(Boolean).join(', ') || area || city,
+      shortAddress: short,
       lat: coords?.lat,
       lon: coords?.lon,
     };
