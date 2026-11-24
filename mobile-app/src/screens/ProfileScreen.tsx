@@ -15,6 +15,7 @@ import {
   BackHandler,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 import { ScreenName } from '../types';
@@ -28,6 +29,35 @@ interface DeliverySite {
   accessNotes: string;
   isPrimary: boolean;
 }
+
+interface TermItem {
+  id: string;
+  title: string;
+  desc: string;
+}
+
+const DEFAULT_TERMS: TermItem[] = [
+  { id: 'tc-1', title: '100% Pure BS-VI High-Speed Diesel', desc: 'All diesel delivered is sourced directly from authorized oil marketing terminal depots and meets strict BS-VI environmental and engine standards.' },
+  { id: 'tc-2', title: 'PESO-Certified Mobile Bowsers', desc: 'Deliveries are executed strictly via Petroleum and Explosives Safety Organisation (PESO) licensed smart bowsers with spark arrestors.' },
+  { id: 'tc-3', title: 'Legal Metrology Calibrated Metering', desc: 'Each smart bowser is equipped with an electronic flow meter calibrated and stamped by Legal Metrology (±0.1% accuracy).' },
+  { id: 'tc-4', title: 'Minimum Order Quantity (MOQ)', desc: 'The minimum delivery volume per doorstep order is 100 Liters.' },
+  { id: 'tc-5', title: 'Free Delivery Threshold', desc: 'Deliveries of 200 Liters and above enjoy zero delivery charges. Orders below 200L are subject to standard delivery fees.' },
+  { id: 'tc-6', title: 'Mandatory Static Earthing', desc: 'Before dispensing begins, the operator must connect a safety bonding wire to prevent static electrical discharge.' },
+  { id: 'tc-7', title: '15-Meter Safety Zone', desc: 'The fueling area must maintain a 15-meter clearance free of open flames, smoking, welding, or electrical spark hazards during discharge.' },
+  { id: 'tc-8', title: 'Certified Hazardous Material Drivers', desc: 'All bowser drivers and operators hold valid hazardous material transport licenses and emergency response training.' },
+  { id: 'tc-9', title: 'Site Accessibility & Clear Passage', desc: 'The customer is responsible for ensuring the delivery bowser has unobstructed access to the fuel intake point.' },
+  { id: 'tc-10', title: 'Dynamic Daily Price Transparency', desc: 'Diesel rates are updated daily based on state-notified fuel prices. The price locked at order placement is honored.' },
+  { id: 'tc-11', title: 'Secure Online Payments via Razorpay', desc: 'All credit/debit card, UPI, and net banking transactions are processed via PCI-DSS compliant Razorpay gateway.' },
+  { id: 'tc-12', title: 'Tax-Compliant 100% GST Invoices', desc: 'Instant digitally signed GST tax invoices are generated upon order completion and available for download.' },
+  { id: 'tc-13', title: 'Tamper-Proof Electronic Delivery Receipts', desc: 'The smart bowser prints an automated receipt detailing start reading, finish reading, volume dispensed, and density.' },
+  { id: 'tc-14', title: 'Free Order Cancellation', desc: 'Orders can be cancelled free of charge at any time prior to the bowser departing from the hub.' },
+  { id: 'tc-15', title: 'On-Site Quality & Density Testing', desc: 'Customers are entitled to request an on-site hydrometer density check using our calibrated test equipment before discharge.' },
+  { id: 'tc-16', title: 'Direct Refilling to Approved Receptors', desc: 'Fuel is dispensed directly into DG set fuel tanks, commercial vehicle fleets, agricultural machinery, or authorized storage.' },
+  { id: 'tc-17', title: 'No Loose Container Fueling', desc: 'In compliance with PESO rules, dispensing into open buckets, jerry cans, or unapproved plastic containers is strictly prohibited.' },
+  { id: 'tc-18', title: 'Spill Prevention & Environmental Safety', desc: 'Our bowsers are equipped with emergency shut-off valves, automatic dry-break nozzles, and spill containment kits.' },
+  { id: 'tc-19', title: 'Scheduled Recurring Refills', desc: 'Customers on weekly/monthly subscription refuels may pause, reschedule, or adjust quota up to 4 hours before the window.' },
+  { id: 'tc-20', title: '24/7 Bowser Dispatch & Support Helpline', desc: 'For emergency fueling or delivery assistance, reach our 24x7 control room via 1800-DIESEL-EX or WhatsApp support.' },
+];
 
 interface ProfileScreenProps {
   user?: {
@@ -52,7 +82,7 @@ interface ProfileScreenProps {
   }) => void;
 }
 
-type SubScreen = 'sites' | 'credit' | 'compliance' | 'support' | 'editProfile' | 'avatarPresets' | null;
+type SubScreen = 'sites' | 'terms' | 'support' | 'editProfile' | 'avatarPresets' | null;
 
 const AVATAR_PRESETS = [
   { id: '1', label: 'Executive', uri: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80' },
@@ -109,25 +139,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onLogout, on
     automatedReceipts: 'Tamper-Proof Dispenser Integrated Printout',
   });
 
-  // Delivery Sites State (Add, Edit, Update, Delete)
-  const [deliverySites, setDeliverySites] = useState<DeliverySite[]>([
-    {
-      id: 'site-1',
-      name: 'Plot 42, Hitech City',
-      address: 'Survey 42, Phase 2, Near Mindspace, Madhapur, Hyderabad, Telangana 500081',
-      dgCapacity: '500 kVA (2 Units)',
-      accessNotes: 'Bowser Gate 2 Access',
-      isPrimary: true,
-    },
-    {
-      id: 'site-2',
-      name: 'Site 8, Gachibowli',
-      address: 'Plot 8, Financial District, Nanakramguda, Hyderabad, Telangana 500032',
-      dgCapacity: '750 kVA (1 Unit)',
-      accessNotes: 'Night Delivery Approved',
-      isPrimary: false,
-    },
-  ]);
+  // Terms and Conditions State (Dynamic 20 Clauses synced with admin panel)
+  const [termsList, setTermsList] = useState<TermItem[]>(DEFAULT_TERMS);
+
+  // Delivery Site State - Strictly 1 Single Delivery Address (No Hardcoded Dummy Sites)
+  const [deliverySites, setDeliverySites] = useState<DeliverySite[]>([]);
 
   // Delivery Site Form State
   const [isShowingSiteForm, setIsShowingSiteForm] = useState(false);
@@ -136,9 +152,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onLogout, on
   const [siteFormAddress, setSiteFormAddress] = useState('');
   const [siteFormDg, setSiteFormDg] = useState('');
   const [siteFormNotes, setSiteFormNotes] = useState('');
-  const [siteFormIsPrimary, setSiteFormIsPrimary] = useState(false);
 
-  // Load Settings & User profile from backend
+  // Load Settings, Terms & User profile from backend and local persistent storage
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -150,14 +165,14 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onLogout, on
         const settingsData = await settingsRes.json();
         if (settingsData.success && settingsData.settings) {
           const s = settingsData.settings;
-          if (s.b2bCreditLimit) setCreditLimit(Number(s.b2bCreditLimit));
-          if (s.b2bCreditTerms) setCreditTerms(s.b2bCreditTerms);
-          if (s.b2bBillingCycle) setCreditBillingCycle(s.b2bBillingCycle);
+          if (s.termsAndConditions && Array.isArray(s.termsAndConditions) && s.termsAndConditions.length > 0) {
+            setTermsList(s.termsAndConditions);
+          }
           if (s.supportHotline) setHotlineSettings((prev) => ({ ...prev, ...s.supportHotline }));
-          if (s.pesoCompliance) setPesoSettings((prev) => ({ ...prev, ...s.pesoCompliance }));
         }
 
         const profileData = await profileRes.json();
+        let loadedSite: DeliverySite | null = null;
         if (profileData.success && profileData.user) {
           const u = profileData.user;
           if (u.name) setEditName(u.name);
@@ -165,8 +180,23 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onLogout, on
           if (u.company) setEditCompany(u.company);
           if (u.gstin) setEditGstin(u.gstin);
           if (Array.isArray(u.deliverySites) && u.deliverySites.length > 0) {
-            setDeliverySites(u.deliverySites);
+            loadedSite = u.deliverySites[0];
           }
+        }
+
+        if (!loadedSite) {
+          const stored = await AsyncStorage.getItem('ed_delivery_site');
+          if (stored) {
+            try {
+              loadedSite = JSON.parse(stored);
+            } catch (e) {}
+          }
+        }
+
+        if (loadedSite) {
+          setDeliverySites([loadedSite]);
+        } else {
+          setDeliverySites([]);
         }
       } catch (e) {
         console.log('Error fetching profile/settings:', e);
@@ -291,15 +321,14 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onLogout, on
   };
 
   // =========================================================================
-  // DELIVERY SITES HANDLERS: ADD, EDIT, DELETE, SET PRIMARY
+  // DELIVERY SITES HANDLERS: ADD, EDIT, DELETE (ONLY 1 SINGLE DELIVERY ADDRESS ALLOWED)
   // =========================================================================
   const openAddSiteForm = () => {
     setEditingSiteId(null);
     setSiteFormName('');
     setSiteFormAddress('');
-    setSiteFormDg('500 kVA (1 Unit)');
-    setSiteFormNotes('Gate 1 Access');
-    setSiteFormIsPrimary(deliverySites.length === 0);
+    setSiteFormDg('500 kVA DG Set');
+    setSiteFormNotes('Direct Bowser Ramp Gate Access');
     setIsShowingSiteForm(true);
   };
 
@@ -309,109 +338,64 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onLogout, on
     setSiteFormAddress(site.address);
     setSiteFormDg(site.dgCapacity);
     setSiteFormNotes(site.accessNotes);
-    setSiteFormIsPrimary(site.isPrimary);
     setIsShowingSiteForm(true);
   };
 
   const handleSaveSiteForm = async () => {
-    if (!siteFormName.trim() || !siteFormAddress.trim()) {
-      Alert.alert('Required Fields', 'Please enter site name and address.');
+    if (!siteFormAddress.trim()) {
+      Alert.alert('Required Field', 'Please enter your delivery site address.');
       return;
     }
 
-    let updatedList: DeliverySite[] = [];
+    const singleSite: DeliverySite = {
+      id: 'site-primary',
+      name: siteFormName.trim() || 'Primary Delivery Site',
+      address: siteFormAddress.trim(),
+      dgCapacity: siteFormDg.trim() || 'Standard Delivery',
+      accessNotes: siteFormNotes.trim() || 'Direct Bowser Gate Access',
+      isPrimary: true,
+    };
 
-    if (editingSiteId) {
-      // Edit existing
-      updatedList = deliverySites.map((site) => {
-        if (site.id === editingSiteId) {
-          return {
-            ...site,
-            name: siteFormName.trim(),
-            address: siteFormAddress.trim(),
-            dgCapacity: siteFormDg.trim() || 'DG Set Installed',
-            accessNotes: siteFormNotes.trim() || 'Standard Delivery Gate',
-            isPrimary: siteFormIsPrimary,
-          };
-        }
-        return siteFormIsPrimary ? { ...site, isPrimary: false } : site;
-      });
-    } else {
-      // Add new
-      const newSite: DeliverySite = {
-        id: `site-${Date.now()}`,
-        name: siteFormName.trim(),
-        address: siteFormAddress.trim(),
-        dgCapacity: siteFormDg.trim() || 'DG Set Installed',
-        accessNotes: siteFormNotes.trim() || 'Standard Delivery Gate',
-        isPrimary: siteFormIsPrimary || deliverySites.length === 0,
-      };
-
-      if (newSite.isPrimary) {
-        updatedList = [newSite, ...deliverySites.map((s) => ({ ...s, isPrimary: false }))];
-      } else {
-        updatedList = [...deliverySites, newSite];
-      }
-    }
-
-    setDeliverySites(updatedList);
+    setDeliverySites([singleSite]);
     setIsShowingSiteForm(false);
 
     try {
+      await AsyncStorage.setItem('ed_delivery_site', JSON.stringify(singleSite));
       await fetch(`${baseUrl}/api/user/delivery-sites`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: userEmail, deliverySites: updatedList }),
+        body: JSON.stringify({ email: userEmail, deliverySites: [singleSite] }),
       });
-      Alert.alert('Success', editingSiteId ? 'Delivery site updated!' : 'New delivery site added!');
+      Alert.alert('Success', 'Delivery address saved successfully!');
     } catch (e) {
-      Alert.alert('Saved', 'Site updated in local profile.');
+      Alert.alert('Saved', 'Delivery address saved locally.');
     }
   };
 
-  const handleDeleteSite = (siteId: string) => {
+  const handleDeleteSite = (_siteId?: string) => {
     Alert.alert(
       'Delete Delivery Site',
-      'Are you sure you want to remove this delivery site?',
+      'Are you sure you want to remove your delivery address?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            const updatedList = deliverySites.filter((s) => s.id !== siteId);
-            if (updatedList.length > 0 && !updatedList.some((s) => s.isPrimary)) {
-              updatedList[0].isPrimary = true;
-            }
-            setDeliverySites(updatedList);
+            setDeliverySites([]);
             try {
+              await AsyncStorage.removeItem('ed_delivery_site');
               await fetch(`${baseUrl}/api/user/delivery-sites`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: userEmail, deliverySites: updatedList }),
+                body: JSON.stringify({ email: userEmail, deliverySites: [] }),
               });
             } catch (e) {}
-            Alert.alert('Deleted', 'Delivery site removed.');
+            Alert.alert('Deleted', 'Delivery address removed.');
           },
         },
       ]
     );
-  };
-
-  const handleSetPrimary = async (siteId: string) => {
-    const updatedList = deliverySites.map((s) => ({
-      ...s,
-      isPrimary: s.id === siteId,
-    }));
-    setDeliverySites(updatedList);
-    try {
-      await fetch(`${baseUrl}/api/user/delivery-sites`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: userEmail, deliverySites: updatedList }),
-      });
-    } catch (e) {}
-    Alert.alert('Primary Site Updated', 'This site is now selected as your primary delivery address.');
   };
 
   // Calculations for Fuel Credit
@@ -436,12 +420,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onLogout, on
     return () => sub.remove();
   }, [activeSubScreen, isShowingSiteForm]);
 
-  // Navigation Sub-header (Clean header without back arrow, handled by nav buttons & gestures)
+  // Navigation Sub-header (Clean header aligned to the LEFT, handled by device gestures & nav buttons)
   const renderSubHeader = (title: string, subtitle?: string) => (
     <View style={styles.subHeaderBar}>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.subHeaderTitle}>{title}</Text>
-        {subtitle ? <Text style={styles.subHeaderSub}>{subtitle}</Text> : null}
+      <View style={{ flex: 1, alignItems: 'flex-start' }}>
+        <Text style={[styles.subHeaderTitle, { textAlign: 'left' }]}>{title}</Text>
+        {subtitle ? <Text style={[styles.subHeaderSub, { textAlign: 'left' }]}>{subtitle}</Text> : null}
       </View>
     </View>
   );
@@ -691,18 +675,37 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onLogout, on
           </TouchableOpacity>
         )}
 
-        {/* Sites List */}
+        {/* Add Site Button: Only visible if no address exists yet */}
+        {!isShowingSiteForm && deliverySites.length === 0 && (
+          <View style={{ alignItems: 'center', paddingVertical: 24, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: '#E2E8F0' }}>
+            <Ionicons name="location-outline" size={44} color="#94A3B8" />
+            <Text style={{ fontSize: 16, fontWeight: '800', color: COLORS.dark, marginTop: 10 }}>
+              No Delivery Address Added
+            </Text>
+            <Text style={{ fontSize: 12.5, color: '#64748B', textAlign: 'center', marginTop: 4, marginBottom: 18 }}>
+              Add your single primary delivery site address for doorstep bowser refueling.
+            </Text>
+            <TouchableOpacity
+              style={styles.addSiteHeaderBtn}
+              onPress={openAddSiteForm}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="add-circle" size={18} color="#FFFFFF" />
+              <Text style={styles.addSiteHeaderBtnText}>Add Delivery Address</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Single Primary Site Card */}
         {deliverySites.map((site) => (
           <View key={site.id} style={styles.siteCardFull}>
             <View style={styles.siteCardHeader}>
               <View style={{ flex: 1 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <Text style={styles.siteName}>{site.name}</Text>
-                  {site.isPrimary && (
-                    <View style={styles.primaryBadge}>
-                      <Text style={styles.primaryBadgeText}>PRIMARY</Text>
-                    </View>
-                  )}
+                  <View style={styles.primaryBadge}>
+                    <Text style={styles.primaryBadgeText}>PRIMARY ADDRESS</Text>
+                  </View>
                 </View>
                 <Text style={styles.siteAddress}>{site.address}</Text>
               </View>
@@ -711,36 +714,23 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onLogout, on
             <View style={styles.siteMetaRow}>
               <View style={styles.siteMetaItem}>
                 <Ionicons name="flash-outline" size={14} color="#64748B" />
-                <Text style={styles.siteMetaText}>{site.dgCapacity}</Text>
+                <Text style={styles.siteMetaText}>{site.dgCapacity || 'Standard Refill'}</Text>
               </View>
               <View style={styles.siteMetaItem}>
                 <Ionicons name="shield-outline" size={14} color="#64748B" />
-                <Text style={styles.siteMetaText}>{site.accessNotes}</Text>
+                <Text style={styles.siteMetaText}>{site.accessNotes || 'Bowser Gate Access'}</Text>
               </View>
             </View>
 
-            {/* Action Bar for Each Site: Edit, Delete, Set Primary */}
+            {/* Action Bar for Single Site: Edit, Delete */}
             <View style={styles.siteActionRow}>
-              {!site.isPrimary && (
-                <TouchableOpacity
-                  style={styles.setPrimaryBtn}
-                  onPress={() => handleSetPrimary(site.id)}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="radio-button-off" size={15} color="#2563EB" />
-                  <Text style={styles.setPrimaryBtnText}>Make Primary</Text>
-                </TouchableOpacity>
-              )}
-
-              <View style={{ flex: 1 }} />
-
               <TouchableOpacity
                 style={styles.siteEditBtn}
                 onPress={() => openEditSiteForm(site)}
                 activeOpacity={0.7}
               >
                 <Ionicons name="create-outline" size={16} color={COLORS.primary} />
-                <Text style={styles.siteEditBtnText}>Edit</Text>
+                <Text style={styles.siteEditBtnText}>Edit Address</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -759,124 +749,39 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onLogout, on
   }
 
   // =========================================================================
-  // SUB-SCREEN 3: B2B CORPORATE FUEL CREDIT ACCOUNT FULL PAGE
+  // SUB-SCREEN 3: TERMS AND CONDITIONS FULL PAGE (20 CLAUSES SYNCED WITH ADMIN)
   // =========================================================================
-  if (activeSubScreen === 'credit') {
+  if (activeSubScreen === 'terms') {
     return (
       <ScrollView
         style={styles.container}
         contentContainerStyle={[styles.content, isDesktop && styles.desktopContent]}
       >
-        {renderSubHeader('B2B Corporate Credit Line', 'Interest-free automated bowser refueling terms and billing')}
+        {renderSubHeader('Terms and Conditions', 'Official fueling guidelines, safety policies and regulatory standards')}
 
-        {/* Available Credit Box */}
-        <View style={styles.creditSummaryBox}>
-          <Text style={styles.creditSummaryLabel}>AVAILABLE FUEL CREDIT LINE</Text>
-          <Text style={styles.creditSummaryValue}>₹{availableCredit.toLocaleString('en-IN')}</Text>
-
-          {/* Dynamic Progress Bar */}
-          <View style={styles.creditProgressTrack}>
-            <View style={[styles.creditProgressBar, { width: `${creditUsagePercent}%` }]} />
-          </View>
-
-          <View style={styles.creditSplitRow}>
-            <Text style={styles.creditSplitText}>Utilized: ₹{usedCredit.toLocaleString('en-IN')}</Text>
-            <Text style={styles.creditSplitText}>Total Limit: ₹{creditLimit.toLocaleString('en-IN')}</Text>
-          </View>
-        </View>
-
-        {/* Corporate Terms Card */}
-        <View style={styles.card}>
-          <Text style={styles.formSectionHeading}>Corporate Account Parameters</Text>
-
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>GSTIN</Text>
-            <Text style={styles.infoValue}>{userGstin}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Payment Terms</Text>
-            <Text style={styles.infoValue}>{creditTerms}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Billing Cycle</Text>
-            <Text style={styles.infoValue}>{creditBillingCycle}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Account Status</Text>
-            <View style={styles.statusPill}>
-              <View style={styles.statusDotGreen} />
-              <Text style={styles.statusPillText}>Active & Approved</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Explanation Card */}
-        <View style={styles.creditExplainCard}>
-          <Ionicons name="information-circle" size={24} color="#0284C7" />
-          <View style={{ flex: 1, marginLeft: 10 }}>
-            <Text style={styles.creditExplainTitle}>How Net-30 Fuel Credit Operates</Text>
-            <Text style={styles.creditExplainText}>
-              • Bowser refuels your generators or fleet with zero upfront payment.{'\n'}
-              • All dispenses during the billing cycle deduct from your ₹{creditLimit.toLocaleString('en-IN')} limit.{'\n'}
-              • Consolidated GST Tax Invoices are issued on month end with 30 days interest-free settlement.
+        <View style={styles.termsHeroBadge}>
+          <Ionicons name="document-text" size={32} color={COLORS.primary} />
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text style={styles.termsHeroTitle}>Extra Diesel Service Agreement</Text>
+            <Text style={styles.termsHeroSub}>
+              PESO-Certified, Legal Metrology Calibrated Doorstep Fuel Delivery
             </Text>
           </View>
         </View>
 
-        <TouchableOpacity
-          style={styles.actionBtn}
-          activeOpacity={0.85}
-          onPress={() => onNavigate('orders')}
-        >
-          <Ionicons name="receipt-outline" size={18} color="#FFFFFF" />
-          <Text style={styles.actionBtnText}>View Invoices & Billing History</Text>
-        </TouchableOpacity>
-      </ScrollView>
-    );
-  }
-
-  // =========================================================================
-  // SUB-SCREEN 4: PESO & SAFETY COMPLIANCE FULL PAGE
-  // =========================================================================
-  if (activeSubScreen === 'compliance') {
-    return (
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={[styles.content, isDesktop && styles.desktopContent]}
-      >
-        {renderSubHeader('PESO & Safety Compliance', 'Petroleum and Explosives Safety Organisation Certifications')}
-
-        <View style={styles.complianceBadgeBox}>
-          <Ionicons name="shield-checkmark" size={44} color="#059669" />
-          <Text style={styles.complianceBadgeTitle}>100% Certified Mobile Bowser</Text>
-          <Text style={styles.complianceBadgeSub}>
-            Fully approved under Petroleum and Explosives Safety Organization (PESO) Rules.
-          </Text>
-        </View>
-
         <View style={styles.card}>
-          <Text style={styles.formSectionHeading}>Regulatory Audit Records</Text>
-
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>PESO License No</Text>
-            <Text style={styles.infoValueBold}>{pesoSettings.licenseNo}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Legal Metrology</Text>
-            <Text style={styles.infoValueBold}>{pesoSettings.legalMetrology}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Calibration Validity</Text>
-            <Text style={styles.infoValueBold}>{pesoSettings.calibrationValidity}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Safety Equipment</Text>
-            <Text style={styles.infoValueBold}>{pesoSettings.safetyEquipment}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Automated Receipts</Text>
-            <Text style={styles.infoValueBold}>{pesoSettings.automatedReceipts}</Text>
-          </View>
+          <Text style={styles.formSectionHeading}>Standard Operating Policies & Safety Clauses ({termsList.length} Points)</Text>
+          {termsList.map((item, idx) => (
+            <View key={item.id || idx} style={[styles.termItemBox, idx < termsList.length - 1 && styles.termItemBorder]}>
+              <View style={styles.termIndexCircle}>
+                <Text style={styles.termIndexText}>{idx + 1}</Text>
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={styles.termTitleText}>{item.title}</Text>
+                <Text style={styles.termDescText}>{item.desc}</Text>
+              </View>
+            </View>
+          ))}
         </View>
       </ScrollView>
     );
@@ -969,13 +874,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onLogout, on
       action: () => setActiveSubScreen('sites'),
     },
     {
-      icon: 'business-outline',
-      label: 'B2B Corporate Credit Account',
-      action: () => setActiveSubScreen('credit'),
-    },
-    {
       icon: 'receipt-outline',
-      label: 'GST Tax Invoices',
+      label: 'Invoices',
       action: () => onNavigate('orders'),
     },
     {
@@ -984,9 +884,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onLogout, on
       action: () => onNavigate('subscription'),
     },
     {
-      icon: 'shield-checkmark-outline',
-      label: 'PESO & Legal Metrology Compliance',
-      action: () => setActiveSubScreen('compliance'),
+      icon: 'document-text-outline',
+      label: 'Terms and Conditions',
+      action: () => setActiveSubScreen('terms'),
     },
     {
       icon: 'help-circle-outline',
@@ -1046,23 +946,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onLogout, on
           </TouchableOpacity>
         </View>
       </View>
-
-      {/* Available Fuel Credit Box (Dynamic Limit & Available balance) */}
-      <TouchableOpacity
-        style={styles.creditCard}
-        activeOpacity={0.9}
-        onPress={() => setActiveSubScreen('credit')}
-      >
-        <View style={styles.creditHeader}>
-          <Text style={styles.creditLabel}>AVAILABLE FUEL CREDIT</Text>
-          <Text style={styles.creditLimit}>Limit: ₹{creditLimit.toLocaleString('en-IN')}</Text>
-        </View>
-        <Text style={styles.creditAmount}>₹{availableCredit.toLocaleString('en-IN')}</Text>
-        <View style={styles.creditFooter}>
-          <Text style={styles.creditSub}>{creditTerms}</Text>
-          <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
-        </View>
-      </TouchableOpacity>
 
       {/* Profile Menu List */}
       <View style={styles.menuCard}>
@@ -1866,5 +1749,60 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  termsHeroBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+  },
+  termsHeroTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.primary,
+  },
+  termsHeroSub: {
+    fontSize: 11.5,
+    color: '#991B1B',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  termItemBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingVertical: 12,
+  },
+  termItemBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  termIndexCircle: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#FEE2E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  termIndexText: {
+    color: COLORS.primary,
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  termTitleText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: COLORS.dark,
+    marginBottom: 3,
+  },
+  termDescText: {
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 17,
   },
 });

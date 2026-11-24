@@ -62,7 +62,22 @@ interface DeliveryBoy {
   completedOrdersCount: number;
 }
 
-type TabType = 'dashboard' | 'orders' | 'delivery' | 'settings';
+type TabType = 'dashboard' | 'orders' | 'subscriptions' | 'delivery' | 'settings';
+
+interface AdminSubscriptionItem {
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string;
+  address: string;
+  subscription: {
+    siteName: string;
+    liters: number;
+    frequency: 'weekly' | 'monthly';
+    days: string[];
+    status: 'active' | 'paused';
+    nextRefill: string;
+  };
+}
 
 export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUser }) => {
   const { width } = useWindowDimensions();
@@ -106,6 +121,20 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
   const [tier1FeeInput, setTier1FeeInput] = useState<string>('350');
   const [tier2FeeInput, setTier2FeeInput] = useState<string>('0');
   const [tier1MaxLitersInput, setTier1MaxLitersInput] = useState<string>('500');
+  const [taxRateInput, setTaxRateInput] = useState<string>('5');
+
+  // Customer Subscriptions
+  const [subscriptionsList, setSubscriptionsList] = useState<AdminSubscriptionItem[]>([]);
+
+  // Preferred Delivery Time Slots Management
+  const [deliverySlotsList, setDeliverySlotsList] = useState<string[]>([
+    '08:00 AM - 12:00 PM',
+    '01:00 PM - 05:00 PM',
+    '06:00 PM - 10:00 PM',
+  ]);
+  const [newSlotInput, setNewSlotInput] = useState<string>('');
+  const [editingSlotIndex, setEditingSlotIndex] = useState<number | null>(null);
+  const [editingSlotValue, setEditingSlotValue] = useState<string>('');
 
   // B2B Corporate Fuel Credit Line Settings
   const [creditLimitInput, setCreditLimitInput] = useState<string>('500000');
@@ -134,6 +163,35 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
   const [newVehicleImageUrl, setNewVehicleImageUrl] = useState<string>('');
   const [editingVehicleIndex, setEditingVehicleIndex] = useState<number | null>(null);
   const [editingVehicleValue, setEditingVehicleValue] = useState<string>('');
+
+  // Terms and Conditions Management (20 Clauses)
+  const [termsList, setTermsList] = useState<Array<{ id: string; title: string; desc: string }>>([
+    { id: 'tc-1', title: '100% Pure BS-VI High-Speed Diesel', desc: 'All diesel delivered is sourced directly from authorized oil marketing terminal depots and meets strict BS-VI environmental and engine standards.' },
+    { id: 'tc-2', title: 'PESO-Certified Mobile Bowsers', desc: 'Deliveries are executed strictly via Petroleum and Explosives Safety Organisation (PESO) licensed smart bowsers with spark arrestors.' },
+    { id: 'tc-3', title: 'Legal Metrology Calibrated Metering', desc: 'Each smart bowser is equipped with an electronic flow meter calibrated and stamped by Legal Metrology (±0.1% accuracy).' },
+    { id: 'tc-4', title: 'Minimum Order Quantity (MOQ)', desc: 'The minimum delivery volume per doorstep order is 100 Liters.' },
+    { id: 'tc-5', title: 'Free Delivery Threshold', desc: 'Deliveries of 200 Liters and above enjoy zero delivery charges. Orders below 200L are subject to standard delivery fees.' },
+    { id: 'tc-6', title: 'Mandatory Static Earthing', desc: 'Before dispensing begins, the operator must connect a safety bonding wire to prevent static electrical discharge.' },
+    { id: 'tc-7', title: '15-Meter Safety Zone', desc: 'The fueling area must maintain a 15-meter clearance free of open flames, smoking, welding, or electrical spark hazards during discharge.' },
+    { id: 'tc-8', title: 'Certified Hazardous Material Drivers', desc: 'All bowser drivers and operators hold valid hazardous material transport licenses and emergency response training.' },
+    { id: 'tc-9', title: 'Site Accessibility & Clear Passage', desc: 'The customer is responsible for ensuring the delivery bowser has unobstructed access to the fuel intake point.' },
+    { id: 'tc-10', title: 'Dynamic Daily Price Transparency', desc: 'Diesel rates are updated daily based on state-notified fuel prices. The price locked at order placement is honored.' },
+    { id: 'tc-11', title: 'Secure Online Payments via Razorpay', desc: 'All credit/debit card, UPI, and net banking transactions are processed via PCI-DSS compliant Razorpay gateway.' },
+    { id: 'tc-12', title: 'Tax-Compliant 100% GST Invoices', desc: 'Instant digitally signed GST tax invoices are generated upon order completion and available for download.' },
+    { id: 'tc-13', title: 'Tamper-Proof Electronic Delivery Receipts', desc: 'The smart bowser prints an automated receipt detailing start reading, finish reading, volume dispensed, and density.' },
+    { id: 'tc-14', title: 'Free Order Cancellation', desc: 'Orders can be cancelled free of charge at any time prior to the bowser departing from the hub.' },
+    { id: 'tc-15', title: 'On-Site Quality & Density Testing', desc: 'Customers are entitled to request an on-site hydrometer density check using our calibrated test equipment before discharge.' },
+    { id: 'tc-16', title: 'Direct Refilling to Approved Receptors', desc: 'Fuel is dispensed directly into DG set fuel tanks, commercial vehicle fleets, agricultural machinery, or authorized storage.' },
+    { id: 'tc-17', title: 'No Loose Container Fueling', desc: 'In compliance with PESO rules, dispensing into open buckets, jerry cans, or unapproved plastic containers is strictly prohibited.' },
+    { id: 'tc-18', title: 'Spill Prevention & Environmental Safety', desc: 'Our bowsers are equipped with emergency shut-off valves, automatic dry-break nozzles, and spill containment kits.' },
+    { id: 'tc-19', title: 'Scheduled Recurring Refills', desc: 'Customers on weekly/monthly subscription refuels may pause, reschedule, or adjust quota up to 4 hours before the window.' },
+    { id: 'tc-20', title: '24/7 Bowser Dispatch & Support Helpline', desc: 'For emergency fueling or delivery assistance, reach our 24x7 control room via 1800-DIESEL-EX or WhatsApp support.' },
+  ]);
+  const [editingTermId, setEditingTermId] = useState<string | null>(null);
+  const [editingTermTitle, setEditingTermTitle] = useState<string>('');
+  const [editingTermDesc, setEditingTermDesc] = useState<string>('');
+  const [newTermTitle, setNewTermTitle] = useState<string>('');
+  const [newTermDesc, setNewTermDesc] = useState<string>('');
 
   const [isSavingSettings, setIsSavingSettings] = useState<boolean>(false);
   const [settingsSuccessMessage, setSettingsSuccessMessage] = useState<string>('');
@@ -169,11 +227,12 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
   const loadAdminData = async () => {
     try {
       setRefreshing(true);
-      const [statsRes, ordersRes, driversRes, settingsRes] = await Promise.all([
+      const [statsRes, ordersRes, driversRes, settingsRes, subsRes] = await Promise.all([
         fetch(`${baseUrl}/api/admin/stats`),
         fetch(`${baseUrl}/api/orders?all=true`),
         fetch(`${baseUrl}/api/admin/delivery-boys`),
         fetch(`${baseUrl}/api/settings`),
+        fetch(`${baseUrl}/api/admin/subscriptions`),
       ]);
 
       const statsData = await statsRes.json();
@@ -191,6 +250,13 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
         setDeliveryBoys(driversData.deliveryBoys);
       }
 
+      try {
+        const subsData = await subsRes.json();
+        if (subsData.success && Array.isArray(subsData.subscriptions)) {
+          setSubscriptionsList(subsData.subscriptions);
+        }
+      } catch (e) {}
+
       const settingsData = await settingsRes.json();
       if (settingsData.success && settingsData.settings) {
         const s = settingsData.settings;
@@ -199,6 +265,10 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
         if (s.deliveryChargeUpTo500 !== undefined) setTier1FeeInput(s.deliveryChargeUpTo500.toString());
         if (s.deliveryChargeAbove500 !== undefined) setTier2FeeInput(s.deliveryChargeAbove500.toString());
         if (s.tier1MaxLiters !== undefined) setTier1MaxLitersInput(s.tier1MaxLiters.toString());
+        if (s.taxRatePercent !== undefined) setTaxRateInput(s.taxRatePercent.toString());
+        if (s.deliverySlots && Array.isArray(s.deliverySlots) && s.deliverySlots.length > 0) {
+          setDeliverySlotsList(s.deliverySlots);
+        }
 
         // Fuel Credit Line
         if (s.b2bCreditLimit !== undefined) setCreditLimitInput(s.b2bCreditLimit.toString());
@@ -226,6 +296,11 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
         // Vehicle Fleet Showcase Images
         if (s.vehicleImages && Array.isArray(s.vehicleImages) && s.vehicleImages.length > 0) {
           setVehicleImagesList(s.vehicleImages);
+        }
+
+        // Terms and Conditions
+        if (s.termsAndConditions && Array.isArray(s.termsAndConditions) && s.termsAndConditions.length > 0) {
+          setTermsList(s.termsAndConditions);
         }
       }
     } catch (e) {
@@ -402,9 +477,11 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
         body: JSON.stringify({
           dieselRate: rateNum,
           city: rateCityInput.trim() || 'Hyderabad',
-          deliveryChargeUpTo500: isNaN(tier1Fee) ? 350 : tier1Fee,
+          deliveryChargeUpTo500: tier1FeeInput.trim() === '' ? 0 : (isNaN(tier1Fee) ? 0 : tier1Fee),
           deliveryChargeAbove500: isNaN(tier2Fee) ? 0 : tier2Fee,
           tier1MaxLiters: isNaN(tier1Max) ? 500 : tier1Max,
+          taxRatePercent: taxRateInput.trim() === '' ? 0 : (isNaN(Number(taxRateInput)) ? 0 : Number(taxRateInput)),
+          deliverySlots: deliverySlotsList,
           b2bCreditLimit: isNaN(creditLim) ? 500000 : creditLim,
           b2bCreditTerms: creditTermsInput.trim() || 'Net-30 Days Interest Free',
           b2bBillingCycle: creditBillingCycleInput.trim() || '1st – 30th of every month',
@@ -423,6 +500,7 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
             automatedReceipts: pesoAutomatedReceipts.trim(),
           },
           vehicleImages: vehicleImagesList,
+          termsAndConditions: termsList,
         }),
       });
 
@@ -467,6 +545,125 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
     });
     setEditingVehicleIndex(null);
     setEditingVehicleValue('');
+  };
+
+  // Terms & Conditions Handlers
+  const handleAddTerm = () => {
+    if (!newTermTitle.trim() || !newTermDesc.trim()) {
+      Alert.alert('Required', 'Please provide both Clause Title and Description.');
+      return;
+    }
+    const newId = `tc-${Date.now()}`;
+    setTermsList((prev) => [...prev, { id: newId, title: newTermTitle.trim(), desc: newTermDesc.trim() }]);
+    setNewTermTitle('');
+    setNewTermDesc('');
+  };
+
+  const handleDeleteTerm = (id: string) => {
+    setTermsList((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const handleStartEditTerm = (term: { id: string; title: string; desc: string }) => {
+    setEditingTermId(term.id);
+    setEditingTermTitle(term.title);
+    setEditingTermDesc(term.desc);
+  };
+
+  const handleSaveEditTerm = () => {
+    if (!editingTermId) return;
+    if (!editingTermTitle.trim() || !editingTermDesc.trim()) {
+      Alert.alert('Required', 'Clause Title and Description cannot be empty.');
+      return;
+    }
+    setTermsList((prev) =>
+      prev.map((item) =>
+        item.id === editingTermId
+          ? { ...item, title: editingTermTitle.trim(), desc: editingTermDesc.trim() }
+          : item
+      )
+    );
+    setEditingTermId(null);
+    setEditingTermTitle('');
+    setEditingTermDesc('');
+  };
+
+  // Delivery Slots Handlers
+  const handleAddDeliverySlot = () => {
+    if (!newSlotInput.trim()) {
+      Alert.alert('Required', 'Please enter a delivery time window, e.g. 06:00 PM - 09:00 PM');
+      return;
+    }
+    setDeliverySlotsList((prev) => [...prev, newSlotInput.trim()]);
+    setNewSlotInput('');
+  };
+
+  const handleDeleteDeliverySlot = (index: number) => {
+    setDeliverySlotsList((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleStartEditSlot = (index: number) => {
+    setEditingSlotIndex(index);
+    setEditingSlotValue(deliverySlotsList[index] || '');
+  };
+
+  const handleSaveEditSlot = () => {
+    if (editingSlotIndex === null || !editingSlotValue.trim()) return;
+    setDeliverySlotsList((prev) => {
+      const copy = [...prev];
+      copy[editingSlotIndex] = editingSlotValue.trim();
+      return copy;
+    });
+    setEditingSlotIndex(null);
+    setEditingSlotValue('');
+  };
+
+  // 1-Click Bowser Dispatch for Customer Subscription
+  const handleDispatchSubscription = async (item: AdminSubscriptionItem) => {
+    try {
+      const orderId = `ED${new Date().getFullYear()}${Math.floor(100000 + Math.random() * 900000)}`;
+      const fuelRate = Number(dieselRateInput) || 94.50;
+      const subtotal = item.subscription.liters * fuelRate;
+      const fee = Number(tier1FeeInput) || 0;
+      const taxRate = Number(taxRateInput) || 0;
+      const tax = taxRate > 0 ? (subtotal + fee) * (taxRate / 100) : 0;
+      const total = subtotal + fee + tax;
+
+      const orderPayload = {
+        id: orderId,
+        name: item.customerName,
+        email: item.customerEmail,
+        phone: item.customerPhone,
+        address: item.address,
+        liters: item.subscription.liters,
+        fuelRate,
+        deliveryFee: fee,
+        tax,
+        total,
+        equipment: item.subscription.siteName,
+        deliverySlot: item.subscription.nextRefill,
+        paymentStatus: 'pending',
+        paymentMethod: 'Subscription Refill (Pay on Delivery)',
+        status: 'pending',
+        statusText: `Subscription Refill: ${item.subscription.frequency.toUpperCase()} Dispatch`,
+      };
+
+      const res = await fetch(`${baseUrl}/api/orders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(orderPayload),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        Alert.alert(
+          'Bowser Dispatch Scheduled',
+          `Order #${orderId} created for ${item.customerName} (${item.subscription.liters}L). You can now assign a Delivery Captain in the Orders tab.`
+        );
+        loadAdminData();
+      }
+    } catch (e) {
+      Alert.alert('Error', 'Failed to dispatch subscription order.');
+    }
   };
 
   // Create Delivery Boy
@@ -633,6 +830,8 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
         return 'Executive Dashboard';
       case 'orders':
         return 'Orders & Fleet Assignments';
+      case 'subscriptions':
+        return 'Customer Recurring Subscriptions';
       case 'delivery':
         return 'Bowser Delivery Fleet';
       case 'settings':
@@ -924,7 +1123,41 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
             </View>
           </TouchableOpacity>
 
-          {/* Item 3: Delivery Boys */}
+          {/* Item 3: Recurring Subscriptions */}
+          <TouchableOpacity
+            style={[styles.sidebarNavItem, activeTab === 'subscriptions' && styles.sidebarNavItemActive]}
+            onPress={() => {
+              setActiveTab('subscriptions');
+              setMobileMenuOpen(false);
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name={activeTab === 'subscriptions' ? 'calendar' : 'calendar-outline'}
+              size={19}
+              color={activeTab === 'subscriptions' ? COLORS.white : '#64748B'}
+            />
+            <Text style={[styles.sidebarNavText, activeTab === 'subscriptions' && styles.sidebarNavTextActive]}>
+              Subscriptions
+            </Text>
+            <View
+              style={[
+                styles.sidebarBadge,
+                activeTab === 'subscriptions' ? styles.sidebarBadgeActive : { backgroundColor: '#EFF6FF' },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.sidebarBadgeText,
+                  activeTab === 'subscriptions' ? styles.sidebarBadgeTextActive : { color: '#2563EB' },
+                ]}
+              >
+                {subscriptionsList.length}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Item 4: Delivery Boys */}
           <TouchableOpacity
             style={[styles.sidebarNavItem, activeTab === 'delivery' && styles.sidebarNavItemActive]}
             onPress={() => {
@@ -1325,6 +1558,113 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
           )}
 
           {/* =========================================================================
+              TAB: CUSTOMER RECURRING SUBSCRIPTIONS
+          ========================================================================== */}
+          {activeTab === 'subscriptions' && (
+            <View>
+              <View style={styles.headerActionRow}>
+                <View>
+                  <Text style={styles.pageSectionTitle}>Customer Recurring Subscriptions</Text>
+                  <Text style={styles.pageSectionSub}>
+                    View scheduled weekly & monthly fuel refills. 1-Click dispatch to create an active order for your delivery captains.
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.primaryAddBtn, { backgroundColor: '#2563EB' }]}
+                  onPress={loadAdminData}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="refresh" size={17} color={COLORS.white} />
+                  <Text style={styles.primaryAddBtnText}>Refresh Refills</Text>
+                </TouchableOpacity>
+              </View>
+
+              {subscriptionsList.length === 0 ? (
+                <View style={[styles.emptyCard, { backgroundColor: COLORS.white, borderRadius: 16, padding: 32, alignItems: 'center', marginTop: 10 }]}>
+                  <Ionicons name="calendar-outline" size={44} color="#94A3B8" />
+                  <Text style={[styles.emptyTitle, { fontSize: 17, fontWeight: '800', color: COLORS.dark, marginTop: 10 }]}>
+                    No Active Subscriptions Yet
+                  </Text>
+                  <Text style={[styles.emptySubtitle, { fontSize: 13, color: '#64748B', textAlign: 'center', marginTop: 4, maxWidth: 440 }]}>
+                    When customers set up recurring weekly or monthly fuel deliveries, they will appear here for scheduled bowser dispatches.
+                  </Text>
+                </View>
+              ) : (
+                <View style={{ gap: 14 }}>
+                  {subscriptionsList.map((item, idx) => (
+                    <View key={item.customerEmail || idx} style={styles.orderCard}>
+                      <View style={styles.orderCardHeader}>
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <Text style={styles.orderIdText}>{item.customerName}</Text>
+                            <View style={[styles.badge, { backgroundColor: item.subscription.status === 'active' ? '#ECFDF5' : '#FEE2E2', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }]}>
+                              <Text style={[styles.badgeText, { color: item.subscription.status === 'active' ? '#059669' : '#DC2626', fontSize: 11, fontWeight: '800' }]}>
+                                {item.subscription.status.toUpperCase()}
+                              </Text>
+                            </View>
+                            <View style={[styles.badge, { backgroundColor: '#EFF6FF', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }]}>
+                              <Text style={[styles.badgeText, { color: '#2563EB', fontSize: 11, fontWeight: '800' }]}>
+                                {item.subscription.frequency.toUpperCase()}
+                              </Text>
+                            </View>
+                          </View>
+                          <Text style={[styles.orderMetaText, { marginTop: 4 }]}>
+                            {item.customerEmail} • {item.customerPhone}
+                          </Text>
+                        </View>
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={{ fontSize: 20, fontWeight: '900', color: COLORS.primary }}>
+                            {item.subscription.liters} L
+                          </Text>
+                          <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '600' }}>
+                            Per Dispatch
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.orderCardBody}>
+                        <View style={styles.orderDetailRow}>
+                          <Ionicons name="business" size={16} color="#64748B" />
+                          <Text style={styles.orderDetailText}>
+                            <Text style={{ fontWeight: '700' }}>Site / Unit:</Text> {item.subscription.siteName}
+                          </Text>
+                        </View>
+                        <View style={styles.orderDetailRow}>
+                          <Ionicons name="location" size={16} color="#64748B" />
+                          <Text style={styles.orderDetailText} numberOfLines={2}>
+                            <Text style={{ fontWeight: '700' }}>Address:</Text> {item.address}
+                          </Text>
+                        </View>
+                        <View style={styles.orderDetailRow}>
+                          <Ionicons name="time" size={16} color="#64748B" />
+                          <Text style={styles.orderDetailText}>
+                            <Text style={{ fontWeight: '700' }}>Schedule:</Text> {item.subscription.days.join(', ')} ({item.subscription.nextRefill})
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={[styles.orderCardFooter, { borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 10, marginTop: 8 }]}>
+                        <View style={{ flexDirection: 'row', gap: 10, flex: 1 }}>
+                          <TouchableOpacity
+                            style={[styles.btnAssign, { backgroundColor: '#2563EB', borderColor: '#1D4ED8', paddingHorizontal: 14 }]}
+                            onPress={() => handleDispatchSubscription(item)}
+                            activeOpacity={0.8}
+                          >
+                            <Ionicons name="paper-plane" size={14} color={COLORS.white} />
+                            <Text style={[styles.btnAssignText, { color: COLORS.white }]}>
+                              Dispatch Bowser Today
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* =========================================================================
               TAB 3: DELIVERY FLEET
           ========================================================================== */}
           {activeTab === 'delivery' && (
@@ -1545,6 +1885,112 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
                 </View>
               </View>
 
+              {/* Terms and Conditions Manager (20 Clauses) Card */}
+              <View style={styles.settingCard}>
+                <View style={styles.settingCardHeader}>
+                  <View style={[styles.settingIconBox, { backgroundColor: '#FEE2E2' }]}>
+                    <Ionicons name="document-text" size={22} color={COLORS.primary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.settingCardTitle}>Terms & Conditions Management ({termsList.length} Clauses)</Text>
+                    <Text style={styles.settingCardSub}>Add, Edit, Update or Delete fueling and compliance clauses displayed on app & web</Text>
+                  </View>
+                </View>
+
+                {/* List of Clauses */}
+                <View style={{ marginTop: 12, gap: 10 }}>
+                  {termsList.map((term, idx) => (
+                    <View key={term.id || idx} style={[styles.vehicleRow, { flexDirection: 'column', alignItems: 'stretch' }]}>
+                      {editingTermId === term.id ? (
+                        <View style={{ gap: 8 }}>
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: COLORS.primary }}>
+                            Editing Clause #{idx + 1}
+                          </Text>
+                          <TextInput
+                            style={styles.standardField}
+                            value={editingTermTitle}
+                            onChangeText={setEditingTermTitle}
+                            placeholder="Clause Title"
+                          />
+                          <TextInput
+                            style={[styles.standardField, { height: 70, textAlignVertical: 'top' }]}
+                            value={editingTermDesc}
+                            onChangeText={setEditingTermDesc}
+                            placeholder="Clause Description"
+                            multiline
+                          />
+                          <View style={{ flexDirection: 'row', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+                            <TouchableOpacity
+                              style={[styles.actionIconBtn, { width: 'auto', paddingHorizontal: 12, backgroundColor: '#E2E8F0', borderColor: '#CBD5E1' }]}
+                              onPress={() => setEditingTermId(null)}
+                            >
+                              <Text style={{ fontSize: 13, fontWeight: '700', color: '#475569' }}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[styles.actionIconBtn, { width: 'auto', paddingHorizontal: 14, backgroundColor: '#16A34A', borderColor: '#15803D' }]}
+                              onPress={handleSaveEditTerm}
+                            >
+                              <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.white }}>Save Changes</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      ) : (
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                          <View style={{ flex: 1, paddingRight: 12 }}>
+                            <Text style={{ fontSize: 14, fontWeight: '800', color: COLORS.dark }}>
+                              {idx + 1}. {term.title}
+                            </Text>
+                            <Text style={{ fontSize: 12.5, color: '#64748B', marginTop: 3, lineHeight: 18 }}>
+                              {term.desc}
+                            </Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', gap: 6, flexShrink: 0 }}>
+                            <TouchableOpacity
+                              style={styles.actionIconBtn}
+                              onPress={() => handleStartEditTerm(term)}
+                            >
+                              <Ionicons name="pencil-outline" size={17} color="#2563EB" />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[styles.actionIconBtn, { borderColor: '#FEE2E2', backgroundColor: '#FEF2F2' }]}
+                              onPress={() => handleDeleteTerm(term.id)}
+                            >
+                              <Ionicons name="trash-outline" size={17} color="#DC2626" />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      )}
+                    </View>
+                  ))}
+                </View>
+
+                {/* Add New Clause */}
+                <View style={{ marginTop: 16, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+                  <Text style={styles.fieldLabel}>Add New Terms & Conditions Clause</Text>
+                  <TextInput
+                    style={[styles.standardField, { marginTop: 6 }]}
+                    value={newTermTitle}
+                    onChangeText={setNewTermTitle}
+                    placeholder="e.g. 21. Emergency Spill Containment Protocol"
+                  />
+                  <TextInput
+                    style={[styles.standardField, { marginTop: 8, height: 60, textAlignVertical: 'top' }]}
+                    value={newTermDesc}
+                    onChangeText={setNewTermDesc}
+                    placeholder="Enter detailed terms, conditions, or regulatory requirement..."
+                    multiline
+                  />
+                  <TouchableOpacity
+                    style={[styles.addVehicleBtn, { marginTop: 10, alignSelf: 'flex-start' }]}
+                    onPress={handleAddTerm}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="add" size={18} color={COLORS.white} />
+                    <Text style={styles.addVehicleBtnText}>Add Clause</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
               {/* Delivery Charges Tiers Card */}
               <View style={styles.settingCard}>
                 <View style={styles.settingCardHeader}>
@@ -1615,6 +2061,124 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ onNavigate, currentUse
                     onChangeText={setTier1MaxLitersInput}
                     placeholder="500"
                   />
+                  <Text style={{ fontSize: 11.5, color: '#64748B', marginTop: 4 }}>
+                    Tip: Enter 0 or leave empty to disable delivery fees entirely. When 0 or empty, the delivery fee line is completely hidden from the customer checkout bill.
+                  </Text>
+                </View>
+              </View>
+
+              {/* GST & Tax Configuration Card */}
+              <View style={styles.settingCard}>
+                <View style={styles.settingCardHeader}>
+                  <View style={[styles.settingIconBox, { backgroundColor: '#FDF4FF' }]}>
+                    <Ionicons name="receipt" size={22} color="#A855F7" />
+                  </View>
+                  <View>
+                    <Text style={styles.settingCardTitle}>Tax & GST Configuration</Text>
+                    <Text style={styles.settingCardSub}>Configure automated GST percentage applied on fuel checkouts</Text>
+                  </View>
+                </View>
+
+                <View style={{ marginTop: 8 }}>
+                  <Text style={styles.fieldLabel}>GST Percentage (%)</Text>
+                  <View style={styles.inputPrefixWrap}>
+                    <Text style={styles.inputPrefixText}>%</Text>
+                    <TextInput
+                      style={styles.inputPrefixField}
+                      keyboardType="number-pad"
+                      value={taxRateInput}
+                      onChangeText={setTaxRateInput}
+                      placeholder="e.g. 5 or leave empty for 0%"
+                    />
+                  </View>
+                  <Text style={{ fontSize: 11.5, color: '#64748B', marginTop: 6, lineHeight: 16 }}>
+                    Tip: Enter 0 or leave empty to disable GST. When empty or 0, the GST line item is completely hidden from the customer's checkout summary, displaying only the pure diesel price.
+                  </Text>
+                </View>
+              </View>
+
+              {/* Preferred Delivery Time Slots Manager Card */}
+              <View style={styles.settingCard}>
+                <View style={styles.settingCardHeader}>
+                  <View style={[styles.settingIconBox, { backgroundColor: '#EFF6FF' }]}>
+                    <Ionicons name="time" size={22} color="#2563EB" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.settingCardTitle}>Preferred Delivery Slots ({deliverySlotsList.length} Windows)</Text>
+                    <Text style={styles.settingCardSub}>Add, Edit, Update, or Delete available delivery windows on App & Website</Text>
+                  </View>
+                </View>
+
+                {/* List of Slots */}
+                <View style={{ marginTop: 12, gap: 8 }}>
+                  {deliverySlotsList.map((slot, idx) => (
+                    <View key={idx} style={[styles.vehicleRow, { paddingVertical: 10 }]}>
+                      {editingSlotIndex === idx ? (
+                        <View style={{ flex: 1, flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                          <TextInput
+                            style={[styles.standardField, { flex: 1 }]}
+                            value={editingSlotValue}
+                            onChangeText={setEditingSlotValue}
+                            placeholder="e.g. 06:00 PM - 09:00 PM"
+                          />
+                          <TouchableOpacity
+                            style={[styles.actionIconBtn, { width: 'auto', paddingHorizontal: 12, backgroundColor: '#16A34A', borderColor: '#15803D' }]}
+                            onPress={handleSaveEditSlot}
+                          >
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: COLORS.white }}>Save</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.actionIconBtn, { width: 'auto', paddingHorizontal: 10, backgroundColor: '#E2E8F0', borderColor: '#CBD5E1' }]}
+                            onPress={() => setEditingSlotIndex(null)}
+                          >
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569' }}>Cancel</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                            <Ionicons name="time-outline" size={18} color="#2563EB" />
+                            <Text style={{ fontSize: 14, fontWeight: '700', color: COLORS.dark }}>{slot}</Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', gap: 6 }}>
+                            <TouchableOpacity
+                              style={styles.actionIconBtn}
+                              onPress={() => handleStartEditSlot(idx)}
+                            >
+                              <Ionicons name="pencil-outline" size={16} color="#2563EB" />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[styles.actionIconBtn, { borderColor: '#FEE2E2', backgroundColor: '#FEF2F2' }]}
+                              onPress={() => handleDeleteDeliverySlot(idx)}
+                            >
+                              <Ionicons name="trash-outline" size={16} color="#DC2626" />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      )}
+                    </View>
+                  ))}
+                </View>
+
+                {/* Add New Slot */}
+                <View style={{ marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+                  <Text style={styles.fieldLabel}>Add New Delivery Time Window</Text>
+                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                    <TextInput
+                      style={[styles.standardField, { flex: 1 }]}
+                      value={newSlotInput}
+                      onChangeText={setNewSlotInput}
+                      placeholder="e.g. 06:00 AM - 10:00 AM"
+                    />
+                    <TouchableOpacity
+                      style={styles.addVehicleBtn}
+                      onPress={handleAddDeliverySlot}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="add" size={18} color={COLORS.white} />
+                      <Text style={styles.addVehicleBtnText}>Add Slot</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
 

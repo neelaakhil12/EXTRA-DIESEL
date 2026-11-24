@@ -38,39 +38,76 @@ interface LocationModalProps {
   currentLocation?: SavedLocation | null;
 }
 
-const SITE_TYPES = [
-  { id: 'dg_set', label: 'Generator (DG Set)', icon: 'hardware-chip-outline' },
-  { id: 'commercial', label: 'Commercial Site', icon: 'business-outline' },
-  { id: 'construction', label: 'Construction', icon: 'construct-outline' },
-  { id: 'fleet', label: 'Fleet Yard', icon: 'car-sport-outline' },
-  { id: 'residential', label: 'Residential', icon: 'home-outline' },
-];
-
 export const LocationModal: React.FC<LocationModalProps> = ({
   visible,
   onClose,
   onSaveLocation,
   currentLocation,
 }) => {
-  const [plotNo, setPlotNo] = useState(currentLocation?.plotNo || 'Plot 42');
-  const [street, setStreet] = useState(currentLocation?.street || 'HITEC City Main Road');
-  const [area, setArea] = useState(currentLocation?.area || 'Madhapur');
-  const [landmark, setLandmark] = useState(currentLocation?.landmark || 'Near Cyber Towers Gate 3');
+  const [plotNo, setPlotNo] = useState(currentLocation?.plotNo || '');
+  const [street, setStreet] = useState(currentLocation?.street || '');
+  const [area, setArea] = useState(currentLocation?.area || '');
+  const [landmark, setLandmark] = useState(currentLocation?.landmark || '');
   const [city, setCity] = useState(currentLocation?.city || 'Hyderabad');
-  const [pincode, setPincode] = useState(currentLocation?.pincode || '500081');
-  const [selectedSiteType, setSelectedSiteType] = useState(currentLocation?.siteType || 'dg_set');
+  const [pincode, setPincode] = useState(currentLocation?.pincode || '');
   const [isLocating, setIsLocating] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
 
   const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'https://extradiesel.in';
-  const mapboxToken = APP_CONFIG.MAPBOX_ACCESS_TOKEN;
+  const mapboxToken = APP_CONFIG.MAPBOX_ACCESS_TOKEN || '';
 
-  // Apply location details from coordinates
+  // Apply location details from coordinates using Mapbox + Backend
   const applyCoordinatesLocation = async (latitude: number, longitude: number) => {
     try {
-      setStatusMessage('Detecting street, area & landmark...');
+      setStatusMessage('Pinning exact street, colony & landmark...');
 
-      // 1. Try server reverse geocode
+      // 1. Direct Mapbox Places API (Accurate rooftop / address / locality detection)
+      const mbUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${longitude},${latitude}.json?access_token=${mapboxToken}&types=address,poi,neighborhood,locality,place,postcode`;
+      const mbRes = await fetch(mbUrl);
+
+      if (mbRes.ok) {
+        const mbData = await mbRes.json();
+        if (mbData.features && mbData.features.length > 0) {
+          const feat = mbData.features[0];
+          const ctx = feat.context || [];
+
+          let pNo = feat.address || '';
+          let st = feat.text || '';
+          let ar = '';
+          let lm = '';
+          let ct = 'Hyderabad';
+          let pin = '';
+
+          ctx.forEach((c: any) => {
+            if (c.id.startsWith('postcode')) pin = c.text;
+            else if (c.id.startsWith('neighborhood') || c.id.startsWith('locality')) ar = c.text;
+            else if (c.id.startsWith('place')) ct = c.text;
+          });
+
+          // Check for nearby landmark / establishment feature
+          const poi = mbData.features.find((f: any) => f.place_type && f.place_type.includes('poi'));
+          if (poi && poi.text) {
+            lm = poi.text;
+          }
+
+          setPlotNo(pNo);
+          setStreet(st);
+          setArea(ar || ct);
+          setLandmark(lm);
+          setCity(ct);
+          setPincode(pin);
+
+          setStatusMessage('Exact GPS location detected successfully!');
+          setTimeout(() => setStatusMessage(''), 3000);
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('Mapbox direct geocoding error:', e);
+    }
+
+    // 2. Server Reverse Geocode API
+    try {
       const res = await fetch(
         `${baseUrl}/api/location/reverse-geocode?lat=${latitude}&lon=${longitude}`
       );
@@ -78,50 +115,21 @@ export const LocationModal: React.FC<LocationModalProps> = ({
 
       if (data.success && data.location) {
         const loc = data.location;
-        if (loc.plotNo) setPlotNo(loc.plotNo);
-        if (loc.street) setStreet(loc.street);
-        if (loc.area) setArea(loc.area);
-        if (loc.landmark) setLandmark(loc.landmark);
-        if (loc.city) setCity(loc.city);
-        if (loc.pincode) setPincode(loc.pincode);
+        setPlotNo(loc.plotNo || '');
+        setStreet(loc.street || '');
+        setArea(loc.area || loc.city || 'Hyderabad');
+        setLandmark(loc.landmark || '');
+        setCity(loc.city || 'Hyderabad');
+        setPincode(loc.pincode || '');
         setStatusMessage('Exact GPS location detected successfully!');
         setTimeout(() => setStatusMessage(''), 3000);
         return;
       }
-    } catch (e) {
-      console.warn('Backend geocoding failed, trying Mapbox directly');
-    }
-
-    // 2. Direct Mapbox fallback
-    try {
-      const mbRes = await fetch(
-        `https://api.mapbox.com/geocoding/v5/mapbox.places/${longitude},${latitude}.json?access_token=${mapboxToken}&types=address,poi,neighborhood,locality,place,postcode`
-      );
-      if (mbRes.ok) {
-        const mbData = await mbRes.json();
-        if (mbData.features && mbData.features.length > 0) {
-          const feat = mbData.features[0];
-          const ctx = feat.context || [];
-
-          if (feat.address) setPlotNo(feat.address);
-          if (feat.text) setStreet(feat.text);
-
-          ctx.forEach((c: any) => {
-            if (c.id.startsWith('postcode')) setPincode(c.text);
-            else if (c.id.startsWith('neighborhood') || c.id.startsWith('locality')) setArea(c.text);
-            else if (c.id.startsWith('place')) setCity(c.text);
-          });
-
-          setStatusMessage('Location pinned accurately via GPS!');
-          setTimeout(() => setStatusMessage(''), 3000);
-          return;
-        }
-      }
     } catch (e2) {
-      console.warn('Mapbox fallback failed');
+      console.warn('Backend geocoding failed');
     }
 
-    setStatusMessage(`GPS Location pinned (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`);
+    setStatusMessage(`GPS pinned (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`);
     setTimeout(() => setStatusMessage(''), 3000);
   };
 
@@ -145,7 +153,39 @@ export const LocationModal: React.FC<LocationModalProps> = ({
           accuracy: Location.Accuracy.High,
         });
 
-        await applyCoordinatesLocation(loc.coords.latitude, loc.coords.longitude);
+        const lat = loc.coords.latitude;
+        const lon = loc.coords.longitude;
+
+        // Try native Android geocoder first for instant rooftop details
+        try {
+          const nativeAddresses = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lon });
+          if (nativeAddresses && nativeAddresses.length > 0) {
+            const na = nativeAddresses[0];
+            const pNo = na.streetNumber || na.name || '';
+            const st = na.street || na.name || '';
+            const ar = na.subregion || na.district || '';
+            const lm = na.name && na.name !== st ? na.name : '';
+            const ct = na.city || 'Hyderabad';
+            const pin = na.postalCode || '';
+
+            if (pNo || st || ar) {
+              setPlotNo(pNo);
+              setStreet(st);
+              setArea(ar || ct);
+              if (lm) setLandmark(lm);
+              setCity(ct);
+              setPincode(pin);
+              setStatusMessage('Exact GPS location detected successfully!');
+              setTimeout(() => setStatusMessage(''), 3000);
+              setIsLocating(false);
+              return;
+            }
+          }
+        } catch (nativeErr) {
+          console.warn('Native reverseGeocodeAsync error:', nativeErr);
+        }
+
+        await applyCoordinatesLocation(lat, lon);
       } catch (err: any) {
         setStatusMessage('GPS detection failed. Please enter address manually.');
         setTimeout(() => setStatusMessage(''), 4000);
@@ -190,7 +230,7 @@ export const LocationModal: React.FC<LocationModalProps> = ({
       city: city.trim(),
       pincode: pincode.trim(),
       fullAddress: full,
-      siteType: selectedSiteType,
+      shortAddress: [plotNo, street || area].filter(Boolean).join(', ') || area || city,
     };
 
     onSaveLocation(saved);
@@ -243,31 +283,6 @@ export const LocationModal: React.FC<LocationModalProps> = ({
                 <Text style={styles.statusBoxText}>{statusMessage}</Text>
               </View>
             ) : null}
-
-            {/* Site Type Selector */}
-            <Text style={styles.fieldSectionHeading}>Site / Equipment Type</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.siteTypeScroll}>
-              {SITE_TYPES.map((type) => {
-                const isSelected = selectedSiteType === type.id;
-                return (
-                  <TouchableOpacity
-                    key={type.id}
-                    style={[styles.siteTypeChip, isSelected && styles.siteTypeChipActive]}
-                    onPress={() => setSelectedSiteType(type.id)}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons
-                      name={type.icon as any}
-                      size={15}
-                      color={isSelected ? COLORS.white : '#475569'}
-                    />
-                    <Text style={[styles.siteTypeChipText, isSelected && styles.siteTypeChipTextActive]}>
-                      {type.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
 
             {/* Address Fields Form */}
             <Text style={styles.fieldSectionHeading}>Delivery Address & Landmark Details</Text>

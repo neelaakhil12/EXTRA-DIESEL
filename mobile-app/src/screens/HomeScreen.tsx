@@ -37,8 +37,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
           if (s.city) setRateCity(s.city);
           if (s.vehicleImages && Array.isArray(s.vehicleImages) && s.vehicleImages.length > 0) {
             const parsedImages = s.vehicleImages.map((img: string) => {
-              if (typeof img === 'string' && (img.startsWith('http') || img.startsWith('data:'))) {
-                return { uri: img };
+              if (typeof img === 'string') {
+                if (img.includes('vehicle-bowser-1.jpeg')) return DEFAULT_VEHICLE_IMAGES[0];
+                if (img.includes('vehicle-bowser-2.jpeg')) return DEFAULT_VEHICLE_IMAGES[1];
+                if (img.startsWith('http') || img.startsWith('data:')) {
+                  return { uri: img };
+                }
               }
               return DEFAULT_VEHICLE_IMAGES[0];
             });
@@ -69,17 +73,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
     >
       {/* Top Banner Row: Live Rate FIRST (prominently highlighted at the top), then Fleet Banner */}
       <View style={[styles.topRow, isDesktop && styles.desktopTopRow]}>
-        {/* 1. Live Diesel Rate Card (Top Highlight) */}
+        {/* 1. Live Diesel Rate Card (Top Highlight) - Perfectly fitted without cut-off */}
         <View style={[styles.rateCard, isDesktop && styles.desktopRateCard]}>
           <View style={styles.rateLeft}>
             <View style={styles.fuelIcon}>
-              <Ionicons name="flame" size={26} color={COLORS.secondary} />
+              <Ionicons name="flame" size={24} color={COLORS.secondary} />
             </View>
-            <View>
+            <View style={styles.rateLeftTextWrap}>
               <Text style={styles.rateSubtitle}>Today's Live Rate ({rateCity})</Text>
-              <Text style={styles.rateTitle}>BS-VI High Speed Diesel</Text>
+              <Text style={styles.rateTitle} numberOfLines={1}>BS-VI High Speed Diesel</Text>
               <View style={styles.pesoMiniBadge}>
-                <Ionicons name="shield-checkmark" size={12} color="#10B981" />
+                <Ionicons name="shield-checkmark" size={11} color="#10B981" />
                 <Text style={styles.pesoMiniText}>PESO Verified</Text>
               </View>
             </View>
@@ -90,37 +94,40 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
           </View>
         </View>
 
-        {/* 2. Our Vehicles Animated Banner (Positioned directly below the live price) */}
-        <View style={[styles.heroBanner, isDesktop && styles.desktopHeroBanner]}>
-          <View style={styles.heroTextContainer}>
+        {/* 2. Our Vehicles Large Hero Showcase Banner with Overlay Tagline & Order Now Button */}
+        <View style={[styles.heroVehicleCard, isDesktop && styles.desktopHeroVehicleCard]}>
+          <Image
+            source={vehicleImages[vehicleImgIdx] || DEFAULT_VEHICLE_IMAGES[0]}
+            style={styles.heroVehicleImage}
+            resizeMode="cover"
+          />
+          <View style={styles.heroVehicleOverlay}>
             <View style={styles.vehicleHeaderRow}>
-              <Text style={styles.heroBadge}>OUR FLEET</Text>
+              <View style={styles.heroBadgeWrap}>
+                <Text style={styles.heroBadgeText}>OUR FLEET</Text>
+              </View>
               <View style={styles.liveVehicleDotWrap}>
                 <View style={styles.liveVehicleDot} />
-                <Text style={styles.liveVehicleText}>Smart Bowser</Text>
+                <Text style={styles.liveVehicleText}>PESO Certified Bowsers</Text>
               </View>
             </View>
-            <Text style={[styles.heroTitle, isDesktop && styles.desktopHeroTitle]}>
-              Our Vehicles
-            </Text>
-            <Text style={styles.heroSubtitle}>
-              PESO-Certified Smart Mobile Bowsers for On-Demand Doorstep Fueling
-            </Text>
-            <TouchableOpacity
-              style={styles.heroBtn}
-              onPress={() => onNavigate('order')}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.heroBtnText}>Order Now</Text>
-              <Ionicons name="arrow-forward" size={16} color={COLORS.white} />
-            </TouchableOpacity>
-          </View>
-          <View style={[styles.vehicleImgFrame, isDesktop && styles.desktopVehicleImgFrame]}>
-            <Image
-              source={vehicleImages[vehicleImgIdx] || DEFAULT_VEHICLE_IMAGES[0]}
-              style={styles.vehicleImg}
-              resizeMode="cover"
-            />
+
+            <View style={styles.heroVehicleBottom}>
+              <View style={{ flex: 1, marginRight: 12 }}>
+                <Text style={styles.heroVehicleTitle}>Our Smart Bowsers</Text>
+                <Text style={styles.heroVehicleSubtitle} numberOfLines={2}>
+                  Automated doorstep delivery for generators, machinery & fleets
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.heroVehicleBtn}
+                onPress={() => onNavigate('order')}
+                activeOpacity={0.88}
+              >
+                <Text style={styles.heroVehicleBtnText}>Order Now</Text>
+                <Ionicons name="arrow-forward" size={15} color={COLORS.white} />
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </View>
@@ -221,7 +228,8 @@ const styles = StyleSheet.create({
   rateCard: {
     backgroundColor: COLORS.primary,
     borderRadius: 16,
-    padding: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -231,114 +239,110 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.25,
     shadowRadius: 6,
+    overflow: 'hidden',
   },
   rateLeft: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
+    marginRight: 6,
   },
   fuelIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
+  rateLeftTextWrap: {
+    flex: 1,
+  },
   rateSubtitle: {
     color: 'rgba(255,255,255,0.85)',
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 11,
+    fontWeight: '600',
   },
   rateTitle: {
     color: COLORS.white,
-    fontSize: 16,
+    fontSize: 14.5,
     fontWeight: '800',
   },
   rateRight: {
     alignItems: 'flex-end',
+    justifyContent: 'center',
+    flexShrink: 0,
+    paddingLeft: 4,
   },
   rateValue: {
     color: COLORS.secondary,
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '900',
+    letterSpacing: -0.5,
   },
   rateUnit: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  heroBanner: {
-    backgroundColor: COLORS.white,
-    borderRadius: 18,
-    padding: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
-  },
-  heroTextContainer: {
-    flex: 1,
-  },
-  heroBadge: {
-    backgroundColor: '#FEE2E2',
-    color: COLORS.primary,
-    fontSize: 10,
-    fontWeight: '800',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    alignSelf: 'flex-start',
-    marginBottom: 6,
-  },
-  heroTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: COLORS.dark,
-    marginBottom: 4,
-  },
-  heroSubtitle: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginBottom: 12,
-  },
-  heroBtn: {
-    backgroundColor: COLORS.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-    gap: 4,
-  },
-  heroBtnText: {
-    color: COLORS.white,
-    fontSize: 12,
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 10.5,
     fontWeight: '700',
+  },
+  heroVehicleCard: {
+    width: '100%',
+    height: 200,
+    borderRadius: 18,
+    overflow: 'hidden',
+    marginBottom: 20,
+    position: 'relative',
+    backgroundColor: '#0F172A',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+  },
+  desktopHeroVehicleCard: {
+    height: 280,
+  },
+  heroVehicleImage: {
+    width: '100%',
+    height: '100%',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+  },
+  heroVehicleOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(15, 23, 42, 0.44)',
+    justifyContent: 'space-between',
+    padding: 14,
   },
   vehicleHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 6,
+  },
+  heroBadgeWrap: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  heroBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9.5,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   liveVehicleDotWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#ECFDF5',
+    backgroundColor: 'rgba(16, 185, 129, 0.25)',
     paddingHorizontal: 7,
-    paddingVertical: 2,
+    paddingVertical: 3,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#A7F3D0',
+    borderColor: 'rgba(16, 185, 129, 0.4)',
   },
   liveVehicleDot: {
     width: 6,
@@ -347,33 +351,51 @@ const styles = StyleSheet.create({
     backgroundColor: '#10B981',
   },
   liveVehicleText: {
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: '700',
-    color: '#065F46',
+    color: '#A7F3D0',
   },
-  vehicleImgFrame: {
-    width: 130,
-    height: 105,
-    borderRadius: 14,
-    overflow: 'hidden',
-    marginLeft: 10,
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#F1F5F9',
-    elevation: 2,
-    shadowColor: '#000',
+  heroVehicleBottom: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+  },
+  heroVehicleTitle: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '900',
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+    marginBottom: 2,
+  },
+  heroVehicleSubtitle: {
+    color: '#F1F5F9',
+    fontSize: 11,
+    fontWeight: '600',
+    lineHeight: 15,
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  heroVehicleBtn: {
+    backgroundColor: COLORS.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 10,
+    elevation: 3,
+    shadowColor: COLORS.primary,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.4,
     shadowRadius: 4,
   },
-  desktopVehicleImgFrame: {
-    width: 210,
-    height: 135,
-    borderRadius: 16,
-  },
-  vehicleImg: {
-    width: '100%',
-    height: '100%',
+  heroVehicleBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
   },
   sectionHeading: {
     fontSize: 18,

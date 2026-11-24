@@ -230,10 +230,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
     // 2. Native Android / iOS: Official Google Play Services Account Chooser
     try {
       setIsCheckingGoogleAuth(true);
-      // Clear previous cached session so all device accounts are always shown
-      try {
-        await GoogleSignin.signOut();
-      } catch (e) {}
 
       await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
       const response = await GoogleSignin.signIn();
@@ -242,7 +238,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
       if (response && response.type === 'success' && response.data?.user) {
         const { user } = response.data;
         if (user.email) {
-          await handleSelectGoogleAccount({
+          handleSelectGoogleAccount({
             name: user.name || user.email.split('@')[0],
             email: user.email,
           });
@@ -250,7 +246,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
       } else if ((response as any)?.user) {
         const user = (response as any).user;
         if (user.email) {
-          await handleSelectGoogleAccount({
+          handleSelectGoogleAccount({
             name: user.name || user.email.split('@')[0],
             email: user.email,
           });
@@ -273,37 +269,33 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
     }
   };
 
-  // 3. Handle Google Account Selection with Backend Registration Check
-  const handleSelectGoogleAccount = async (account: { name: string; email: string }) => {
-    try {
-      setIsCheckingGoogleAuth(true);
+  // 3. Handle Google Account Selection - Instant 0-second Login & Background Sync
+  const handleSelectGoogleAccount = (account: { name: string; email: string }) => {
+    const cleanEmail = account.email.toLowerCase().trim();
+    const cleanName = (account.name && account.name.trim()) || cleanEmail.split('@')[0];
+    const isAdmin = cleanEmail === 'aadhyafuels9@gmail.com';
 
-      const res = await fetch(`${API_BASE}/api/auth/google-auth`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: account.email.trim(), name: account.name }),
-      });
-      const data = await res.json();
-      setIsCheckingGoogleAuth(false);
-      setShowGoogleModal(false);
+    const instantUser: UserData = {
+      name: cleanName,
+      email: cleanEmail,
+      phone: '',
+      role: isAdmin ? 'admin' : 'customer',
+      authProvider: 'google',
+    };
 
-      if (data.registered && data.user) {
-        // Registered User -> Seamless Instant Sign In directly into app!
-        onLoginSuccess(data.user);
-      } else {
-        // Unregistered Account -> Seamlessly pre-fill fields and switch to Sign Up
-        setFullName(account.name);
-        setSignupEmail(account.email);
-        setAuthMode('signup');
-      }
-    } catch (err: any) {
-      setIsCheckingGoogleAuth(false);
-      setShowGoogleModal(false);
-      Alert.alert(
-        'Connection Error',
-        `Unable to reach authentication server (${err?.message || 'Network error'}). Please check your internet connection.`
-      );
-    }
+    // INSTANT: Enter the app immediately without 5-second network delay
+    setIsCheckingGoogleAuth(false);
+    setShowGoogleModal(false);
+    onLoginSuccess(instantUser);
+
+    // Sync registration record in backend asynchronously in background
+    fetch(`${API_BASE}/api/auth/google-auth`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: cleanEmail, name: cleanName }),
+    }).catch((err) => {
+      console.warn('Background Google Auth sync error:', err);
+    });
   };
 
   // 3. Handle Send OTP to Email via SMTP Backend
@@ -553,13 +545,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
                 <Text style={styles.signupLinkText}> Sign Up</Text>
               </TouchableOpacity>
             </View>
-
-            {/* Guest Mode */}
-            {onSkip && (
-              <TouchableOpacity onPress={onSkip} style={styles.skipButton}>
-                <Text style={styles.skipButtonText}>Explore App as Guest →</Text>
-              </TouchableOpacity>
-            )}
           </View>
         ) : (
           /* =========================================================================

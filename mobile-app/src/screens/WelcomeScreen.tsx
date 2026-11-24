@@ -16,12 +16,11 @@ import { COLORS } from '../constants/theme';
 
 interface WelcomeScreenProps {
   onLoginPress: () => void;
-  onExplorePress: () => void;
+  onExplorePress?: () => void;
 }
 
 export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
   onLoginPress,
-  onExplorePress,
 }) => {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -87,15 +86,6 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
         >
           <Text style={styles.loginButtonText}>Login to Continue</Text>
           <Ionicons name="arrow-forward" size={20} color={COLORS.white} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.guestButton}
-          onPress={onExplorePress}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.guestButtonText}>Explore as Guest</Text>
-          <Ionicons name="chevron-forward" size={16} color="#64748B" />
         </TouchableOpacity>
       </View>
     </View>

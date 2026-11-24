@@ -78,7 +78,7 @@ export const Header: React.FC<HeaderProps> = ({
       { screen: 'home', label: 'Home', icon: 'home-outline' },
       { screen: 'order', label: 'Order Diesel', icon: 'funnel-outline' },
       { screen: 'track', label: 'Live Track', icon: 'location-outline' },
-      { screen: 'orders', label: 'Order History', icon: 'receipt-outline' },
+      { screen: 'orders', label: 'Invoices', icon: 'receipt-outline' },
       { screen: 'subscription', label: 'Subscriptions', icon: 'calendar-outline' },
     ];
 
@@ -459,12 +459,15 @@ const styles = StyleSheet.create({
   },
   titleContainer: {
     flex: 1,
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    paddingLeft: 4,
   },
   titleText: {
-    fontSize: 17,
-    fontWeight: '800',
+    fontSize: 18,
+    fontWeight: '900',
     color: COLORS.dark,
+    textAlign: 'left',
   },
 
   /* =========================================================================

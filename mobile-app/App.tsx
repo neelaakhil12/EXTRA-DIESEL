@@ -30,6 +30,13 @@ import { ProfileScreen } from './src/screens/ProfileScreen';
 import { AdminScreen } from './src/screens/AdminScreen';
 import { DeliveryDashboardScreen } from './src/screens/DeliveryDashboardScreen';
 import { LocationModal, SavedLocation } from './src/components/LocationModal';
+import {
+  initNotifications,
+  getStoredNotifications,
+  deleteStoredNotification,
+  clearAllStoredNotifications,
+  AppNotification,
+} from './src/services/notificationService';
 import { APP_CONFIG } from './src/constants/config';
 
 export default function App() {
@@ -82,16 +89,15 @@ function MainApp() {
 
   // Delivery Location State (Modal popup appears ONLY after login on the Home screen)
   const [deliveryLocation, setDeliveryLocation] = useState<SavedLocation>({
-    siteName: 'Plot 42, Hitech City',
-    plotNo: 'Plot 42',
-    street: 'Survey 42, Phase 2, Near Mindspace',
-    landmark: 'Opposite Mindspace West Gate',
-    area: 'Madhapur',
+    siteName: 'Current Delivery Site',
+    plotNo: '',
+    street: '',
+    landmark: '',
+    area: '',
     city: 'Hyderabad',
-    pincode: '500081',
-    fullAddress: 'Plot 42, Survey 42, Phase 2, Near Mindspace, Madhapur, Hyderabad - 500081',
-    shortAddress: 'Plot 42, Hitech City, Madhapur',
-    siteType: 'dg_set',
+    pincode: '',
+    fullAddress: 'Tap to Pin Delivery Location',
+    shortAddress: 'Pin Delivery Site',
   });
   const [showLocationModal, setShowLocationModal] = useState<boolean>(false);
   const [currentUser, setCurrentUser] = useState<{
@@ -359,7 +365,7 @@ function MainApp() {
       case 'track':
         return 'Live Bowser Track';
       case 'orders':
-        return 'Order History';
+        return 'Invoices';
       case 'subscription':
         return 'Subscriptions';
       case 'profile':
@@ -379,6 +385,41 @@ function MainApp() {
   const showBackBtn = false;
 
   const [showNotifications, setShowNotifications] = useState(false);
+  const [notificationsList, setNotificationsList] = useState<AppNotification[]>([]);
+
+  // Initialize System Status Bar Push Notifications
+  useEffect(() => {
+    let cleanupFn: (() => void) | undefined;
+    const init = async () => {
+      cleanupFn = await initNotifications(() => {
+        // Tapping status bar notification navigates to Notification Center
+        setShowNotifications(true);
+      });
+      const stored = await getStoredNotifications();
+      setNotificationsList(stored);
+    };
+    init();
+    return () => {
+      cleanupFn?.();
+    };
+  }, []);
+
+  // Refresh notifications whenever modal opens
+  useEffect(() => {
+    if (showNotifications) {
+      getStoredNotifications().then(setNotificationsList);
+    }
+  }, [showNotifications]);
+
+  const handleDeleteNotification = async (id: string) => {
+    const updated = await deleteStoredNotification(id);
+    setNotificationsList(updated);
+  };
+
+  const handleClearAllNotifications = async () => {
+    await clearAllStoredNotifications();
+    setNotificationsList([]);
+  };
 
   useEffect(() => {
     if (Platform.OS === 'android') {
@@ -424,14 +465,12 @@ function MainApp() {
           {currentScreen === 'welcome' && (
             <WelcomeScreen
               onLoginPress={() => navigateTo('login')}
-              onExplorePress={handleSkipLogin}
             />
           )}
 
           {currentScreen === 'login' && (
             <LoginScreen
               onLoginSuccess={handleLoginSuccess}
-              onSkip={handleSkipLogin}
             />
           )}
 
@@ -443,6 +482,9 @@ function MainApp() {
             <OrderDieselScreen
               onOrderSuccess={handleOrderSuccess}
               onNavigate={(screen) => navigateTo(screen)}
+              currentUser={currentUser}
+              deliveryLocation={deliveryLocation}
+              onOpenLocationModal={() => setShowLocationModal(true)}
             />
           )}
 
@@ -515,41 +557,91 @@ function MainApp() {
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <Ionicons name="notifications" size={20} color={COLORS.primary} />
                   <Text style={styles.notifTitle}>Notifications</Text>
+                  {notificationsList.length > 0 && (
+                    <View style={styles.notifCountBadge}>
+                      <Text style={styles.notifCountText}>{notificationsList.length}</Text>
+                    </View>
+                  )}
                 </View>
-                <TouchableOpacity onPress={() => setShowNotifications(false)} style={styles.notifClose}>
-                  <Ionicons name="close" size={20} color={COLORS.dark} />
-                </TouchableOpacity>
-              </View>
 
-              <View style={styles.notifItem}>
-                <View style={[styles.notifIconWrap, { backgroundColor: '#FEF2F2' }]}>
-                  <Ionicons name="trending-down" size={18} color={COLORS.primary} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.notifItemTitle}>Today's Diesel Rate Updated</Text>
-                  <Text style={styles.notifItemBody}>High-speed diesel updated to ₹94.50/L today.</Text>
-                </View>
-              </View>
-
-              <View style={styles.notifItem}>
-                <View style={[styles.notifIconWrap, { backgroundColor: '#EFF6FF' }]}>
-                  <Ionicons name="navigate" size={18} color="#2563EB" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.notifItemTitle}>Bowser Out for Delivery</Text>
-                  <Text style={styles.notifItemBody}>Delivery #ED20261116-8941 is arriving in ~25 mins.</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  {notificationsList.length > 0 && (
+                    <TouchableOpacity onPress={handleClearAllNotifications} activeOpacity={0.7}>
+                      <Text style={styles.clearAllText}>Clear All</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity onPress={() => setShowNotifications(false)} style={styles.notifClose}>
+                    <Ionicons name="close" size={20} color={COLORS.dark} />
+                  </TouchableOpacity>
                 </View>
               </View>
 
-              <View style={[styles.notifItem, { borderBottomWidth: 0 }]}>
-                <View style={[styles.notifIconWrap, { backgroundColor: '#ECFDF5' }]}>
-                  <Ionicons name="calendar" size={18} color="#059669" />
+              {notificationsList.length === 0 ? (
+                <View style={styles.emptyNotifBox}>
+                  <Ionicons name="notifications-off-outline" size={40} color="#94A3B8" />
+                  <Text style={styles.emptyNotifTitle}>No Notifications</Text>
+                  <Text style={styles.emptyNotifSub}>
+                    You will receive real-time updates when diesel orders are placed, bowser captains are assigned, and for scheduled refills.
+                  </Text>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.notifItemTitle}>Scheduled Generator Refill</Text>
-                  <Text style={styles.notifItemBody}>Weekly 500L refill scheduled for Thursday 10:00 AM.</Text>
-                </View>
-              </View>
+              ) : (
+                <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
+                  {notificationsList.map((notif, index) => {
+                    const iconName =
+                      notif.type === 'driver'
+                        ? 'bicycle'
+                        : notif.type === 'subscription'
+                        ? 'calendar'
+                        : notif.type === 'rate'
+                        ? 'flame'
+                        : 'cart';
+                    const iconColor =
+                      notif.type === 'driver'
+                        ? '#2563EB'
+                        : notif.type === 'subscription'
+                        ? '#059669'
+                        : notif.type === 'rate'
+                        ? '#D97706'
+                        : COLORS.primary;
+                    const iconBg =
+                      notif.type === 'driver'
+                        ? '#EFF6FF'
+                        : notif.type === 'subscription'
+                        ? '#ECFDF5'
+                        : notif.type === 'rate'
+                        ? '#FEF3C7'
+                        : '#FEF2F2';
+
+                    return (
+                      <View
+                        key={notif.id || index}
+                        style={[
+                          styles.notifItem,
+                          index === notificationsList.length - 1 && { borderBottomWidth: 0 },
+                        ]}
+                      >
+                        <View style={[styles.notifIconWrap, { backgroundColor: iconBg }]}>
+                          <Ionicons name={iconName} size={18} color={iconColor} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Text style={styles.notifItemTitle}>{notif.title}</Text>
+                            <Text style={styles.notifTimeText}>{notif.date}</Text>
+                          </View>
+                          <Text style={styles.notifItemBody}>{notif.body}</Text>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.notifDeleteBtn}
+                          onPress={() => handleDeleteNotification(notif.id)}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="trash-outline" size={16} color="#94A3B8" />
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })}
+                </ScrollView>
+              )}
             </View>
           </View>
         </Modal>
@@ -610,6 +702,50 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '800',
     color: COLORS.dark,
+  },
+  notifCountBadge: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  notifCountText: {
+    color: COLORS.white,
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  clearAllText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  emptyNotifBox: {
+    paddingVertical: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyNotifTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.dark,
+    marginTop: 10,
+  },
+  emptyNotifSub: {
+    fontSize: 12.5,
+    color: '#64748B',
+    textAlign: 'center',
+    marginTop: 4,
+    lineHeight: 18,
+    paddingHorizontal: 16,
+  },
+  notifTimeText: {
+    fontSize: 11,
+    color: '#94A3B8',
+    fontWeight: '600',
+  },
+  notifDeleteBtn: {
+    padding: 6,
+    marginLeft: 4,
   },
   notifClose: {
     padding: 4,

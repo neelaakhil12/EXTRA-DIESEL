@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 import { ScreenName } from '../types';
 import { APP_CONFIG } from '../constants/config';
+import { sendSystemNotification } from '../services/notificationService';
 
 interface TrackOrderScreenProps {
   orderId?: string;
@@ -97,6 +98,19 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
     }, 45000);
     return () => clearInterval(timer);
   }, []);
+
+  // Listen for driver assignment update & trigger status bar push notification
+  const prevDriverRef = React.useRef<string | null>(null);
+  useEffect(() => {
+    if (activeOrder?.assignedToName && activeOrder.assignedToName !== prevDriverRef.current) {
+      sendSystemNotification(
+        '🚚 Bowser Captain Assigned!',
+        `Captain ${activeOrder.assignedToName} (${activeOrder.vehicleNumber || 'Bowser'}) has been assigned to your order #${activeOrder.id}. Dispatch started.`,
+        'driver'
+      ).catch(() => {});
+      prevDriverRef.current = activeOrder.assignedToName;
+    }
+  }, [activeOrder?.assignedToName, activeOrder?.id, activeOrder?.vehicleNumber]);
 
   const driverName = activeOrder?.assignedToName || 'Assigned Delivery Captain';
   const bowserNo = activeOrder?.vehicleNumber || 'Bowser TS 09 UB 4521';
@@ -318,33 +332,49 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
       </View>
 
       {/* Driver & Bowser Card */}
-      <View style={styles.driverCard}>
-        <View style={styles.driverInfoRow}>
-          <View style={styles.driverAvatarCircle}>
-            <Ionicons name="person" size={24} color={COLORS.white} />
-          </View>
-          <View style={styles.driverDetails}>
-            <Text style={styles.driverName}>{driverName}</Text>
-            <Text style={styles.driverVehicle}>🚚 {bowserNo}</Text>
-            <View style={styles.ratingRow}>
-              <Ionicons name="shield-checkmark" size={14} color="#059669" />
-              <Text style={styles.ratingText}>PESO Certified Bowser Captain</Text>
+      {!activeOrder.assignedToName ? (
+        <View style={[styles.driverCard, { borderColor: '#FDE68A', backgroundColor: '#FFFBEB' }]}>
+          <View style={styles.driverInfoRow}>
+            <View style={[styles.driverAvatarCircle, { backgroundColor: '#F59E0B' }]}>
+              <Ionicons name="hourglass-outline" size={24} color={COLORS.white} />
+            </View>
+            <View style={styles.driverDetails}>
+              <Text style={[styles.driverName, { color: '#B45309' }]}>Delivery Partner Not Assigned Yet</Text>
+              <Text style={{ fontSize: 12.5, color: '#78350F', marginTop: 3, lineHeight: 18 }}>
+                Your order is confirmed. Our hub dispatch team is assigning an authorized bowser captain shortly.
+              </Text>
             </View>
           </View>
         </View>
+      ) : (
+        <View style={styles.driverCard}>
+          <View style={styles.driverInfoRow}>
+            <View style={styles.driverAvatarCircle}>
+              <Ionicons name="person" size={24} color={COLORS.white} />
+            </View>
+            <View style={styles.driverDetails}>
+              <Text style={styles.driverName}>{driverName}</Text>
+              <Text style={styles.driverVehicle}>🚚 {bowserNo}</Text>
+              <View style={styles.ratingRow}>
+                <Ionicons name="shield-checkmark" size={14} color="#059669" />
+                <Text style={styles.ratingText}>PESO Certified Bowser Captain</Text>
+              </View>
+            </View>
+          </View>
 
-        <View style={styles.actionButtonsRow}>
-          <TouchableOpacity style={styles.callButton} onPress={handleCallDriver} activeOpacity={0.85}>
-            <Ionicons name="call" size={17} color={COLORS.white} />
-            <Text style={styles.callButtonText}>Call Captain</Text>
-          </TouchableOpacity>
+          <View style={styles.actionButtonsRow}>
+            <TouchableOpacity style={styles.callButton} onPress={handleCallDriver} activeOpacity={0.85}>
+              <Ionicons name="call" size={17} color={COLORS.white} />
+              <Text style={styles.callButtonText}>Call Captain</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity style={styles.waButton} onPress={handleWhatsAppDriver} activeOpacity={0.85}>
-            <Ionicons name="logo-whatsapp" size={17} color="#25D366" />
-            <Text style={styles.waButtonText}>WhatsApp</Text>
-          </TouchableOpacity>
+            <TouchableOpacity style={styles.waButton} onPress={handleWhatsAppDriver} activeOpacity={0.85}>
+              <Ionicons name="logo-whatsapp" size={17} color="#25D366" />
+              <Text style={styles.waButtonText}>WhatsApp</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+      )}
 
       {/* Dynamic Delivery Milestone Timeline */}
       <View style={styles.timelineCard}>

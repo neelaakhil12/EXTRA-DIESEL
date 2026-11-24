@@ -36,6 +36,11 @@ const DEFAULT_SETTINGS = {
   deliveryChargeUpTo500: 350,    // Delivery charge for 0 - 500 Liters (₹)
   deliveryChargeAbove500: 0,     // Delivery charge above 500 Liters (0 = FREE)
   taxRatePercent: 5,             // 5% GST on fuel delivery
+  deliverySlots: [
+    '08:00 AM - 12:00 PM',
+    '01:00 PM - 05:00 PM',
+    '06:00 PM - 10:00 PM',
+  ],
   supportHotline: {
     tollFree: '1800-DIESEL-EX (1800-343-7353)',
     phone: '+91 9989551305',
@@ -56,6 +61,28 @@ const DEFAULT_SETTINGS = {
   vehicleImages: [
     'https://extradiesel.in/assets/images/vehicle-bowser-1.jpeg',
     'https://extradiesel.in/assets/images/vehicle-bowser-2.jpeg',
+  ],
+  termsAndConditions: [
+    { id: 'tc-1', title: '100% Pure BS-VI High-Speed Diesel', desc: 'All diesel delivered is sourced directly from authorized oil marketing terminal depots and meets strict BS-VI environmental and engine standards.' },
+    { id: 'tc-2', title: 'PESO-Certified Mobile Bowsers', desc: 'Deliveries are executed strictly via Petroleum and Explosives Safety Organisation (PESO) licensed smart bowsers with spark arrestors.' },
+    { id: 'tc-3', title: 'Legal Metrology Calibrated Metering', desc: 'Each smart bowser is equipped with an electronic flow meter calibrated and stamped by Legal Metrology (±0.1% accuracy).' },
+    { id: 'tc-4', title: 'Minimum Order Quantity (MOQ)', desc: 'The minimum delivery volume per doorstep order is 100 Liters.' },
+    { id: 'tc-5', title: 'Free Delivery Threshold', desc: 'Deliveries of 200 Liters and above enjoy zero delivery charges. Orders below 200L are subject to standard delivery fees.' },
+    { id: 'tc-6', title: 'Mandatory Static Earthing', desc: 'Before dispensing begins, the operator must connect a safety bonding wire to prevent static electrical discharge.' },
+    { id: 'tc-7', title: '15-Meter Safety Zone', desc: 'The fueling area must maintain a 15-meter clearance free of open flames, smoking, welding, or electrical spark hazards during discharge.' },
+    { id: 'tc-8', title: 'Certified Hazardous Material Drivers', desc: 'All bowser drivers and operators hold valid hazardous material transport licenses and emergency response training.' },
+    { id: 'tc-9', title: 'Site Accessibility & Clear Passage', desc: 'The customer is responsible for ensuring the delivery bowser has unobstructed access to the fuel intake point.' },
+    { id: 'tc-10', title: 'Dynamic Daily Price Transparency', desc: 'Diesel rates are updated daily based on state-notified fuel prices. The price locked at order placement is honored.' },
+    { id: 'tc-11', title: 'Secure Online Payments via Razorpay', desc: 'All credit/debit card, UPI, and net banking transactions are processed via PCI-DSS compliant Razorpay gateway.' },
+    { id: 'tc-12', title: 'Tax-Compliant 100% GST Invoices', desc: 'Instant digitally signed GST tax invoices are generated upon order completion and available for download.' },
+    { id: 'tc-13', title: 'Tamper-Proof Electronic Delivery Receipts', desc: 'The smart bowser prints an automated receipt detailing start reading, finish reading, volume dispensed, and density.' },
+    { id: 'tc-14', title: 'Free Order Cancellation', desc: 'Orders can be cancelled free of charge at any time prior to the bowser departing from the hub.' },
+    { id: 'tc-15', title: 'On-Site Quality & Density Testing', desc: 'Customers are entitled to request an on-site hydrometer density check using our calibrated test equipment before discharge.' },
+    { id: 'tc-16', title: 'Direct Refilling to Approved Receptors', desc: 'Fuel is dispensed directly into DG set fuel tanks, commercial vehicle fleets, agricultural machinery, or authorized storage.' },
+    { id: 'tc-17', title: 'No Loose Container Fueling', desc: 'In compliance with PESO rules, dispensing into open buckets, jerry cans, or unapproved plastic containers is strictly prohibited.' },
+    { id: 'tc-18', title: 'Spill Prevention & Environmental Safety', desc: 'Our bowsers are equipped with emergency shut-off valves, automatic dry-break nozzles, and spill containment kits.' },
+    { id: 'tc-19', title: 'Scheduled Recurring Refills', desc: 'Customers on weekly/monthly subscription refuels may pause, reschedule, or adjust quota up to 4 hours before the window.' },
+    { id: 'tc-20', title: '24/7 Bowser Dispatch & Support Helpline', desc: 'For emergency fueling or delivery assistance, reach our 24x7 control room via 1800-DIESEL-EX or WhatsApp support.' },
   ],
   updatedAt: new Date().toISOString(),
 };
@@ -251,6 +278,8 @@ app.post('/api/settings', (req, res) => {
       b2bCreditTerms,
       b2bBillingCycle,
       vehicleImages,
+      termsAndConditions,
+      deliverySlots,
     } = req.body;
 
     currentSettings = loadSettings();
@@ -259,8 +288,8 @@ app.post('/api/settings', (req, res) => {
       currentSettings.dieselRate = parseFloat(Number(dieselRate).toFixed(2));
     }
     if (city) currentSettings.city = city.trim();
-    if (deliveryChargeUpTo500 !== undefined && !isNaN(Number(deliveryChargeUpTo500))) {
-      currentSettings.deliveryChargeUpTo500 = Number(deliveryChargeUpTo500);
+    if (deliveryChargeUpTo500 !== undefined) {
+      currentSettings.deliveryChargeUpTo500 = (deliveryChargeUpTo500 === '' || deliveryChargeUpTo500 === null || isNaN(Number(deliveryChargeUpTo500))) ? 0 : Number(deliveryChargeUpTo500);
     }
     if (deliveryChargeAbove500 !== undefined && !isNaN(Number(deliveryChargeAbove500))) {
       currentSettings.deliveryChargeAbove500 = Number(deliveryChargeAbove500);
@@ -268,8 +297,8 @@ app.post('/api/settings', (req, res) => {
     if (tier1MaxLiters !== undefined && !isNaN(Number(tier1MaxLiters))) {
       currentSettings.tier1MaxLiters = Number(tier1MaxLiters);
     }
-    if (taxRatePercent !== undefined && !isNaN(Number(taxRatePercent))) {
-      currentSettings.taxRatePercent = Number(taxRatePercent);
+    if (taxRatePercent !== undefined) {
+      currentSettings.taxRatePercent = (taxRatePercent === '' || taxRatePercent === null || isNaN(Number(taxRatePercent))) ? 0 : Number(taxRatePercent);
     }
     if (b2bCreditLimit !== undefined && !isNaN(Number(b2bCreditLimit))) {
       currentSettings.b2bCreditLimit = Number(b2bCreditLimit);
@@ -290,6 +319,12 @@ app.post('/api/settings', (req, res) => {
     }
     if (vehicleImages && Array.isArray(vehicleImages)) {
       currentSettings.vehicleImages = vehicleImages.filter(Boolean);
+    }
+    if (termsAndConditions && Array.isArray(termsAndConditions)) {
+      currentSettings.termsAndConditions = termsAndConditions;
+    }
+    if (deliverySlots && Array.isArray(deliverySlots)) {
+      currentSettings.deliverySlots = deliverySlots.filter(Boolean);
     }
 
     currentSettings.updatedAt = new Date().toISOString();
@@ -1023,16 +1058,12 @@ app.post('/api/user/delivery-sites', (req, res) => {
 app.get('/api/user/subscription', (req, res) => {
   try {
     const { email } = req.query;
-    const key = (email || 'aadhyafuels9@gmail.com').toLowerCase().trim();
+    if (!email) {
+      return res.json({ success: true, subscription: null });
+    }
+    const key = email.toLowerCase().trim();
     const user = registeredUsers.get(key);
-    const subscription = user?.subscription || {
-      siteName: 'Hitech City Phase 2 DG Set',
-      liters: 300,
-      frequency: 'weekly',
-      days: ['Mon', 'Thu'],
-      status: 'active',
-      nextRefill: 'Mon 23 Nov, 08:00 AM',
-    };
+    const subscription = user?.subscription || null;
     res.json({ success: true, subscription });
   } catch (e) {
     res.status(500).json({ success: false, error: 'Failed to fetch subscription' });
@@ -1042,7 +1073,10 @@ app.get('/api/user/subscription', (req, res) => {
 app.post('/api/user/subscription', (req, res) => {
   try {
     const { email, subscription } = req.body;
-    const key = (email || 'aadhyafuels9@gmail.com').toLowerCase().trim();
+    if (!email) {
+      return res.status(400).json({ success: false, error: 'Email required' });
+    }
+    const key = email.toLowerCase().trim();
     let user = registeredUsers.get(key);
     if (!user) {
       user = { name: key.split('@')[0], email: key, role: 'customer' };
@@ -1054,6 +1088,47 @@ app.post('/api/user/subscription', (req, res) => {
     res.json({ success: true, message: 'Subscription plan updated successfully', subscription: user.subscription });
   } catch (e) {
     res.status(500).json({ success: false, error: 'Failed to update subscription' });
+  }
+});
+
+app.delete('/api/user/subscription', (req, res) => {
+  try {
+    const { email } = req.query;
+    if (!email) {
+      return res.status(400).json({ success: false, error: 'Email required' });
+    }
+    const key = email.toLowerCase().trim();
+    const user = registeredUsers.get(key);
+    if (user) {
+      user.subscription = null;
+      user.updatedAt = new Date().toISOString();
+      registeredUsers.set(key, user);
+      saveUsers(registeredUsers);
+    }
+    res.json({ success: true, message: 'Subscription cancelled successfully' });
+  } catch (e) {
+    res.status(500).json({ success: false, error: 'Failed to cancel subscription' });
+  }
+});
+
+// Admin Subscriptions API - Fetch all user subscriptions
+app.get('/api/admin/subscriptions', (req, res) => {
+  try {
+    const subscriptionsList = [];
+    for (const [emailKey, user] of registeredUsers.entries()) {
+      if (user.subscription && user.subscription.status !== 'cancelled') {
+        subscriptionsList.push({
+          customerName: user.name || emailKey.split('@')[0],
+          customerEmail: user.email || emailKey,
+          customerPhone: user.phone || 'N/A',
+          address: user.deliverySites?.[0]?.address || user.subscription.siteName || 'Site Location',
+          subscription: user.subscription,
+        });
+      }
+    }
+    res.json({ success: true, subscriptions: subscriptionsList });
+  } catch (e) {
+    res.status(500).json({ success: false, error: 'Failed to fetch admin subscriptions' });
   }
 });
 
@@ -1541,8 +1616,14 @@ app.get('/api/files/signed-url', async (req, res) => {
 });
 
 // -------------------------------------------------------------------------
-// SERVE EXPORTED REACT NATIVE WEB BUILD
+// SERVE EXPORTED REACT NATIVE WEB BUILD & ASSETS
 // -------------------------------------------------------------------------
+const ASSETS_PATH = path.join(__dirname, '../../mobile-app/assets');
+if (fs.existsSync(ASSETS_PATH)) {
+  console.log(`[Static] Serving assets from ${ASSETS_PATH}`);
+  app.use('/assets', express.static(ASSETS_PATH));
+}
+
 const DIST_PATH = path.join(__dirname, '../../mobile-app/dist');
 if (fs.existsSync(DIST_PATH)) {
   console.log(`[Static] Serving web frontend from ${DIST_PATH}`);
