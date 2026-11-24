@@ -73,77 +73,106 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
       style={styles.container}
       contentContainerStyle={[styles.content, isDesktop && styles.desktopContent]}
     >
-      {/* 1. Live Diesel Rate Card (Top Highlight) - Full width, clean, perfectly fitted on Desktop & Mobile */}
-      <View style={[styles.rateCard, isDesktop && styles.desktopRateCard]}>
-        <View style={styles.rateLeft}>
-          <View style={styles.fuelIcon}>
-            <Ionicons name="flame" size={isDesktop ? 26 : 22} color={COLORS.secondary} />
-          </View>
-          <View style={styles.rateLeftTextWrap}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Text style={styles.rateSubtitle}>Today's Live Rate ({rateCity})</Text>
-              <View style={styles.qualityBadge}>
-                <Ionicons name="shield-checkmark" size={11} color="#10B981" />
-                <Text style={styles.qualityBadgeText}>Quality Assured</Text>
+      {/* Top Banner Row: Side by Side Boxes on Desktop, Stacked on Mobile */}
+      <View style={[styles.topRow, isDesktop && styles.desktopTopRow]}>
+        {/* 1. Live Diesel Rate Box */}
+        <View style={[styles.rateCard, isDesktop && styles.desktopRateCard]}>
+          {isDesktop ? (
+            /* Desktop Layout for Rate Box */
+            <View style={styles.desktopRateCardContent}>
+              <View style={styles.desktopRateTop}>
+                <View style={styles.fuelIcon}>
+                  <Ionicons name="flame" size={24} color={COLORS.secondary} />
+                </View>
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={styles.rateSubtitle}>TODAY'S LIVE RATE ({rateCity.toUpperCase()})</Text>
+                  <View style={styles.qualityBadge}>
+                    <Ionicons name="shield-checkmark" size={11} color="#10B981" />
+                    <Text style={styles.qualityBadgeText}>Quality Assured</Text>
+                  </View>
+                </View>
               </View>
-            </View>
-            <Text style={[styles.rateTitle, isDesktop && { fontSize: 16 }]} numberOfLines={1}>
-              BS-VI High Speed Doorstep Diesel
-            </Text>
-          </View>
-        </View>
 
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-          <View style={styles.rateRight}>
-            <Text style={[styles.rateValue, isDesktop && { fontSize: 26 }]}>₹{fuelRate.toFixed(2)}</Text>
-            <Text style={styles.rateUnit}>per Liter (Incl. Taxes)</Text>
-          </View>
-          {isDesktop && (
-            <TouchableOpacity
-              style={styles.desktopRateOrderBtn}
-              onPress={() => onNavigate('order')}
-              activeOpacity={0.88}
-            >
-              <Text style={styles.desktopRateOrderBtnText}>Order Diesel</Text>
-              <Ionicons name="arrow-forward" size={15} color={COLORS.primary} />
-            </TouchableOpacity>
+              <View style={styles.desktopRateMiddle}>
+                <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
+                  <Text style={styles.desktopRateValue}>₹{fuelRate.toFixed(2)}</Text>
+                  <Text style={styles.desktopRateUnit}>/ Liter</Text>
+                </View>
+                <Text style={styles.desktopRateFuelType}>BS-VI High Speed Doorstep Diesel</Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.desktopRateOrderBtn}
+                onPress={() => onNavigate('order')}
+                activeOpacity={0.88}
+              >
+                <Text style={styles.desktopRateOrderBtnText}>Order Diesel at ₹{fuelRate.toFixed(2)}</Text>
+                <Ionicons name="arrow-forward" size={15} color={COLORS.primary} />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            /* Mobile Layout for Rate Box (Compact Horizontal) */
+            <>
+              <View style={styles.rateLeft}>
+                <View style={styles.fuelIcon}>
+                  <Ionicons name="flame" size={22} color={COLORS.secondary} />
+                </View>
+                <View style={styles.rateLeftTextWrap}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={styles.rateSubtitle}>Today's Live Rate ({rateCity})</Text>
+                    <View style={styles.qualityBadge}>
+                      <Ionicons name="shield-checkmark" size={11} color="#10B981" />
+                      <Text style={styles.qualityBadgeText}>Quality Assured</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.rateTitle} numberOfLines={1}>
+                    BS-VI High Speed Diesel
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.rateRight}>
+                <Text style={styles.rateValue}>₹{fuelRate.toFixed(2)}</Text>
+                <Text style={styles.rateUnit}>per Liter</Text>
+              </View>
+            </>
           )}
         </View>
-      </View>
 
-      {/* 2. Our Vehicles Hero Showcase Banner - Sleek, balanced height, not oversized */}
-      <View style={[styles.heroVehicleCard, isDesktop && styles.desktopHeroVehicleCard]}>
-        <Image
-          source={vehicleImages[vehicleImgIdx] || DEFAULT_VEHICLE_IMAGES[0]}
-          style={styles.heroVehicleImage}
-          resizeMode="cover"
-        />
-        <View style={styles.heroVehicleOverlay}>
-          <View style={styles.vehicleHeaderRow}>
-            <View style={styles.heroBadgeWrap}>
-              <Text style={styles.heroBadgeText}>OUR FLEET</Text>
+        {/* 2. Slide Images Box (Our Vehicles Showcase) */}
+        <View style={[styles.heroVehicleCard, isDesktop && styles.desktopHeroVehicleCard]}>
+          <Image
+            source={vehicleImages[vehicleImgIdx] || DEFAULT_VEHICLE_IMAGES[0]}
+            style={styles.heroVehicleImage}
+            resizeMode="cover"
+          />
+          <View style={styles.heroVehicleOverlay}>
+            <View style={styles.vehicleHeaderRow}>
+              <View style={styles.heroBadgeWrap}>
+                <Text style={styles.heroBadgeText}>OUR FLEET</Text>
+              </View>
+              <View style={styles.liveVehicleDotWrap}>
+                <View style={styles.liveVehicleDot} />
+                <Text style={styles.liveVehicleText}>Legal Metrology Certified</Text>
+              </View>
             </View>
-            <View style={styles.liveVehicleDotWrap}>
-              <View style={styles.liveVehicleDot} />
-              <Text style={styles.liveVehicleText}>Legal Metrology Certified</Text>
-            </View>
-          </View>
 
-          <View style={styles.heroVehicleBottom}>
-            <View style={{ flex: 1, marginRight: 14 }}>
-              <Text style={[styles.heroVehicleTitle, isDesktop && { fontSize: 20 }]}>Our Smart Mobile Bowsers</Text>
-              <Text style={[styles.heroVehicleSubtitle, isDesktop && { fontSize: 13.5 }]} numberOfLines={2}>
-                Automated doorstep delivery for generators, machinery & commercial fleets
-              </Text>
+            <View style={styles.heroVehicleBottom}>
+              <View style={{ flex: 1, marginRight: 14 }}>
+                <Text style={[styles.heroVehicleTitle, isDesktop && { fontSize: 19 }]}>Our Smart Mobile Bowsers</Text>
+                <Text style={[styles.heroVehicleSubtitle, isDesktop && { fontSize: 13 }]} numberOfLines={2}>
+                  Automated doorstep delivery for generators, machinery & commercial fleets
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.heroVehicleBtn}
+                onPress={() => onNavigate('order')}
+                activeOpacity={0.88}
+              >
+                <Text style={styles.heroVehicleBtnText}>Order Now</Text>
+                <Ionicons name="arrow-forward" size={15} color={COLORS.white} />
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity
-              style={styles.heroVehicleBtn}
-              onPress={() => onNavigate('order')}
-              activeOpacity={0.88}
-            >
-              <Text style={styles.heroVehicleBtnText}>Order Now</Text>
-              <Ionicons name="arrow-forward" size={15} color={COLORS.white} />
-            </TouchableOpacity>
           </View>
         </View>
       </View>
@@ -317,8 +346,11 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
   },
   desktopHeroVehicleCard: {
-    height: 185,
-    marginBottom: 24,
+    flex: 1.5,
+    minHeight: 220,
+    maxHeight: 235,
+    marginBottom: 0,
+    width: undefined,
   },
   heroVehicleImage: {
     width: '100%',
@@ -461,8 +493,11 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   desktopTopRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 20,
+    marginBottom: 24,
     width: '100%',
-    marginBottom: 20,
   },
   desktopContent: {
     maxWidth: 1240,
@@ -485,19 +520,51 @@ const styles = StyleSheet.create({
     height: 120,
   },
   desktopRateCard: {
-    width: '100%',
-    paddingHorizontal: 28,
+    flex: 1,
+    minHeight: 220,
+    maxHeight: 235,
+    paddingHorizontal: 20,
     paddingVertical: 18,
-    marginBottom: 16,
-    borderRadius: 16,
+    marginBottom: 0,
+    borderRadius: 18,
+    justifyContent: 'space-between',
+  },
+  desktopRateCardContent: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  desktopRateTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  desktopRateMiddle: {
+    marginVertical: 10,
+  },
+  desktopRateValue: {
+    color: COLORS.secondary,
+    fontSize: 34,
+    fontWeight: '900',
+    letterSpacing: -0.5,
+  },
+  desktopRateUnit: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  desktopRateFuelType: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 2,
   },
   desktopRateOrderBtn: {
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 18,
     paddingVertical: 10,
+    paddingHorizontal: 16,
     borderRadius: 10,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
     elevation: 2,
     shadowColor: '#000',
