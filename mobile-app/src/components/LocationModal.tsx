@@ -193,13 +193,37 @@ export const LocationModal: React.FC<LocationModalProps> = ({
     setTimeout(() => setStatusMessage(''), 3000);
   };
 
-  // Apply location details from coordinates using Mapbox + Backend
+  // Apply location details from coordinates using Server Engine (OSM Colony + Mapbox)
   const applyCoordinatesLocation = async (latitude: number, longitude: number) => {
     try {
-      setStatusMessage('Pinning exact street, colony & landmark...');
+      setStatusMessage('Pinning exact colony, street & landmark...');
       setCoords({ lat: latitude, lon: longitude });
 
-      // 1. Direct Mapbox Places API (Accurate rooftop / address / locality detection)
+      // 1. Primary: Server Reverse Geocode API (OSM Nominatim Colony + Mapbox Street/POI)
+      try {
+        const res = await fetch(
+          `${baseUrl}/api/location/reverse-geocode?lat=${latitude}&lon=${longitude}`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.location) {
+            const loc = data.location;
+            setPlotNo(loc.plotNo || '');
+            setStreet(loc.street || '');
+            setArea(loc.area || loc.city || 'Hyderabad');
+            setLandmark(loc.landmark || '');
+            setCity(loc.city || 'Hyderabad');
+            setPincode(loc.pincode || '');
+            setStatusMessage(`📍 Pinned: ${loc.area || loc.shortAddress}`);
+            setTimeout(() => setStatusMessage(''), 4000);
+            return;
+          }
+        }
+      } catch (e1) {
+        console.warn('Backend geocoding error, falling back to Mapbox:', e1);
+      }
+
+      // 2. Direct Mapbox Places API fallback
       if (mapboxToken) {
         const mbUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${longitude},${latitude}.json?access_token=${mapboxToken}&types=address,poi,neighborhood,locality,place,postcode`;
         const mbRes = await fetch(mbUrl);
@@ -210,62 +234,39 @@ export const LocationModal: React.FC<LocationModalProps> = ({
             const feat = mbData.features[0];
             const ctx = feat.context || [];
 
-            let pNo = feat.address || '';
-            let st = feat.text || '';
-            let ar = '';
+            let st = feat.text && !/^[A-Z0-9]{4,8}\+/i.test(feat.text) ? feat.text : '';
+            let colony = '';
+            let locality = '';
             let lm = '';
             let ct = 'Hyderabad';
             let pin = '';
 
             ctx.forEach((c: any) => {
               if (c.id.startsWith('postcode')) pin = c.text;
-              else if (c.id.startsWith('neighborhood') || c.id.startsWith('locality')) ar = c.text;
+              else if (c.id.startsWith('neighborhood')) colony = c.text;
+              else if (c.id.startsWith('locality')) locality = c.text;
               else if (c.id.startsWith('place')) ct = c.text;
             });
 
             const poi = mbData.features.find((f: any) => f.place_type && f.place_type.includes('poi'));
-            if (poi && poi.text) {
-              lm = poi.text;
-            }
+            if (poi && poi.text) lm = poi.text;
 
-            setPlotNo(pNo);
+            const ar = [colony, locality].filter(Boolean).join(', ') || locality || ct;
+            setPlotNo('');
             setStreet(st);
-            setArea(ar || ct);
+            setArea(ar);
             setLandmark(lm);
             setCity(ct);
             setPincode(pin);
 
-            setStatusMessage(`Exact GPS location pinned (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`);
+            setStatusMessage(`📍 Pinned: ${ar}`);
             setTimeout(() => setStatusMessage(''), 4000);
             return;
           }
         }
       }
     } catch (e) {
-      console.warn('Mapbox direct geocoding error:', e);
-    }
-
-    // 2. Server Reverse Geocode API
-    try {
-      const res = await fetch(
-        `${baseUrl}/api/location/reverse-geocode?lat=${latitude}&lon=${longitude}`
-      );
-      const data = await res.json();
-
-      if (data.success && data.location) {
-        const loc = data.location;
-        setPlotNo(loc.plotNo || '');
-        setStreet(loc.street || '');
-        setArea(loc.area || loc.city || 'Hyderabad');
-        setLandmark(loc.landmark || '');
-        setCity(loc.city || 'Hyderabad');
-        setPincode(loc.pincode || '');
-        setStatusMessage(`GPS pinned (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`);
-        setTimeout(() => setStatusMessage(''), 4000);
-        return;
-      }
-    } catch (e2) {
-      console.warn('Backend geocoding failed');
+      console.warn('Geocoding error:', e);
     }
 
     setStatusMessage(`GPS pinned (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`);
@@ -295,34 +296,6 @@ export const LocationModal: React.FC<LocationModalProps> = ({
         const lat = loc.coords.latitude;
         const lon = loc.coords.longitude;
         setCoords({ lat, lon });
-
-        try {
-          const nativeAddresses = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lon });
-          if (nativeAddresses && nativeAddresses.length > 0) {
-            const na = nativeAddresses[0];
-            const pNo = na.streetNumber || na.name || '';
-            const st = na.street || na.name || '';
-            const ar = na.subregion || na.district || '';
-            const lm = na.name && na.name !== st ? na.name : '';
-            const ct = na.city || 'Hyderabad';
-            const pin = na.postalCode || '';
-
-            if (pNo || st || ar) {
-              setPlotNo(pNo);
-              setStreet(st);
-              setArea(ar || ct);
-              if (lm) setLandmark(lm);
-              setCity(ct);
-              setPincode(pin);
-              setStatusMessage('Exact GPS location detected successfully!');
-              setTimeout(() => setStatusMessage(''), 3000);
-              setIsLocating(false);
-              return;
-            }
-          }
-        } catch (nativeErr) {
-          console.warn('Native reverseGeocodeAsync error:', nativeErr);
-        }
 
         await applyCoordinatesLocation(lat, lon);
       } catch (err: any) {

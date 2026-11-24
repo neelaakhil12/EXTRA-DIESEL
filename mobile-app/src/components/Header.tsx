@@ -223,7 +223,7 @@ export const Header: React.FC<HeaderProps> = ({
   // Home Screen: Mobile Location & Profile Bar
   return (
     <View style={[styles.container, { paddingTop: dynamicPaddingTop }]}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
       <View style={styles.homeHeader}>
         {/* Left: Location Pin & Site Selector */}
         <TouchableOpacity
@@ -237,7 +237,7 @@ export const Header: React.FC<HeaderProps> = ({
           <View style={styles.locationTextWrap}>
             <View style={styles.locationLabelRow}>
               <Text style={styles.locationLabel}>DELIVERING TO SITE</Text>
-              <Ionicons name="chevron-down" size={13} color={COLORS.primary} />
+              <Ionicons name="chevron-down" size={13} color="#FFFFFF" />
             </View>
             <Text style={styles.locationSiteName} numberOfLines={1}>
               {currentLocationText || 'Plot 42, Hitech City'}
@@ -252,7 +252,7 @@ export const Header: React.FC<HeaderProps> = ({
             style={styles.iconCircle}
             activeOpacity={0.7}
           >
-            <Ionicons name="notifications-outline" size={19} color={COLORS.dark} />
+            <Ionicons name="notifications" size={19} color={COLORS.primary} />
             <View style={styles.notificationDot} />
           </TouchableOpacity>
 
@@ -274,14 +274,14 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Modern App Brand Strip */}
       <View style={styles.brandStrip}>
         <View style={styles.brandBadge}>
-          <Ionicons name="flame" size={15} color={COLORS.primary} />
+          <Ionicons name="water" size={16} color={COLORS.primary} />
           <Text style={styles.brandText}>
             EXTRA <Text style={styles.brandTextAccent}>DIESEL</Text>
           </Text>
         </View>
 
         <View style={styles.complianceTag}>
-          <Ionicons name="shield-checkmark" size={12} color={COLORS.greenDark} />
+          <Ionicons name="shield-checkmark" size={13} color={COLORS.greenDark} />
           <Text style={styles.complianceText}>Legal Metrology Certified</Text>
         </View>
       </View>
@@ -292,16 +292,14 @@ export const Header: React.FC<HeaderProps> = ({
 const styles = StyleSheet.create({
   // Mobile Container Styles
   container: {
-    backgroundColor: COLORS.white,
-    paddingBottom: 10,
+    backgroundColor: COLORS.primary,
+    paddingBottom: 12,
     paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    elevation: 2,
+    elevation: 4,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
   },
   homeHeader: {
     flexDirection: 'row',
@@ -316,10 +314,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   locationIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#FEF2F2',
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -334,13 +332,13 @@ const styles = StyleSheet.create({
   locationLabel: {
     fontSize: 10,
     fontWeight: '800',
-    color: COLORS.primary,
+    color: 'rgba(255, 255, 255, 0.9)',
     letterSpacing: 0.8,
   },
   locationSiteName: {
     fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.dark,
+    fontWeight: '800',
+    color: '#FFFFFF',
     marginTop: 1,
   },
   rightActions: {
@@ -352,9 +350,8 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 0,
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
@@ -372,21 +369,23 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
     overflow: 'visible',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
   },
   avatarText: {
-    color: COLORS.white,
+    color: COLORS.primary,
     fontSize: 13,
     fontWeight: '800',
   },
   mobileAvatarImg: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
   },
   onlineBadge: {
     position: 'absolute',
@@ -403,13 +402,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
     marginTop: 10,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
   },
   brandBadge: {
     flexDirection: 'row',

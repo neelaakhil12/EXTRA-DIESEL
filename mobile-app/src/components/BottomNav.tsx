@@ -52,8 +52,8 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentScreen, onNavigate 
             <View style={[styles.iconWrapper, isActive && styles.iconWrapperActive]}>
               <Ionicons
                 name={isActive ? tab.iconActive : tab.icon}
-                size={22}
-                color={isActive ? COLORS.primary : COLORS.muted}
+                size={23}
+                color={isActive ? '#FFFFFF' : 'rgba(255, 255, 255, 0.75)'}
               />
             </View>
             <Text style={[styles.label, isActive && styles.labelActive]}>
@@ -69,15 +69,14 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentScreen, onNavigate 
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.primary,
     paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    elevation: 8,
+    borderTopWidth: 0,
+    elevation: 10,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
   },
   tab: {
     flex: 1,
@@ -85,20 +84,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   iconWrapper: {
-    padding: 4,
+    padding: 3,
     borderRadius: 16,
   },
   iconWrapperActive: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
   },
   label: {
     fontSize: 11,
     marginTop: 2,
-    color: COLORS.muted,
-    fontWeight: '500',
+    color: 'rgba(255, 255, 255, 0.78)',
+    fontWeight: '600',
   },
   labelActive: {
-    color: COLORS.primary,
-    fontWeight: '700',
+    color: '#FFFFFF',
+    fontWeight: '800',
   },
 });

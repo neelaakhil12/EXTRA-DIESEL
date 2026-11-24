@@ -358,105 +358,100 @@ app.get('/api/location/reverse-geocode', async (req, res) => {
 
     // Primary: Mapbox Places API (Accurate down to rooftop/street level across India)
     const mapboxToken = process.env.MAPBOX_ACCESS_TOKEN;
+    let colony = '';
+    let suburb = '';
+    let street = '';
+    let city = 'Hyderabad';
+    let state = 'Telangana';
+    let pincode = '';
+    let landmark = '';
+    let plotNo = '';
+
+    // 1. OpenStreetMap Nominatim for exact Indian Neighbourhood / Colony name
     try {
-      const mbUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${lonFloat},${latFloat}.json?access_token=${mapboxToken}&types=address,poi,neighborhood,locality,place,postcode`;
-      const mbRes = await fetch(mbUrl);
-      if (mbRes.ok) {
-        const mbData = await mbRes.json();
-        if (mbData.features && mbData.features.length > 0) {
-          const feat = mbData.features[0];
-          const ctx = feat.context || [];
-
-          let plotNo = feat.address || '';
-          let street = feat.text || '';
-          let landmark = '';
-          let area = '';
-          let city = 'Hyderabad';
-          let state = 'Telangana';
-          let pincode = '';
-
-          ctx.forEach(c => {
-            if (c.id.startsWith('postcode')) pincode = c.text;
-            else if (c.id.startsWith('neighborhood') || c.id.startsWith('locality')) area = c.text;
-            else if (c.id.startsWith('place')) city = c.text;
-            else if (c.id.startsWith('region')) state = c.text;
-          });
-
-          // If the feature is a POI or establishment, use it as landmark / plot
-          if (feat.place_type && feat.place_type.includes('poi')) {
-            landmark = feat.text;
-          }
-
-          const fullAddress = feat.place_name || [plotNo, street, area, city, pincode].filter(Boolean).join(', ');
-          const shortAddress = [street, area || city].filter(Boolean).join(', ') || city;
-
-          return res.json({
-            success: true,
-            location: {
-              lat: latFloat,
-              lon: lonFloat,
-              plotNo,
-              street,
-              area: area || city,
-              landmark,
-              city,
-              state,
-              pincode,
-              fullAddress,
-              shortAddress
-            }
-          });
-        }
-      }
-    } catch (mbErr) {
-      console.warn('[Reverse Geocode] Mapbox error, falling back to OSM:', mbErr.message);
-    }
-
-    // Secondary: OpenStreetMap Nominatim
-    try {
-      const osmUrl = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${encodeURIComponent(latFloat)}&lon=${encodeURIComponent(lonFloat)}&addressdetails=1`;
-      const response = await fetch(osmUrl, {
+      const osmUrl = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${encodeURIComponent(latFloat)}&lon=${encodeURIComponent(lonFloat)}&zoom=18&addressdetails=1`;
+      const osmRes = await fetch(osmUrl, {
         headers: {
           'User-Agent': 'ExtraDieselApp/1.0 (contact@extradiesel.in)',
           'Accept-Language': 'en'
         }
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        const a = data.address || {};
-
-        const plotNo = a.house_number || a.building || '';
-        const street = a.road || a.pedestrian || a.street || '';
-        const area = a.suburb || a.neighbourhood || a.residential || a.subdistrict || '';
-        const city = a.city || a.town || a.county || a.state_district || 'Hyderabad';
-        const state = a.state || 'Telangana';
-        const pincode = a.postcode || '';
-        const landmark = a.amenity || a.commercial || a.office || a.leisure || '';
-
-        const parts = [plotNo, street, area, city, pincode].filter(Boolean);
-        const fullAddress = parts.join(', ') || data.display_name || `${city}, ${state}`;
-
-        return res.json({
-          success: true,
-          location: {
-            lat: latFloat,
-            lon: lonFloat,
-            plotNo,
-            street,
-            area,
-            landmark,
-            city,
-            state,
-            pincode,
-            fullAddress,
-            shortAddress: [plotNo, street || area].filter(Boolean).join(', ') || area || city
-          }
-        });
+      if (osmRes.ok) {
+        const osmData = await osmRes.json();
+        const a = osmData.address || {};
+        colony = a.neighbourhood || a.residential || a.subdistrict || '';
+        suburb = a.suburb || a.locality || '';
+        street = a.road || a.pedestrian || a.street || '';
+        city = a.city || a.town || city;
+        pincode = a.postcode || '';
+        landmark = a.amenity || a.commercial || '';
+        plotNo = a.house_number || '';
       }
     } catch (osmErr) {
-      console.warn('[Reverse Geocode] OSM Nominatim error:', osmErr.message);
+      console.warn('[Reverse Geocode] OSM error:', osmErr.message);
     }
+
+    // 2. Mapbox Places API for Street, POI Landmark & context refinement
+    if (mapboxToken) {
+      try {
+        const mbUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${lonFloat},${latFloat}.json?access_token=${mapboxToken}&types=address,poi,neighborhood,locality,place,postcode`;
+        const mbRes = await fetch(mbUrl);
+        if (mbRes.ok) {
+          const mbData = await mbRes.json();
+          if (mbData.features && mbData.features.length > 0) {
+            const feat = mbData.features[0];
+            const ctx = feat.context || [];
+
+            // Ignore Plus codes (e.g. 8G7W+54M)
+            const isPlusCode = (t) => t && /^[A-Z0-9]{4,8}\+[A-Z0-9]{2,4}/i.test(t.trim());
+
+            if (!street && feat.text && !isPlusCode(feat.text)) {
+              street = feat.text;
+            }
+
+            ctx.forEach(c => {
+              if (!colony && c.id.startsWith('neighborhood')) colony = c.text;
+              if (!suburb && c.id.startsWith('locality')) suburb = c.text;
+              if (!pincode && c.id.startsWith('postcode')) pincode = c.text;
+              if (c.id.startsWith('place')) city = c.text;
+              if (c.id.startsWith('region')) state = c.text;
+            });
+
+            const poi = mbData.features.find(f => f.place_type && f.place_type.includes('poi'));
+            if (poi && poi.text) landmark = poi.text;
+          }
+        }
+      } catch (mbErr) {
+        console.warn('[Reverse Geocode] Mapbox error:', mbErr.message);
+      }
+    }
+
+    // Clean up Plus Codes or raw segment numbers in plotNo
+    if (plotNo && (/^\d{3,}$/.test(plotNo) || /^[A-Z0-9]{4,8}\+/i.test(plotNo))) {
+      plotNo = '';
+    }
+
+    const area = [colony, suburb].filter(Boolean).join(', ') || city;
+    const shortAddress = [colony || street, suburb || city].filter(Boolean).join(', ') || area;
+    const fullParts = [plotNo, street, colony, suburb, city, pincode].filter(Boolean);
+    const fullAddress = fullParts.join(', ') || `${city}, ${state}`;
+
+    return res.json({
+      success: true,
+      location: {
+        lat: latFloat,
+        lon: lonFloat,
+        plotNo,
+        street,
+        area,
+        landmark,
+        city,
+        state,
+        pincode,
+        fullAddress,
+        shortAddress
+      }
+    });
 
     // Fallback using coordinates (Never a hardcoded fake location)
     res.json({

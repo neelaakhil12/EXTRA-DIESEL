@@ -475,9 +475,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onLogout, on
           </View>
         </View>
 
-        {/* Personal & Business Form */}
+        {/* Personal Form */}
         <View style={styles.card}>
-          <Text style={styles.formSectionHeading}>Personal & Company Information</Text>
+          <Text style={styles.formSectionHeading}>Personal Information</Text>
 
           <Text style={styles.inputLabel}>Full Name</Text>
           <TextInput
@@ -503,31 +503,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onLogout, on
             editable={false}
           />
 
-          <Text style={styles.inputLabel}>Company / Business Name</Text>
-          <TextInput
-            style={styles.textInput}
-            value={editCompany}
-            onChangeText={setEditCompany}
-            placeholder="e.g. Aadhya Fuels & Infra"
-          />
-
-          <Text style={styles.inputLabel}>GSTIN (For B2B Tax Invoicing)</Text>
-          <TextInput
-            style={styles.textInput}
-            value={editGstin}
-            onChangeText={setEditGstin}
-            autoCapitalize="characters"
-            placeholder="e.g. 36AAACE1234F1Z5"
-          />
-
           <TouchableOpacity
             style={styles.saveProfileBtn}
             onPress={() =>
               handleSaveProfile({
                 name: editName,
                 phone: editPhone,
-                company: editCompany,
-                gstin: editGstin,
               })
             }
             disabled={isSaving}

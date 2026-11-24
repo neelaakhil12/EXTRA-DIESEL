@@ -118,13 +118,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
                   <Ionicons name="flame" size={22} color={COLORS.secondary} />
                 </View>
                 <View style={styles.rateLeftTextWrap}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={styles.rateSubtitle}>Today's Live Rate ({rateCity})</Text>
-                    <View style={styles.qualityBadge}>
-                      <Ionicons name="shield-checkmark" size={11} color="#10B981" />
-                      <Text style={styles.qualityBadgeText}>Quality Assured</Text>
-                    </View>
-                  </View>
+                  <Text style={styles.rateSubtitle}>Today's Live Rate ({rateCity})</Text>
                   <Text style={styles.rateTitle} numberOfLines={1}>
                     BS-VI High Speed Diesel
                   </Text>
@@ -214,7 +208,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
           </View>
         </TouchableOpacity>
 
-        {/* Card 3: Subscription */}
+        {/* Card 3: Schedule Delivery */}
         <TouchableOpacity
           style={[styles.serviceCard, isDesktop && styles.desktopServiceCard]}
           onPress={() => onNavigate('subscription')}
@@ -223,14 +217,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
           <View style={[styles.serviceIconCircle, { backgroundColor: '#E0E7FF' }]}>
             <Ionicons name="calendar" size={24} color="#4F46E5" />
           </View>
-          <Text style={styles.serviceTitle}>Subscription</Text>
-          <Text style={styles.serviceDesc}>Scheduled auto-refill</Text>
+          <Text style={styles.serviceTitle}>Schedule Delivery</Text>
+          <Text style={styles.serviceDesc}>Plan your delivery</Text>
           <View style={styles.cardArrow}>
             <Ionicons name="chevron-forward" size={16} color="#4F46E5" />
           </View>
         </TouchableOpacity>
 
-        {/* Card 4: Live Track */}
+        {/* Card 4: Track Order */}
         <TouchableOpacity
           style={[styles.serviceCard, isDesktop && styles.desktopServiceCard]}
           onPress={() => onNavigate('track')}
@@ -239,8 +233,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
           <View style={[styles.serviceIconCircle, { backgroundColor: '#D1FAE5' }]}>
             <Ionicons name="location" size={24} color={COLORS.greenDark} />
           </View>
-          <Text style={styles.serviceTitle}>Track Bowser</Text>
-          <Text style={styles.serviceDesc}>Live GPS tracking</Text>
+          <Text style={styles.serviceTitle}>Track Order</Text>
+          <Text style={styles.serviceDesc}>Live tracking</Text>
           <View style={styles.cardArrow}>
             <Ionicons name="chevron-forward" size={16} color={COLORS.greenDark} />
           </View>
