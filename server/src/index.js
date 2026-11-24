@@ -480,6 +480,108 @@ app.get('/api/location/reverse-geocode', async (req, res) => {
   }
 });
 
+// Location Search / Autocomplete Endpoint (Mapbox Places + OSM fallback)
+app.get('/api/location/search', async (req, res) => {
+  try {
+    const { query } = req.query;
+    if (!query || query.trim().length < 2) {
+      return res.json({ success: true, results: [] });
+    }
+
+    const q = query.trim();
+    const mapboxToken = process.env.MAPBOX_ACCESS_TOKEN;
+
+    if (mapboxToken) {
+      try {
+        const mbUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?access_token=${mapboxToken}&country=IN&proximity=78.4867,17.3850&types=poi,address,neighborhood,locality,place`;
+        const mbRes = await fetch(mbUrl);
+        if (mbRes.ok) {
+          const mbData = await mbRes.json();
+          if (mbData.features && mbData.features.length > 0) {
+            const results = mbData.features.map(f => {
+              const ctx = f.context || [];
+              let plotNo = f.address || '';
+              let street = f.text || '';
+              let area = '';
+              let city = 'Hyderabad';
+              let state = 'Telangana';
+              let pincode = '';
+              let landmark = '';
+
+              ctx.forEach(c => {
+                if (c.id.startsWith('postcode')) pincode = c.text;
+                else if (c.id.startsWith('neighborhood') || c.id.startsWith('locality')) area = c.text;
+                else if (c.id.startsWith('place')) city = c.text;
+                else if (c.id.startsWith('region')) state = c.text;
+              });
+
+              if (f.place_type && f.place_type.includes('poi')) {
+                landmark = f.text;
+              }
+
+              return {
+                id: f.id,
+                name: f.text,
+                placeName: f.place_name,
+                lat: f.center[1],
+                lon: f.center[0],
+                plotNo,
+                street,
+                area: area || f.text,
+                landmark,
+                city,
+                state,
+                pincode,
+              };
+            });
+            return res.json({ success: true, results });
+          }
+        }
+      } catch (mbErr) {
+        console.warn('[Location Search] Mapbox search error:', mbErr.message);
+      }
+    }
+
+    // Fallback: OpenStreetMap Nominatim
+    try {
+      const osmUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q + ', Hyderabad')}&countrycodes=in&limit=5&addressdetails=1`;
+      const osmRes = await fetch(osmUrl, {
+        headers: {
+          'User-Agent': 'ExtraDieselApp/1.0 (contact@extradiesel.in)',
+          'Accept-Language': 'en'
+        }
+      });
+      if (osmRes.ok) {
+        const data = await osmRes.json();
+        const results = (data || []).map((item, idx) => {
+          const a = item.address || {};
+          return {
+            id: `osm-${idx}-${item.place_id || idx}`,
+            name: item.display_name.split(',')[0],
+            placeName: item.display_name,
+            lat: parseFloat(item.lat),
+            lon: parseFloat(item.lon),
+            plotNo: a.house_number || a.building || '',
+            street: a.road || a.pedestrian || a.street || '',
+            area: a.suburb || a.neighbourhood || a.residential || '',
+            landmark: a.amenity || a.commercial || '',
+            city: a.city || a.town || 'Hyderabad',
+            state: a.state || 'Telangana',
+            pincode: a.postcode || '',
+          };
+        });
+        return res.json({ success: true, results });
+      }
+    } catch (osmErr) {
+      console.warn('[Location Search] OSM search error:', osmErr.message);
+    }
+
+    res.json({ success: true, results: [] });
+  } catch (err) {
+    res.status(500).json({ success: false, error: 'Location search failed', details: err.message });
+  }
+});
+
 // Backward compatible Fuel Rate endpoints
 app.get('/api/fuel-rate', (req, res) => {
   currentSettings = loadSettings();

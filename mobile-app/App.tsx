@@ -9,6 +9,7 @@ import {
   BackHandler,
   Platform,
   StatusBar,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -648,7 +649,7 @@ function MainApp() {
 
         {/* Global Delivery Location Pin Modal (Prompts only on Home screen after login, and accessible via Header pill) */}
         <LocationModal
-          visible={showLocationModal && currentScreen === 'home'}
+          visible={showLocationModal}
           onClose={() => setShowLocationModal(false)}
           onSaveLocation={(loc) => {
             setDeliveryLocation(loc);

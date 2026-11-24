@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -38,6 +38,21 @@ interface LocationModalProps {
   currentLocation?: SavedLocation | null;
 }
 
+interface PlaceSearchResult {
+  id: string;
+  name: string;
+  placeName: string;
+  lat: number;
+  lon: number;
+  plotNo?: string;
+  street?: string;
+  area?: string;
+  landmark?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+}
+
 export const LocationModal: React.FC<LocationModalProps> = ({
   visible,
   onClose,
@@ -50,56 +65,180 @@ export const LocationModal: React.FC<LocationModalProps> = ({
   const [landmark, setLandmark] = useState(currentLocation?.landmark || '');
   const [city, setCity] = useState(currentLocation?.city || 'Hyderabad');
   const [pincode, setPincode] = useState(currentLocation?.pincode || '');
+  const [coords, setCoords] = useState<{ lat?: number; lon?: number }>({
+    lat: currentLocation?.lat,
+    lon: currentLocation?.lon,
+  });
+
+  // Place Search & Autocomplete
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<PlaceSearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const searchTimeoutRef = useRef<any>(null);
+
   const [isLocating, setIsLocating] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
 
   const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'https://extradiesel.in';
   const mapboxToken = APP_CONFIG.MAPBOX_ACCESS_TOKEN || '';
 
+  // Handle Search Input with Debounce
+  const handleSearchChange = (text: string) => {
+    setSearchQuery(text);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+
+    if (text.trim().length < 2) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    searchTimeoutRef.current = setTimeout(async () => {
+      await performPlaceSearch(text.trim());
+    }, 350);
+  };
+
+  const performPlaceSearch = async (query: string) => {
+    try {
+      // 1. Direct Mapbox Places API
+      if (mapboxToken) {
+        const mbUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxToken}&country=IN&proximity=78.4867,17.3850&types=poi,address,neighborhood,locality,place`;
+        const mbRes = await fetch(mbUrl);
+        if (mbRes.ok) {
+          const mbData = await mbRes.json();
+          if (mbData.features && mbData.features.length > 0) {
+            const results: PlaceSearchResult[] = mbData.features.map((f: any) => {
+              const ctx = f.context || [];
+              let pNo = f.address || '';
+              let st = f.text || '';
+              let ar = '';
+              let ct = 'Hyderabad';
+              let pin = '';
+              let lm = '';
+
+              ctx.forEach((c: any) => {
+                if (c.id.startsWith('postcode')) pin = c.text;
+                else if (c.id.startsWith('neighborhood') || c.id.startsWith('locality')) ar = c.text;
+                else if (c.id.startsWith('place')) ct = c.text;
+              });
+
+              if (f.place_type && f.place_type.includes('poi')) {
+                lm = f.text;
+              }
+
+              return {
+                id: f.id,
+                name: f.text,
+                placeName: f.place_name,
+                lat: f.center[1],
+                lon: f.center[0],
+                plotNo: pNo,
+                street: st,
+                area: ar || f.text,
+                landmark: lm,
+                city: ct,
+                pincode: pin,
+              };
+            });
+            setSearchResults(results);
+            setIsSearching(false);
+            return;
+          }
+        }
+      }
+
+      // 2. Fallback to Backend Search API
+      const res = await fetch(`${baseUrl}/api/location/search?query=${encodeURIComponent(query)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.results) {
+          setSearchResults(data.results);
+          setIsSearching(false);
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('Place search error:', e);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleSelectSearchResult = (item: PlaceSearchResult) => {
+    setPlotNo(item.plotNo || '');
+    setStreet(item.street || item.name || '');
+    setArea(item.area || item.name || '');
+    setLandmark(item.landmark || '');
+    setCity(item.city || 'Hyderabad');
+    setPincode(item.pincode || '');
+    setCoords({ lat: item.lat, lon: item.lon });
+    setSearchResults([]);
+    setSearchQuery('');
+    setStatusMessage(`📍 Pinned: ${item.name} (${item.lat.toFixed(4)}, ${item.lon.toFixed(4)})`);
+    setTimeout(() => setStatusMessage(''), 4000);
+  };
+
+  const handleClearForm = () => {
+    setPlotNo('');
+    setStreet('');
+    setArea('');
+    setLandmark('');
+    setCity('Hyderabad');
+    setPincode('');
+    setCoords({});
+    setSearchQuery('');
+    setSearchResults([]);
+    setStatusMessage('Form cleared. Search or type your exact address.');
+    setTimeout(() => setStatusMessage(''), 3000);
+  };
+
   // Apply location details from coordinates using Mapbox + Backend
   const applyCoordinatesLocation = async (latitude: number, longitude: number) => {
     try {
       setStatusMessage('Pinning exact street, colony & landmark...');
+      setCoords({ lat: latitude, lon: longitude });
 
       // 1. Direct Mapbox Places API (Accurate rooftop / address / locality detection)
-      const mbUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${longitude},${latitude}.json?access_token=${mapboxToken}&types=address,poi,neighborhood,locality,place,postcode`;
-      const mbRes = await fetch(mbUrl);
+      if (mapboxToken) {
+        const mbUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${longitude},${latitude}.json?access_token=${mapboxToken}&types=address,poi,neighborhood,locality,place,postcode`;
+        const mbRes = await fetch(mbUrl);
 
-      if (mbRes.ok) {
-        const mbData = await mbRes.json();
-        if (mbData.features && mbData.features.length > 0) {
-          const feat = mbData.features[0];
-          const ctx = feat.context || [];
+        if (mbRes.ok) {
+          const mbData = await mbRes.json();
+          if (mbData.features && mbData.features.length > 0) {
+            const feat = mbData.features[0];
+            const ctx = feat.context || [];
 
-          let pNo = feat.address || '';
-          let st = feat.text || '';
-          let ar = '';
-          let lm = '';
-          let ct = 'Hyderabad';
-          let pin = '';
+            let pNo = feat.address || '';
+            let st = feat.text || '';
+            let ar = '';
+            let lm = '';
+            let ct = 'Hyderabad';
+            let pin = '';
 
-          ctx.forEach((c: any) => {
-            if (c.id.startsWith('postcode')) pin = c.text;
-            else if (c.id.startsWith('neighborhood') || c.id.startsWith('locality')) ar = c.text;
-            else if (c.id.startsWith('place')) ct = c.text;
-          });
+            ctx.forEach((c: any) => {
+              if (c.id.startsWith('postcode')) pin = c.text;
+              else if (c.id.startsWith('neighborhood') || c.id.startsWith('locality')) ar = c.text;
+              else if (c.id.startsWith('place')) ct = c.text;
+            });
 
-          // Check for nearby landmark / establishment feature
-          const poi = mbData.features.find((f: any) => f.place_type && f.place_type.includes('poi'));
-          if (poi && poi.text) {
-            lm = poi.text;
+            const poi = mbData.features.find((f: any) => f.place_type && f.place_type.includes('poi'));
+            if (poi && poi.text) {
+              lm = poi.text;
+            }
+
+            setPlotNo(pNo);
+            setStreet(st);
+            setArea(ar || ct);
+            setLandmark(lm);
+            setCity(ct);
+            setPincode(pin);
+
+            setStatusMessage(`Exact GPS location pinned (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`);
+            setTimeout(() => setStatusMessage(''), 4000);
+            return;
           }
-
-          setPlotNo(pNo);
-          setStreet(st);
-          setArea(ar || ct);
-          setLandmark(lm);
-          setCity(ct);
-          setPincode(pin);
-
-          setStatusMessage('Exact GPS location detected successfully!');
-          setTimeout(() => setStatusMessage(''), 3000);
-          return;
         }
       }
     } catch (e) {
@@ -121,8 +260,8 @@ export const LocationModal: React.FC<LocationModalProps> = ({
         setLandmark(loc.landmark || '');
         setCity(loc.city || 'Hyderabad');
         setPincode(loc.pincode || '');
-        setStatusMessage('Exact GPS location detected successfully!');
-        setTimeout(() => setStatusMessage(''), 3000);
+        setStatusMessage(`GPS pinned (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`);
+        setTimeout(() => setStatusMessage(''), 4000);
         return;
       }
     } catch (e2) {
@@ -155,8 +294,8 @@ export const LocationModal: React.FC<LocationModalProps> = ({
 
         const lat = loc.coords.latitude;
         const lon = loc.coords.longitude;
+        setCoords({ lat, lon });
 
-        // Try native Android geocoder first for instant rooftop details
         try {
           const nativeAddresses = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lon });
           if (nativeAddresses && nativeAddresses.length > 0) {
@@ -231,6 +370,8 @@ export const LocationModal: React.FC<LocationModalProps> = ({
       pincode: pincode.trim(),
       fullAddress: full,
       shortAddress: [plotNo, street || area].filter(Boolean).join(', ') || area || city,
+      lat: coords?.lat,
+      lon: coords?.lon,
     };
 
     onSaveLocation(saved);
@@ -257,7 +398,67 @@ export const LocationModal: React.FC<LocationModalProps> = ({
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+          <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            {/* 1. Fast Location Search & Autocomplete Bar */}
+            <View style={styles.searchSection}>
+              <View style={styles.searchHeaderRow}>
+                <Text style={styles.fieldSectionHeading}>Search Area, Colony or Landmark</Text>
+                <TouchableOpacity onPress={handleClearForm} style={styles.clearFormBtn}>
+                  <Ionicons name="trash-outline" size={13} color="#EF4444" />
+                  <Text style={styles.clearFormText}>Clear Form</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.searchBar}>
+                <Ionicons name="search" size={18} color="#64748B" style={{ marginRight: 8 }} />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="e.g. Madhapur, Kondapur, Kukatpally, Gachibowli..."
+                  placeholderTextColor="#94A3B8"
+                  value={searchQuery}
+                  onChangeText={handleSearchChange}
+                />
+                {isSearching ? (
+                  <ActivityIndicator size="small" color={COLORS.primary} />
+                ) : searchQuery.length > 0 ? (
+                  <TouchableOpacity onPress={() => { setSearchQuery(''); setSearchResults([]); }}>
+                    <Ionicons name="close-circle" size={18} color="#94A3B8" />
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+
+              {/* Autocomplete Dropdown */}
+              {searchResults.length > 0 && (
+                <View style={styles.resultsDropdown}>
+                  {searchResults.map((item) => (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={styles.resultItem}
+                      onPress={() => handleSelectSearchResult(item)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.resultIconWrap}>
+                        <Ionicons name="location-sharp" size={16} color={COLORS.primary} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.resultTitle}>{item.name}</Text>
+                        <Text style={styles.resultSubtitle} numberOfLines={2}>
+                          {item.placeName}
+                        </Text>
+                      </View>
+                      <Ionicons name="arrow-forward-circle-outline" size={18} color="#94A3B8" />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+
+            {/* Divider */}
+            <View style={styles.dividerRow}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>OR AUTO-DETECT</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
             {/* Locate Me Primary Action Button */}
             <TouchableOpacity
               style={styles.locateMeBtn}
@@ -277,15 +478,35 @@ export const LocationModal: React.FC<LocationModalProps> = ({
               <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.7)" />
             </TouchableOpacity>
 
+            {/* Desktop browser notice */}
+            {Platform.OS === 'web' && (
+              <View style={styles.desktopGpsNotice}>
+                <Ionicons name="information-circle-outline" size={14} color="#64748B" />
+                <Text style={styles.desktopGpsNoticeText}>
+                  On PC/Laptop browsers, Wi-Fi location can resolve to your ISP telecom node (e.g. BN Reddy / Almasguda). Use the Search bar above or edit fields below for exact doorstep delivery.
+                </Text>
+              </View>
+            )}
+
             {statusMessage ? (
               <View style={styles.statusBox}>
-                <Ionicons name="information-circle" size={16} color="#059669" />
+                <Ionicons name="checkmark-circle" size={16} color="#059669" />
                 <Text style={styles.statusBoxText}>{statusMessage}</Text>
               </View>
             ) : null}
 
             {/* Address Fields Form */}
-            <Text style={styles.fieldSectionHeading}>Delivery Address & Landmark Details</Text>
+            <View style={styles.addressFormHeaderRow}>
+              <Text style={styles.fieldSectionHeading}>Delivery Address & Landmark Details</Text>
+              {coords.lat && coords.lon && (
+                <View style={styles.coordsBadge}>
+                  <Ionicons name="locate" size={12} color="#059669" />
+                  <Text style={styles.coordsBadgeText}>
+                    GPS: {coords.lat.toFixed(4)}, {coords.lon.toFixed(4)}
+                  </Text>
+                </View>
+              )}
+            </View>
 
             <View style={styles.fieldRow}>
               <View style={{ flex: 1 }}>
@@ -430,15 +651,111 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 10,
   },
+  searchSection: {
+    marginBottom: 14,
+  },
+  searchHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  clearFormBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: '#FEF2F2',
+  },
+  clearFormText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#EF4444',
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 13.5,
+    color: '#0F172A',
+  },
+  resultsDropdown: {
+    marginTop: 6,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    maxHeight: 220,
+  },
+  resultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  resultIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FEF2F2',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  resultTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  resultSubtitle: {
+    fontSize: 11.5,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 10,
+    gap: 10,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E2E8F0',
+  },
+  dividerText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#94A3B8',
+    letterSpacing: 0.5,
+  },
   locateMeBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     backgroundColor: COLORS.primary,
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 13,
     borderRadius: 12,
-    marginBottom: 14,
+    marginBottom: 8,
     shadowColor: COLORS.primary,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.25,
@@ -447,13 +764,30 @@ const styles = StyleSheet.create({
   },
   locateMeBtnText: {
     color: COLORS.white,
-    fontSize: 15,
+    fontSize: 14.5,
     fontWeight: '800',
   },
   locateMeBtnSub: {
     color: 'rgba(255,255,255,0.85)',
-    fontSize: 11.5,
+    fontSize: 11,
     marginTop: 2,
+  },
+  desktopGpsNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    padding: 8,
+    marginBottom: 12,
+  },
+  desktopGpsNoticeText: {
+    fontSize: 11,
+    color: '#64748B',
+    lineHeight: 15,
+    flex: 1,
   },
   statusBox: {
     flexDirection: 'row',
@@ -472,41 +806,35 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     flex: 1,
   },
+  addressFormHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+    marginTop: 4,
+  },
   fieldSectionHeading: {
-    fontSize: 12.5,
+    fontSize: 12,
     fontWeight: '800',
     color: '#475569',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: 8,
-    marginTop: 6,
   },
-  siteTypeScroll: {
-    marginBottom: 14,
-  },
-  siteTypeChip: {
+  coordsBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#F8FAFC',
+    gap: 4,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
-    marginRight: 8,
+    borderColor: '#A7F3D0',
   },
-  siteTypeChipActive: {
-    backgroundColor: '#0F172A',
-    borderColor: '#0F172A',
-  },
-  siteTypeChipText: {
-    fontSize: 12.5,
+  coordsBadgeText: {
+    fontSize: 10.5,
     fontWeight: '700',
-    color: '#334155',
-  },
-  siteTypeChipTextActive: {
-    color: COLORS.white,
+    color: '#065F46',
   },
   fieldRow: {
     flexDirection: 'row',
