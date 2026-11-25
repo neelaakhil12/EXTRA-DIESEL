@@ -54,6 +54,8 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({
   const [googleMapsLink, setGoogleMapsLink] = useState<string>(
     deliveryLocation?.locationLink || ''
   );
+  const [pastedMapsLink, setPastedMapsLink] = useState<string>('');
+  const [isResolvingLink, setIsResolvingLink] = useState<boolean>(false);
   const [isLocating, setIsLocating] = useState<boolean>(false);
   const [locateStatus, setLocateStatus] = useState<string>('');
 
@@ -295,6 +297,56 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({
       setTimeout(() => setLocateStatus(''), 3000);
     } finally {
       setIsLocating(false);
+    }
+  };
+
+  // Resolve pasted Google Maps link in Checkout
+  const handleResolvePastedLink = async () => {
+    const rawUrl = pastedMapsLink.trim();
+    if (!rawUrl) {
+      Alert.alert('Paste Link', 'Please paste a Google Maps link or coordinates.');
+      return;
+    }
+
+    try {
+      setIsResolvingLink(true);
+      setLocateStatus('Extracting GPS site address from link...');
+      const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'https://extradiesel.in';
+
+      const res = await fetch(`${baseUrl}/api/location/resolve-link?url=${encodeURIComponent(rawUrl)}`);
+      const data = await res.json();
+
+      if (data.success && data.fullAddress) {
+        setDeliveryAddress(data.fullAddress);
+        setGoogleMapsLink(data.mapsLink || rawUrl);
+        setLocateStatus(`📍 Pinned: ${data.shortAddress || data.fullAddress}`);
+        setPastedMapsLink('');
+        setTimeout(() => setLocateStatus(''), 4500);
+      } else {
+        const coordMatch = rawUrl.match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
+        if (coordMatch) {
+          const lat = parseFloat(coordMatch[1]);
+          const lon = parseFloat(coordMatch[2]);
+          if (!isNaN(lat) && !isNaN(lon)) {
+            const geoRes = await fetch(`${baseUrl}/api/location/reverse-geocode?lat=${lat}&lon=${lon}`);
+            const geoData = await geoRes.json();
+            const addr = geoData.success && geoData.location ? (geoData.location.fullAddress || geoData.location.area) : `GPS Site (${lat.toFixed(5)}, ${lon.toFixed(5)})`;
+            setDeliveryAddress(addr);
+            setGoogleMapsLink(`https://maps.google.com/?q=${lat.toFixed(6)},${lon.toFixed(6)}`);
+            setLocateStatus(`📍 Pinned: ${addr}`);
+            setPastedMapsLink('');
+            setTimeout(() => setLocateStatus(''), 4500);
+            return;
+          }
+        }
+        Alert.alert('Notice', data.error || 'Could not resolve the Maps link. Please enter your address manually.');
+        setLocateStatus('');
+      }
+    } catch (e) {
+      Alert.alert('Error', 'Failed to resolve location link.');
+      setLocateStatus('');
+    } finally {
+      setIsResolvingLink(false);
     }
   };
 
@@ -714,6 +766,34 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({
                   <Text style={styles.changeModalBtnText}>Pin Details</Text>
                 </TouchableOpacity>
               )}
+            </View>
+
+            {/* Paste Google Maps Link Sub-bar */}
+            <View style={styles.pasteLinkCheckoutRow}>
+              <TextInput
+                style={styles.pasteLinkCheckoutInput}
+                placeholder="Or paste Google Maps location link..."
+                placeholderTextColor="#94A3B8"
+                value={pastedMapsLink}
+                onChangeText={setPastedMapsLink}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <TouchableOpacity
+                style={[
+                  styles.pasteLinkCheckoutBtn,
+                  (!pastedMapsLink.trim() || isResolvingLink) && styles.pasteLinkCheckoutBtnDisabled,
+                ]}
+                onPress={handleResolvePastedLink}
+                disabled={!pastedMapsLink.trim() || isResolvingLink}
+                activeOpacity={0.8}
+              >
+                {isResolvingLink ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.pasteLinkCheckoutBtnText}>Fetch</Text>
+                )}
+              </TouchableOpacity>
             </View>
 
             {locateStatus ? (
@@ -1279,6 +1359,40 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#059669',
     marginVertical: 4,
+  },
+  pasteLinkCheckoutRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  pasteLinkCheckoutInput: {
+    flex: 1,
+    height: 40,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingHorizontal: 10,
+    fontSize: 12.5,
+    color: '#0F172A',
+  },
+  pasteLinkCheckoutBtn: {
+    backgroundColor: '#DC2626',
+    paddingHorizontal: 14,
+    height: 40,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pasteLinkCheckoutBtnDisabled: {
+    backgroundColor: '#CBD5E1',
+  },
+  pasteLinkCheckoutBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12.5,
+    fontWeight: '700',
   },
   formGrid: {
     flexDirection: 'row',

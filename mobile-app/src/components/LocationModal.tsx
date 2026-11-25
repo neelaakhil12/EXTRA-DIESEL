@@ -59,10 +59,60 @@ export const LocationModal: React.FC<LocationModalProps> = ({
   });
 
   const [isLocating, setIsLocating] = useState(false);
+  const [isResolvingLink, setIsResolvingLink] = useState(false);
+  const [pastedMapsUrl, setPastedMapsUrl] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
 
   const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'https://extradiesel.in';
   const mapboxToken = APP_CONFIG.MAPBOX_ACCESS_TOKEN || '';
+
+  // Resolve pasted Google Maps link into exact coordinates and full structured address
+  const handleResolvePastedLink = async (urlToResolve?: string) => {
+    const rawUrl = (urlToResolve || pastedMapsUrl).trim();
+    if (!rawUrl) {
+      Alert.alert('Paste Link', 'Please paste a Google Maps link or location URL.');
+      return;
+    }
+
+    try {
+      setIsResolvingLink(true);
+      setStatusMessage('Extracting GPS coordinates from Google Maps link...');
+
+      const res = await fetch(`${baseUrl}/api/location/resolve-link?url=${encodeURIComponent(rawUrl)}`);
+      const data = await res.json();
+
+      if (data.success && data.fullAddress) {
+        setAddress(data.fullAddress);
+        setShortAddress(data.shortAddress || '');
+        setLocationLink(data.mapsLink || rawUrl);
+        if (data.lat && data.lon) {
+          setCoords({ lat: data.lat, lon: data.lon });
+        }
+        setStatusMessage(`📍 Pinned from Maps: ${data.shortAddress || data.fullAddress}`);
+        setPastedMapsUrl('');
+        setTimeout(() => setStatusMessage(''), 4500);
+      } else {
+        // Fallback: check if URL contains coordinates directly
+        const coordMatch = rawUrl.match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
+        if (coordMatch) {
+          const lat = parseFloat(coordMatch[1]);
+          const lon = parseFloat(coordMatch[2]);
+          if (!isNaN(lat) && !isNaN(lon)) {
+            await applyCoordinatesLocation(lat, lon);
+            setPastedMapsUrl('');
+            return;
+          }
+        }
+        Alert.alert('Link Resolution', data.error || 'Could not extract site location from the provided link. Please enter address manually.');
+        setStatusMessage('');
+      }
+    } catch (err: any) {
+      Alert.alert('Error', 'Failed to resolve location link. Please check internet connection.');
+      setStatusMessage('');
+    } finally {
+      setIsResolvingLink(false);
+    }
+  };
 
   // Apply location details from coordinates dynamically using Native Geocoder + Server OSM / Mapbox
   const applyCoordinatesLocation = async (latitude: number, longitude: number) => {
@@ -338,6 +388,43 @@ export const LocationModal: React.FC<LocationModalProps> = ({
               <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.7)" />
             </TouchableOpacity>
 
+            {/* Paste Google Maps Link Section */}
+            <View style={styles.pasteLinkCard}>
+              <View style={styles.pasteHeaderRow}>
+                <Ionicons name="link-outline" size={16} color="#DC2626" />
+                <Text style={styles.pasteHeaderText}>OR PASTE GOOGLE MAPS LINK</Text>
+              </View>
+              <Text style={styles.pasteSubText}>
+                Paste any shared Google Maps link (e.g. maps.app.goo.gl/...) to auto-fill exact site
+              </Text>
+              <View style={styles.pasteInputRow}>
+                <TextInput
+                  style={styles.pasteTextInput}
+                  placeholder="Paste Google Maps URL or coordinates..."
+                  placeholderTextColor="#94A3B8"
+                  value={pastedMapsUrl}
+                  onChangeText={setPastedMapsUrl}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <TouchableOpacity
+                  style={[
+                    styles.resolveBtn,
+                    (!pastedMapsUrl.trim() || isResolvingLink) && styles.resolveBtnDisabled,
+                  ]}
+                  onPress={() => handleResolvePastedLink()}
+                  disabled={!pastedMapsUrl.trim() || isResolvingLink}
+                  activeOpacity={0.8}
+                >
+                  {isResolvingLink ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.resolveBtnText}>Fetch</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+
             {/* Pinned Address Feedback Box */}
             {statusMessage ? (
               <View style={styles.statusBox}>
@@ -491,6 +578,64 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.85)',
     fontSize: 11,
     marginTop: 2,
+  },
+  pasteLinkCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 12,
+    marginBottom: 12,
+  },
+  pasteHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 3,
+  },
+  pasteHeaderText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#DC2626',
+    letterSpacing: 0.5,
+  },
+  pasteSubText: {
+    fontSize: 11.5,
+    color: '#64748B',
+    marginBottom: 8,
+    lineHeight: 16,
+  },
+  pasteInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  pasteTextInput: {
+    flex: 1,
+    height: 40,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingHorizontal: 10,
+    fontSize: 12.5,
+    color: '#0F172A',
+  },
+  resolveBtn: {
+    backgroundColor: '#DC2626',
+    paddingHorizontal: 14,
+    height: 40,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  resolveBtnDisabled: {
+    backgroundColor: '#CBD5E1',
+  },
+  resolveBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12.5,
+    fontWeight: '700',
   },
   statusBox: {
     flexDirection: 'row',

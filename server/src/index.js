@@ -345,6 +345,104 @@ app.post('/api/settings', (req, res) => {
   }
 });
 
+// Endpoint to Resolve and Reverse-Geocode Pasted Google Maps Links (handles maps.app.goo.gl, coords, etc.)
+app.get('/api/location/resolve-link', async (req, res) => {
+  try {
+    const rawUrl = req.query.url;
+    if (!rawUrl || typeof rawUrl !== 'string') {
+      return res.status(400).json({ success: false, error: 'Google Maps URL is required' });
+    }
+
+    let targetUrl = rawUrl.trim();
+    let lat = null;
+    let lon = null;
+
+    // 1. Direct coordinate pattern e.g., "17.313112, 78.545285"
+    const directMatch = targetUrl.match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
+    if (directMatch) {
+      lat = parseFloat(directMatch[1]);
+      lon = parseFloat(directMatch[2]);
+    }
+
+    // 2. If it is a short link like maps.app.goo.gl or goo.gl, follow redirect
+    if ((!lat || !lon) && /goo\.gl|maps\.app\.goo\.gl/i.test(targetUrl)) {
+      try {
+        const headRes = await fetch(targetUrl, {
+          method: 'GET',
+          redirect: 'follow',
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          },
+        });
+        targetUrl = headRes.url || targetUrl;
+      } catch (redirectErr) {
+        console.warn('[Resolve Link] Redirect error:', redirectErr.message);
+      }
+    }
+
+    // 3. Extract coordinates from expanded Google Maps URL patterns
+    if (!lat || !lon) {
+      const atMatch = targetUrl.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+      if (atMatch) {
+        lat = parseFloat(atMatch[1]);
+        lon = parseFloat(atMatch[2]);
+      }
+    }
+    if (!lat || !lon) {
+      const qMatch = targetUrl.match(/(?:q|destination|query|ll)=(-?\d+\.\d+),(-?\d+\.\d+)/);
+      if (qMatch) {
+        lat = parseFloat(qMatch[1]);
+        lon = parseFloat(qMatch[2]);
+      }
+    }
+    if (!lat || !lon) {
+      const dMatch = targetUrl.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/);
+      if (dMatch) {
+        lat = parseFloat(dMatch[1]);
+        lon = parseFloat(dMatch[2]);
+      }
+    }
+
+    if (!lat || !lon) {
+      return res.status(400).json({
+        success: false,
+        error: 'Could not extract GPS coordinates from this Google Maps link. Please verify the URL or drop a GPS pin.',
+      });
+    }
+
+    // Forward to internal reverse-geocode handler for accurate Colony & Address
+    const geoUrl = `http://localhost:${PORT}/api/location/reverse-geocode?lat=${lat}&lon=${lon}`;
+    const geoRes = await fetch(geoUrl);
+    const geoData = await geoRes.json();
+
+    if (geoData.success && geoData.location) {
+      return res.json({
+        success: true,
+        resolvedUrl: targetUrl,
+        location: {
+          ...geoData.location,
+          mapsLink: `https://maps.google.com/?q=${lat.toFixed(6)},${lon.toFixed(6)}`,
+        },
+      });
+    }
+
+    return res.json({
+      success: true,
+      resolvedUrl: targetUrl,
+      location: {
+        lat,
+        lon,
+        fullAddress: `Site Coordinates (${lat.toFixed(6)}, ${lon.toFixed(6)})`,
+        shortAddress: `Site Pin (${lat.toFixed(4)}, ${lon.toFixed(4)})`,
+        mapsLink: `https://maps.google.com/?q=${lat.toFixed(6)},${lon.toFixed(6)}`,
+      },
+    });
+  } catch (err) {
+    console.error('[Resolve Link Error]:', err);
+    res.status(500).json({ success: false, error: err.message || 'Internal link resolver error' });
+  }
+});
+
 // 3. Location Reverse-Geocoding (Mapbox Geocoding API with OSM Nominatim fallback for pinpoint accuracy)
 app.get('/api/location/reverse-geocode', async (req, res) => {
   try {

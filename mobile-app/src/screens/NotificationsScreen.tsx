@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   Platform,
   Alert,
+  Animated,
+  PanResponder,
   useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,6 +25,115 @@ interface NotificationsScreenProps {
   onNavigate: (screen: ScreenName) => void;
   onSelectOrder?: (orderId: string) => void;
 }
+
+interface SwipeableNotificationItemProps {
+  item: AppNotification;
+  onPress: () => void;
+  onDelete: () => void;
+  iconMeta: { name: keyof typeof Ionicons.glyphMap; color: string; bg: string };
+}
+
+const SwipeableNotificationItem: React.FC<SwipeableNotificationItemProps> = ({
+  item,
+  onPress,
+  onDelete,
+  iconMeta,
+}) => {
+  const pan = useRef(new Animated.ValueXY()).current;
+  const isSwipingRef = useRef(false);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dx) > 12 && Math.abs(gestureState.dy) < 12;
+      },
+      onPanResponderGrant: () => {
+        isSwipingRef.current = true;
+      },
+      onPanResponderMove: (_, gestureState) => {
+        pan.setValue({ x: gestureState.dx, y: 0 });
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        setTimeout(() => {
+          isSwipingRef.current = false;
+        }, 50);
+
+        if (Math.abs(gestureState.dx) > 85) {
+          const toX = gestureState.dx > 0 ? 500 : -500;
+          Animated.timing(pan, {
+            toValue: { x: toX, y: 0 },
+            duration: 180,
+            useNativeDriver: Platform.OS !== 'web',
+          }).start(() => {
+            onDelete();
+          });
+        } else {
+          Animated.spring(pan, {
+            toValue: { x: 0, y: 0 },
+            friction: 7,
+            tension: 40,
+            useNativeDriver: Platform.OS !== 'web',
+          }).start();
+        }
+      },
+    })
+  ).current;
+
+  return (
+    <View style={styles.swipeContainer}>
+      <View style={styles.swipeBackground}>
+        <View style={styles.swipeActionLeft}>
+          <Ionicons name="trash-outline" size={18} color="#FFFFFF" />
+          <Text style={styles.swipeActionText}>Clear</Text>
+        </View>
+        <View style={styles.swipeActionRight}>
+          <Text style={styles.swipeActionText}>Clear</Text>
+          <Ionicons name="trash-outline" size={18} color="#FFFFFF" />
+        </View>
+      </View>
+
+      <Animated.View
+        style={[
+          styles.notifCard,
+          {
+            transform: [{ translateX: pan.x }],
+          },
+        ]}
+        {...panResponder.panHandlers}
+      >
+        <TouchableOpacity
+          style={styles.notifCardTouch}
+          onPress={() => {
+            if (!isSwipingRef.current) onPress();
+          }}
+          activeOpacity={0.85}
+        >
+          <View style={[styles.notifIconWrap, { backgroundColor: iconMeta.bg }]}>
+            <Ionicons name={iconMeta.name} size={20} color={iconMeta.color} />
+          </View>
+
+          <View style={styles.notifBody}>
+            <View style={styles.titleRow}>
+              <Text style={styles.notifTitle} numberOfLines={1}>
+                {item.title}
+              </Text>
+              <Text style={styles.notifTime}>{item.date}</Text>
+            </View>
+            <Text style={styles.notifDesc}>{item.body}</Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.deleteBtn}
+            onPress={onDelete}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="trash-outline" size={17} color="#94A3B8" />
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Animated.View>
+    </View>
+  );
+};
 
 export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
   onNavigate,
@@ -150,7 +261,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
         )}
       </View>
 
-      {/* Notifications List */}
+      {/* Notifications List with Left/Right Swipe to Clear */}
       {notifications.length === 0 ? (
         <View style={styles.emptyCard}>
           <View style={styles.emptyCircle}>
@@ -170,39 +281,21 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
           </TouchableOpacity>
         </View>
       ) : (
-        notifications.map((item) => {
-          const iconMeta = getNotifIcon(item.type);
-          return (
-            <TouchableOpacity
-              key={item.id}
-              style={styles.notifCard}
-              onPress={() => handleNotificationPress(item)}
-              activeOpacity={0.85}
-            >
-              <View style={[styles.notifIconWrap, { backgroundColor: iconMeta.bg }]}>
-                <Ionicons name={iconMeta.name} size={20} color={iconMeta.color} />
-              </View>
-
-              <View style={styles.notifBody}>
-                <View style={styles.titleRow}>
-                  <Text style={styles.notifTitle} numberOfLines={1}>
-                    {item.title}
-                  </Text>
-                  <Text style={styles.notifTime}>{item.date}</Text>
-                </View>
-                <Text style={styles.notifDesc}>{item.body}</Text>
-              </View>
-
-              <TouchableOpacity
-                style={styles.deleteBtn}
-                onPress={() => handleDelete(item.id)}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="trash-outline" size={17} color="#94A3B8" />
-              </TouchableOpacity>
-            </TouchableOpacity>
-          );
-        })
+        <>
+          <Text style={styles.swipeHintText}>👈 Swipe left or right to clear notification 👉</Text>
+          {notifications.map((item) => {
+            const iconMeta = getNotifIcon(item.type);
+            return (
+              <SwipeableNotificationItem
+                key={item.id}
+                item={item}
+                onPress={() => handleNotificationPress(item)}
+                onDelete={() => handleDelete(item.id)}
+                iconMeta={iconMeta}
+              />
+            );
+          })}
+        </>
       )}
     </ScrollView>
   );
@@ -314,12 +407,8 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   notifCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 14,
-    marginBottom: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     shadowColor: '#000',
@@ -327,6 +416,56 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 3,
     elevation: 2,
+  },
+  swipeContainer: {
+    position: 'relative',
+    marginBottom: 10,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  swipeHintText: {
+    fontSize: 11,
+    color: '#94A3B8',
+    textAlign: 'center',
+    fontWeight: '600',
+    marginBottom: 10,
+    letterSpacing: 0.2,
+  },
+  swipeBackground: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#EF4444',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    borderRadius: 16,
+  },
+  swipeActionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  swipeActionRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  swipeActionText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  notifCardTouch: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFFFFF',
+    padding: 14,
+    borderRadius: 16,
   },
   notifIconWrap: {
     width: 40,

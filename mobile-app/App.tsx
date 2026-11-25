@@ -304,7 +304,26 @@ function MainApp() {
           }
           setCurrentUser((prev) => ({ ...prev, ...user, phone: phone || prev.phone }));
           setIsLoggedIn(true);
+
+          // If logged in as delivery partner, ALWAYS keep them on captain dashboard (never customer screen or location modal)
+          if (user.role === 'delivery') {
+            setScreenStack(['delivery']);
+            return;
+          }
+
+          if (
+            Platform.OS === 'web' &&
+            typeof window !== 'undefined' &&
+            (window.location.pathname === '/admin' || window.location.pathname.startsWith('/admin')) &&
+            user.role === 'admin'
+          ) {
+            setScreenStack(['admin']);
+            return;
+          }
+
+          // Customer role -> Home screen & prompt delivery location
           setScreenStack(['home']);
+          setTimeout(() => setShowLocationModal(true), 600);
           return;
         }
       }
@@ -314,6 +333,7 @@ function MainApp() {
 
     if (isLoggedIn) {
       setScreenStack(['home']);
+      setTimeout(() => setShowLocationModal(true), 600);
     } else {
       setScreenStack(['welcome']);
     }
