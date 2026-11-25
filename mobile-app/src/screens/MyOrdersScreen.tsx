@@ -51,7 +51,7 @@ export const MyOrdersScreen: React.FC<MyOrdersScreenProps> = ({
   mode = 'orders',
   currentUser,
 }) => {
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const isDesktop = Platform.OS === 'web' && width >= 768;
   const isInvoiceMode = mode === 'invoices';
 
@@ -511,8 +511,8 @@ export const MyOrdersScreen: React.FC<MyOrdersScreenProps> = ({
               </View>
 
               <ScrollView
-                style={{ flex: 1 }}
-                contentContainerStyle={{ padding: 16, paddingBottom: 36 }}
+                style={{ maxHeight: height * 0.72 }}
+                contentContainerStyle={{ padding: 18, paddingBottom: 28 }}
                 showsVerticalScrollIndicator={true}
               >
                 {/* Brand Strip with Official Logo */}

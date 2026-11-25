@@ -57,9 +57,8 @@ export const Header: React.FC<HeaderProps> = ({
   const insets = useSafeAreaInsets();
   const isDesktop = Platform.OS === 'web' && width >= 768;
 
-  const dynamicPaddingTop = Platform.OS === 'android'
-    ? 10
-    : Math.max(insets.top, 14);
+  // With top status bar spacer handled in App.tsx, dynamicPaddingTop provides clean internal breathing room
+  const dynamicPaddingTop = 10;
 
   const getInitials = (name?: string) => {
     if (!name || !name.trim()) return 'ED';

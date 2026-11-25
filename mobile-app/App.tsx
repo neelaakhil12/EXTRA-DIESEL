@@ -11,7 +11,7 @@ import {
   StatusBar,
   ScrollView,
 } from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from './src/constants/theme';
 import { ScreenName } from './src/types';
@@ -438,6 +438,11 @@ function MainApp() {
     };
   }, []);
 
+  const insets = useSafeAreaInsets();
+  const topInset = Platform.OS === 'android'
+    ? Math.max(insets.top, StatusBar.currentHeight || 28)
+    : insets.top;
+
   useEffect(() => {
     if (Platform.OS === 'android') {
       (StatusBar as any).setBackgroundColor?.('#FFFFFF');
@@ -450,6 +455,11 @@ function MainApp() {
     <DeviceFrame>
       <View style={styles.container}>
         <StatusBar barStyle="dark-content" />
+
+        {/* Top Status Bar Spacer - Keeps status bar in standard phone color (#FFFFFF) and prevents red bleed */}
+        {showHeader && topInset > 0 && (
+          <View style={{ height: topInset, backgroundColor: '#FFFFFF', width: '100%' }} />
+        )}
 
         {/* Header */}
         {showHeader && (
