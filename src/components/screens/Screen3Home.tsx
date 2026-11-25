@@ -29,9 +29,9 @@ export const Screen3Home: React.FC = () => {
   const heroSlides = [
     {
       title: 'Automated Smart Bowser',
-      subtitle: 'Mahindra Bolero TG 07 W 3015',
-      badge: 'PESO & ATEX Certified • Calibrated Meter',
-      image: '/assets/vehicle-bolero-side.jpg'
+      subtitle: 'Doorstep High-Speed Fueling Fleet',
+      badge: 'Legal Metrology Certified • Calibrated Meter',
+      image: '/assets/vehicle-bowser-1.jpeg'
     },
     {
       title: 'High-Speed Pure Diesel',
@@ -43,7 +43,7 @@ export const Screen3Home: React.FC = () => {
       title: 'Corporate B2B Fleet',
       subtitle: 'Bulk Slabs & Flexible Credit',
       badge: 'DG Sets • Fleets • Construction',
-      image: '/assets/vehicle-bolero-front.jpg'
+      image: '/assets/vehicle-bowser-2.jpeg'
     }
   ];
 
@@ -265,7 +265,7 @@ export const Screen3Home: React.FC = () => {
                 <span>Our Mobile Bowser Fleet</span>
               </div>
               <h3 className="text-sm font-extrabold text-slate-900">
-                Mahindra Bolero Smart Bowser (TG 07 W 3015)
+                Automated Mobile Fueling Bowser Fleet
               </h3>
             </div>
             <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">
@@ -277,8 +277,8 @@ export const Screen3Home: React.FC = () => {
           <div className="grid grid-cols-2 gap-2">
             <div className="relative rounded-xl overflow-hidden h-28 border border-slate-200 bg-slate-100">
               <img
-                src="/assets/vehicle-bolero-side.jpg"
-                alt="Extra Diesel Mahindra Bolero side view"
+                src="/assets/vehicle-bowser-1.jpeg"
+                alt="Extra Diesel Smart Bowser"
                 className="w-full h-full object-cover object-center"
               />
               <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/60 backdrop-blur-md text-white text-[9px] font-bold">
@@ -287,12 +287,12 @@ export const Screen3Home: React.FC = () => {
             </div>
             <div className="relative rounded-xl overflow-hidden h-28 border border-slate-200 bg-slate-100">
               <img
-                src="/assets/vehicle-bolero-front.jpg"
-                alt="Extra Diesel Mahindra Bolero front view"
+                src="/assets/vehicle-bowser-2.jpeg"
+                alt="Extra Diesel Fleet"
                 className="w-full h-full object-cover object-center"
               />
               <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/60 backdrop-blur-md text-white text-[9px] font-bold">
-                TG 07 W 3015
+                GPS Bowser
               </span>
             </div>
           </div>

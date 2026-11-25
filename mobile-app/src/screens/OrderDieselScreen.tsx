@@ -76,21 +76,9 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({
   };
 
   const today = new Date();
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const dayAfter = new Date(today);
-  dayAfter.setDate(dayAfter.getDate() + 2);
-
   const [selectedDate, setSelectedDate] = useState<string>(formatDateDisplay(today));
   const [showCalendarModal, setShowCalendarModal] = useState<boolean>(false);
   const [calendarMonth, setCalendarMonth] = useState<Date>(new Date(today.getFullYear(), today.getMonth(), 1));
-
-  const quickDateOptions = [
-    { label: 'Today', dateStr: formatDateShort(today), formatted: formatDateDisplay(today) },
-    { label: 'Tomorrow', dateStr: formatDateShort(tomorrow), formatted: formatDateDisplay(tomorrow) },
-    { label: '+2 Days', dateStr: formatDateShort(dayAfter), formatted: formatDateDisplay(dayAfter) },
-  ];
-  const isCustomDateSelected = !quickDateOptions.some((q) => q.formatted === selectedDate);
 
   // Helper for rendering days in month calendar
   const renderCalendarDays = () => {
@@ -597,49 +585,32 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({
               <Text style={styles.cardTitle}>Preferred Delivery Date</Text>
             </View>
 
-            <View style={styles.dateChipsRow}>
-              {quickDateOptions.map((q) => {
-                const isSelected = selectedDate === q.formatted;
-                return (
-                  <TouchableOpacity
-                    key={q.label}
-                    style={[styles.dateChip, isSelected && styles.dateChipActive]}
-                    onPress={() => setSelectedDate(q.formatted)}
-                    activeOpacity={0.75}
-                  >
-                    <Text style={[styles.dateChipLabel, isSelected && styles.dateChipLabelActive]}>
-                      {q.label}
-                    </Text>
-                    <Text style={[styles.dateChipSub, isSelected && styles.dateChipSubActive]}>
-                      {q.dateStr}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-              <TouchableOpacity
-                style={[styles.dateChip, isCustomDateSelected && styles.dateChipActive]}
-                onPress={() => setShowCalendarModal(true)}
-                activeOpacity={0.75}
-              >
-                <Ionicons
-                  name="calendar-outline"
-                  size={16}
-                  color={isCustomDateSelected ? '#FFFFFF' : COLORS.primary}
-                />
-                <Text style={[styles.dateChipLabel, isCustomDateSelected && styles.dateChipLabelActive]}>
-                  {isCustomDateSelected ? selectedDate.split(' ').slice(0, 2).join(' ') : 'Pick Date'}
-                </Text>
-                <Text style={[styles.dateChipSub, isCustomDateSelected && styles.dateChipSubActive]}>
-                  Calendar
-                </Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              style={styles.calendarPickerCard}
+              onPress={() => setShowCalendarModal(true)}
+              activeOpacity={0.8}
+            >
+              <View style={styles.calendarPickerLeft}>
+                <View style={styles.calendarIconCircle}>
+                  <Ionicons name="calendar" size={20} color="#DC2626" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.calendarPickerSubLabel}>Selected Delivery Date</Text>
+                  <Text style={styles.calendarPickerDateText}>{selectedDate}</Text>
+                </View>
+              </View>
+
+              <View style={styles.calendarPickerBtn}>
+                <Ionicons name="calendar-outline" size={15} color="#FFFFFF" />
+                <Text style={styles.calendarPickerBtnText}>Change Date</Text>
+              </View>
+            </TouchableOpacity>
 
             {/* Selected Date & Slot Confirmation Banner */}
             <View style={styles.scheduleBanner}>
               <Ionicons name="time-outline" size={16} color="#DC2626" />
               <Text style={styles.scheduleBannerText}>
-                Scheduled for <Text style={{ fontWeight: '800' }}>{selectedDate}</Text> during <Text style={{ fontWeight: '800' }}>{selectedSlot}</Text>
+                Scheduled for <Text style={{ fontWeight: '800' }}>{selectedDate}</Text> • <Text style={{ fontWeight: '800' }}>{selectedSlot}</Text>
               </Text>
             </View>
 
@@ -1429,44 +1400,61 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 2,
   },
-  dateChipsRow: {
+  calendarPickerCard: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 10,
-  },
-  dateChip: {
-    flex: 1,
-    minWidth: 70,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    paddingVertical: 10,
-    paddingHorizontal: 8,
+    borderColor: '#DC2626',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 10,
+    shadowColor: '#DC2626',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  calendarPickerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  calendarIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FEF2F2',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  dateChipActive: {
-    backgroundColor: '#DC2626',
-    borderColor: '#DC2626',
-  },
-  dateChipLabel: {
-    fontSize: 12.5,
-    fontWeight: '800',
-    color: '#334155',
-  },
-  dateChipLabelActive: {
-    color: '#FFFFFF',
-  },
-  dateChipSub: {
-    fontSize: 10.5,
+  calendarPickerSubLabel: {
+    fontSize: 11,
     color: '#64748B',
-    marginTop: 2,
     fontWeight: '600',
   },
-  dateChipSubActive: {
-    color: 'rgba(255, 255, 255, 0.9)',
+  calendarPickerDateText: {
+    fontSize: 14.5,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginTop: 2,
+  },
+  calendarPickerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#DC2626',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  calendarPickerBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
   scheduleBanner: {
     flexDirection: 'row',

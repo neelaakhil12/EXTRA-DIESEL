@@ -1393,8 +1393,17 @@ app.post('/api/orders', (req, res) => {
     const totalAmount = parseFloat((subtotal + deliveryFee + tax).toFixed(2));
 
     const now = new Date();
-    const formattedDate = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) +
-      ' • ' + now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    const formattedDate = now.toLocaleDateString('en-GB', {
+      timeZone: 'Asia/Kolkata',
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    }) + ' • ' + now.toLocaleTimeString('en-US', {
+      timeZone: 'Asia/Kolkata',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
 
     const newOrder = {
       id: id || `ED${now.getFullYear()}${Math.floor(100000 + Math.random() * 900000)}`,
@@ -1644,7 +1653,7 @@ app.get('/api/invoice/:orderId/html', (req, res) => {
       <div class="invoice-meta">
         <div class="invoice-title">TAX INVOICE</div>
         <div class="invoice-num">#INV-${order.id}</div>
-        <div class="invoice-date">Date: ${order.date || new Date().toLocaleDateString('en-GB')}</div>
+        <div class="invoice-date">Date: ${order.date || new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' })}</div>
         <div class="badge-paid">✓ PAID VIA RAZORPAY</div>
       </div>
     </div>
@@ -1794,7 +1803,7 @@ app.get('/api/invoice/:orderId/html', (req, res) => {
 app.get('/api/admin/stats', (req, res) => {
   try {
     const allOrders = loadOrders();
-    const today = new Date().toLocaleDateString('en-GB'); // "23/11/2026" or matches date prefix
+    const today = new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' }); // matches Indian date
 
     let totalEarnings = 0;
     let todayEarnings = 0;
@@ -1807,7 +1816,7 @@ app.get('/api/admin/stats', (req, res) => {
         totalEarnings += orderTotal;
 
         // Check if created today
-        const orderDateStr = o.createdAt ? new Date(o.createdAt).toLocaleDateString('en-GB') : '';
+        const orderDateStr = o.createdAt ? new Date(o.createdAt).toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' }) : '';
         if (orderDateStr === today || (o.date && o.date.includes('Today'))) {
           todayEarnings += orderTotal;
         }

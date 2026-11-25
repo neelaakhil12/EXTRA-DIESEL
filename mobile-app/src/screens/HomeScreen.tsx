@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Platform, useWindowDimensions } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 import { ScreenName } from '../types';
@@ -10,7 +11,6 @@ interface HomeScreenProps {
 }
 
 const DEFAULT_VEHICLE_IMAGES = [
-  require('../../assets/images/tanker-welcome.png'),
   require('../../assets/images/vehicle-bowser-1.jpeg'),
   require('../../assets/images/vehicle-bowser-2.jpeg'),
 ];
@@ -22,6 +22,22 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
   const [rateCity, setRateCity] = useState<string>('Hyderabad');
   const [vehicleImages, setVehicleImages] = useState<any[]>(DEFAULT_VEHICLE_IMAGES);
   const [vehicleImgIdx, setVehicleImgIdx] = useState<number>(0);
+
+  // Immediately load cached banners from persistent storage (0ms latency, zero fallback flash)
+  useEffect(() => {
+    AsyncStorage.getItem('ed_cached_banners')
+      .then((cached) => {
+        if (cached) {
+          try {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setVehicleImages(parsed);
+            }
+          } catch (e) {}
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Fetch real-time dynamic diesel price and fleet showcase images from live backend
   useEffect(() => {
@@ -39,9 +55,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
           if (s.vehicleImages && Array.isArray(s.vehicleImages) && s.vehicleImages.length > 0) {
             const parsedImages = s.vehicleImages.map((img: string) => {
               if (typeof img === 'string') {
-                if (img.includes('tanker-welcome')) return DEFAULT_VEHICLE_IMAGES[0];
-                if (img.includes('vehicle-bowser-1.jpeg')) return DEFAULT_VEHICLE_IMAGES[1];
-                if (img.includes('vehicle-bowser-2.jpeg')) return DEFAULT_VEHICLE_IMAGES[2];
+                if (img.includes('vehicle-bowser-1.jpeg')) return DEFAULT_VEHICLE_IMAGES[0];
+                if (img.includes('vehicle-bowser-2.jpeg')) return DEFAULT_VEHICLE_IMAGES[1];
                 if (img.startsWith('http') || img.startsWith('data:')) {
                   return { uri: img };
                 }
@@ -49,6 +64,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
               return DEFAULT_VEHICLE_IMAGES[0];
             });
             setVehicleImages(parsedImages);
+            AsyncStorage.setItem('ed_cached_banners', JSON.stringify(parsedImages)).catch(() => {});
           }
         }
       } catch (err) {

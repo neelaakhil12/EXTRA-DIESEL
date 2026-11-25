@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 import { ScreenName } from '../types';
 import { APP_CONFIG } from '../constants/config';
+import { EXTRA_DIESEL_LOGO_BASE64 } from '../constants/logoBase64';
 
 interface OrderItem {
   id: string;
@@ -166,15 +167,18 @@ export const MyOrdersScreen: React.FC<MyOrdersScreenProps> = ({
 </head>
 <body>
   <div class="header">
-    <div>
-      <div class="brand-title">🔥 EXTRA DIESEL</div>
-      <div class="brand-sub">Aadhya Fuels & Infra • Doorstep Fueling Bowser Fleet</div>
-      <div class="brand-cert">✓ Legal Metrology Certified (Weights & Measures)</div>
+    <div style="display: flex; align-items: center; gap: 14px;">
+      <img src="data:image/png;base64,${EXTRA_DIESEL_LOGO_BASE64}" alt="EXTRA DIESEL" style="width: 52px; height: 52px; object-fit: contain;" />
+      <div>
+        <div class="brand-title">EXTRA DIESEL</div>
+        <div class="brand-sub">Aadhya Fuels & Infra • Doorstep Fueling Bowser Fleet</div>
+        <div class="brand-cert">✓ Legal Metrology Certified (Weights & Measures)</div>
+      </div>
     </div>
     <div class="inv-meta">
       <div class="inv-title">TAX INVOICE</div>
       <div class="inv-num">#INV-${order.id}</div>
-      <div class="inv-date">Date: ${order.date || new Date().toLocaleDateString('en-GB')}</div>
+      <div class="inv-date">Date: ${order.date || new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' })}</div>
       <div class="badge-paid">✓ PAID VIA RAZORPAY</div>
     </div>
   </div>
@@ -311,14 +315,14 @@ export const MyOrdersScreen: React.FC<MyOrdersScreenProps> = ({
             size={22}
             color={COLORS.primary}
           />
-          <View>
+          <View style={{ flex: 1, paddingRight: 4 }}>
             <Text style={styles.bannerTitle}>
               {isInvoiceMode ? 'Tax Invoices & GST Receipts' : 'Fuel Order History'}
             </Text>
-            <Text style={styles.bannerSub}>
+            <Text style={styles.bannerSub} numberOfLines={2}>
               {isInvoiceMode
                 ? 'Download digitally signed 100% compliant GST bills'
-                : 'Track ongoing bowser dispatches & view past fueling trips'}
+                : 'Track ongoing bowsers & view fueling history'}
             </Text>
           </View>
         </View>
@@ -561,18 +565,39 @@ export const MyOrdersScreen: React.FC<MyOrdersScreenProps> = ({
                       ₹{((Number(selectedInvoice.liters) || 200) * (Number(selectedInvoice.fuelRate) || 94.50)).toFixed(2)}
                     </Text>
                   </View>
+                  {Number(selectedInvoice.deliveryFee) > 0 ? (
+                    <View style={styles.tableRow}>
+                      <View style={{ flex: 2 }}>
+                        <Text style={styles.itemTitle}>Doorstep Delivery Fee</Text>
+                        <Text style={styles.itemSub}>SAC: 996511 • Bowser Transport</Text>
+                      </View>
+                      <Text style={[styles.itemText, { flex: 1, textAlign: 'center' }]}>
+                        1 Trip
+                      </Text>
+                      <Text style={[styles.itemText, { flex: 1, textAlign: 'right', fontWeight: '700' }]}>
+                        ₹{Number(selectedInvoice.deliveryFee).toFixed(2)}
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
 
                 {/* Grand Total */}
                 <View style={styles.totalBox}>
                   <View style={styles.totalLine}>
                     <Text style={styles.totalLineLabel}>Taxable Amount:</Text>
-                    <Text style={styles.totalLineVal}>₹{(Number(selectedInvoice.total) * 0.95).toFixed(2)}</Text>
+                    <Text style={styles.totalLineVal}>
+                      ₹{(
+                        (Number(selectedInvoice.liters) || 200) * (Number(selectedInvoice.fuelRate) || 94.50) +
+                        (Number(selectedInvoice.deliveryFee) || 0)
+                      ).toFixed(2)}
+                    </Text>
                   </View>
-                  <View style={styles.totalLine}>
-                    <Text style={styles.totalLineLabel}>GST (5%):</Text>
-                    <Text style={styles.totalLineVal}>₹{(Number(selectedInvoice.total) * 0.05).toFixed(2)}</Text>
-                  </View>
+                  {Number(selectedInvoice.tax) > 0 ? (
+                    <View style={styles.totalLine}>
+                      <Text style={styles.totalLineLabel}>GST (5%):</Text>
+                      <Text style={styles.totalLineVal}>₹{Number(selectedInvoice.tax).toFixed(2)}</Text>
+                    </View>
+                  ) : null}
                   <View style={[styles.totalLine, { borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 8, marginTop: 4 }]}>
                     <Text style={[styles.totalLineLabel, { fontWeight: '900', color: '#0F172A', fontSize: 14 }]}>
                       Grand Total Paid:
