@@ -62,12 +62,29 @@ export const initNotifications = async (onNotificationClicked?: () => void) => {
   }
 };
 
+// Deduplication helper to prevent repeating the exact same notification
+const SENT_KEYS_PREFIX = 'ed_sent_notif_fingerprint_';
+
 // Send Immediate Status Bar Notification (Inside & Outside the App)
 export const sendSystemNotification = async (
   title: string,
   body: string,
   type: 'order' | 'driver' | 'subscription' | 'rate' = 'order'
-): Promise<AppNotification> => {
+): Promise<AppNotification | null> => {
+  // Generate a fingerprint based on title + body to guarantee no duplicate re-triggers
+  const fingerprint = `${title.trim()}_${body.trim()}`.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 80);
+  const sentKey = `${SENT_KEYS_PREFIX}${fingerprint}`;
+
+  try {
+    const alreadySent = await AsyncStorage.getItem(sentKey);
+    if (alreadySent) {
+      // Notification already sent once; do not re-trigger!
+      return null;
+    }
+    // Mark as sent immediately
+    await AsyncStorage.setItem(sentKey, Date.now().toString());
+  } catch (e) {}
+
   const newNotif: AppNotification = {
     id: `notif-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     title,
