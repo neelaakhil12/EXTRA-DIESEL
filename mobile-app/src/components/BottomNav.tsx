@@ -20,17 +20,6 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentScreen, onNavigate 
     return null;
   }
 
-  // Dynamic bottom padding:
-  // - With Android 3-Button Navigation (Square/Circle/Triangle): insets.bottom is ~48-56dp.
-  //   We add +6dp breathing room, so labels & icons sit completely clear above the system buttons.
-  // - With Android Gesture Navigation: insets.bottom is ~15-20dp -> padding becomes ~21-26dp.
-  // - With iOS Home Indicator: insets.bottom is 34dp -> padding becomes 40dp.
-  // - Desktop web / devices without bottom bar: insets.bottom is 0 -> fallback to 14dp.
-  const dynamicPaddingBottom = Math.max(
-    insets.bottom > 0 ? insets.bottom + 6 : (Platform.OS === 'android' ? 14 : 10),
-    12
-  );
-
   const tabs: { screen: ScreenName; label: string; icon: keyof typeof Ionicons.glyphMap; iconActive: keyof typeof Ionicons.glyphMap }[] = [
     { screen: 'home', label: 'Home', icon: 'home-outline', iconActive: 'home' },
     { screen: 'orders', label: 'Orders', icon: 'receipt-outline', iconActive: 'receipt' },
@@ -39,38 +28,47 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentScreen, onNavigate 
   ];
 
   return (
-    <View style={[styles.container, { paddingBottom: dynamicPaddingBottom }]}>
-      {tabs.map((tab) => {
-        const isActive = currentScreen === tab.screen;
-        return (
-          <TouchableOpacity
-            key={tab.screen}
-            onPress={() => onNavigate(tab.screen)}
-            style={styles.tab}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.iconWrapper, isActive && styles.iconWrapperActive]}>
-              <Ionicons
-                name={isActive ? tab.iconActive : tab.icon}
-                size={23}
-                color={isActive ? '#FFFFFF' : 'rgba(255, 255, 255, 0.75)'}
-              />
-            </View>
-            <Text style={[styles.label, isActive && styles.labelActive]}>
-              {tab.label}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
+    <View style={styles.navWrapper}>
+      <View style={styles.container}>
+        {tabs.map((tab) => {
+          const isActive = currentScreen === tab.screen;
+          return (
+            <TouchableOpacity
+              key={tab.screen}
+              onPress={() => onNavigate(tab.screen)}
+              style={styles.tab}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.iconWrapper, isActive && styles.iconWrapperActive]}>
+                <Ionicons
+                  name={isActive ? tab.iconActive : tab.icon}
+                  size={23}
+                  color={isActive ? '#FFFFFF' : 'rgba(255, 255, 255, 0.75)'}
+                />
+              </View>
+              <Text style={[styles.label, isActive && styles.labelActive]}>
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      {insets.bottom > 0 && (
+        <View style={{ height: insets.bottom, backgroundColor: '#000000' }} />
+      )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
+  navWrapper: {
+    backgroundColor: '#000000',
+  },
   container: {
     flexDirection: 'row',
     backgroundColor: COLORS.primary,
     paddingTop: 8,
+    paddingBottom: 8,
     borderTopWidth: 0,
     elevation: 10,
     shadowColor: '#000',

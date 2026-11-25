@@ -812,10 +812,12 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({
               <Text style={styles.billValue}>₹{subtotal.toFixed(2)}</Text>
             </View>
             <View style={styles.billRow}>
-              <Text style={styles.billLabel}>Scheduled Delivery</Text>
-              <Text style={[styles.billValue, { color: '#F87171', fontWeight: '800' }]}>
-                {selectedDate} • {selectedSlot}
-              </Text>
+              <Text style={styles.billLabel}>Delivery Date</Text>
+              <Text style={[styles.billValue, { color: '#FFFFFF', fontWeight: '700' }]}>{selectedDate}</Text>
+            </View>
+            <View style={styles.billRow}>
+              <Text style={styles.billLabel}>Delivery Slot</Text>
+              <Text style={[styles.billValue, { color: '#F87171', fontWeight: '800' }]}>{selectedSlot}</Text>
             </View>
             {deliveryFee > 0 ? (
               <View style={styles.billRow}>

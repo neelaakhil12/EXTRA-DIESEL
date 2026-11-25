@@ -29,6 +29,16 @@
       },
       "predictiveBackGestureEnabled": false
     },
+    "androidStatusBar": {
+      "barStyle": "dark-content",
+      "backgroundColor": "#FFFFFF",
+      "translucent": false
+    },
+    "androidNavigationBar": {
+      "visible": "always",
+      "barStyle": "light-content",
+      "backgroundColor": "#000000"
+    },
     "web": {
       "bundler": "metro",
       "favicon": "./assets/favicon.png"

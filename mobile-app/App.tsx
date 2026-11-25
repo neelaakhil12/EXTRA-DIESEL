@@ -440,9 +440,9 @@ function MainApp() {
 
   useEffect(() => {
     if (Platform.OS === 'android') {
-      (StatusBar as any).setBackgroundColor?.('transparent');
+      (StatusBar as any).setBackgroundColor?.('#FFFFFF');
       (StatusBar as any).setBarStyle?.('dark-content');
-      (StatusBar as any).setTranslucent?.(true);
+      (StatusBar as any).setTranslucent?.(false);
     }
   }, []);
 

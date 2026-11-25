@@ -510,7 +510,11 @@ export const MyOrdersScreen: React.FC<MyOrdersScreenProps> = ({
                 </TouchableOpacity>
               </View>
 
-              <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              <ScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={{ padding: 16, paddingBottom: 36 }}
+                showsVerticalScrollIndicator={true}
+              >
                 {/* Brand Strip with Official Logo */}
                 <View style={styles.invoiceBrandStrip}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
@@ -526,15 +530,15 @@ export const MyOrdersScreen: React.FC<MyOrdersScreenProps> = ({
                   </View>
                 </View>
 
-                {/* Metadata */}
-                <View style={styles.metaRow}>
-                  <View>
+                {/* Metadata Box - Stacked cleanly so it never cuts off or overflows */}
+                <View style={styles.metaBox}>
+                  <View style={styles.metaLine}>
                     <Text style={styles.metaLabel}>Invoice No:</Text>
                     <Text style={styles.metaVal}>#INV-{selectedInvoice.id}</Text>
                   </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={styles.metaLabel}>Date:</Text>
-                    <Text style={styles.metaVal}>{selectedInvoice.date}</Text>
+                  <View style={[styles.metaLine, { marginTop: 6 }]}>
+                    <Text style={styles.metaLabel}>Date & Slot:</Text>
+                    <Text style={styles.metaDateVal}>{selectedInvoice.date}</Text>
                   </View>
                 </View>
 
@@ -969,6 +973,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 12,
   },
+  metaBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 12,
+  },
+  metaLine: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   metaLabel: {
     fontSize: 11,
     color: '#64748B',
@@ -978,6 +995,11 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#0F172A',
     marginTop: 1,
+  },
+  metaDateVal: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
   },
   consigneeCard: {
     backgroundColor: '#F8FAFC',

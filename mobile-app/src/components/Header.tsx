@@ -58,7 +58,7 @@ export const Header: React.FC<HeaderProps> = ({
   const isDesktop = Platform.OS === 'web' && width >= 768;
 
   const dynamicPaddingTop = Platform.OS === 'android'
-    ? Math.max(insets.top, StatusBar.currentHeight || 28) + 8
+    ? 10
     : Math.max(insets.top, 14);
 
   const getInitials = (name?: string) => {
@@ -223,7 +223,7 @@ export const Header: React.FC<HeaderProps> = ({
   // Home Screen: Mobile Location & Profile Bar
   return (
     <View style={[styles.container, { paddingTop: dynamicPaddingTop }]}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="dark-content" />
       <View style={styles.homeHeader}>
         {/* Left: Location Pin & Site Selector */}
         <TouchableOpacity
