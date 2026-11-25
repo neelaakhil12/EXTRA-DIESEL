@@ -46,7 +46,8 @@
         {
           "locationAlwaysAndWhenInUsePermission": "Allow Extra Diesel to use your location to deliver diesel directly to your bowser site."
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "owner": "neelaakhil143",
     "extra": {

@@ -1374,7 +1374,7 @@ app.get('/api/orders', (req, res) => {
 // 2. Create Order (Applies Live Settings & Delivery Tier Charges)
 app.post('/api/orders', (req, res) => {
   try {
-    const { id, email, name, phone, liters, address, vehicleType, slot } = req.body;
+    const { id, email, name, phone, liters, address, vehicleType, slot, deliveryDate, deliverySlot, paymentId, paymentStatus, paymentMethod } = req.body;
     currentSettings = loadSettings();
 
     const orderLiters = Number(liters) || 200;
@@ -1401,7 +1401,8 @@ app.post('/api/orders', (req, res) => {
       email: email ? email.toLowerCase().trim() : '',
       name: name || 'Customer',
       phone: phone || '',
-      date: formattedDate,
+      date: req.body.date || (deliveryDate ? `${deliveryDate} • ${deliverySlot || slot || ''}` : formattedDate),
+      deliveryDate: deliveryDate || req.body.deliveryDate || null,
       liters: orderLiters,
       fuelRate: rate,
       deliveryFee,
@@ -1410,8 +1411,12 @@ app.post('/api/orders', (req, res) => {
       status: 'pending',
       statusText: 'Order Placed - Pending Confirmation',
       address: address || 'Plot 42, Hitech City, Hyderabad',
-      vehicleType: vehicleType || 'DG Set',
-      slot: slot || '08:00 AM - 12:00 PM',
+      vehicleType: vehicleType || req.body.equipment || 'DG Set',
+      slot: slot || deliverySlot || '08:00 AM - 12:00 PM',
+      deliverySlot: deliverySlot || slot || '08:00 AM - 12:00 PM',
+      paymentId: paymentId || req.body.paymentId || null,
+      paymentStatus: paymentStatus || 'paid',
+      paymentMethod: paymentMethod || 'Razorpay UPI / Cards / NetBanking',
       assignedTo: null,
       assignedToName: null,
       vehicleNumber: null,
@@ -1529,62 +1534,112 @@ app.get('/api/invoice/:orderId/html', (req, res) => {
     const sgst = (taxAmt / 2).toFixed(2);
     const grandTotal = Number(order.total) || (fuelTotal + delFee + taxAmt);
 
+    // Read high-res EXTRA DIESEL logo from disk and embed as Base64 for 100% offline & PDF reliability
+    let logoBase64 = '';
+    try {
+      const logoPath = path.join(__dirname, '../../mobile-app/assets/images/logo.png');
+      if (fs.existsSync(logoPath)) {
+        logoBase64 = fs.readFileSync(logoPath).toString('base64');
+      }
+    } catch (e) {
+      console.warn('Could not read logo image:', e.message);
+    }
+
     const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Tax Invoice #${order.id} - EXTRA DIESEL</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #F8FAFC; color: #0F172A; padding: 24px; }
-    .invoice-card { max-width: 820px; margin: 0 auto; background: #FFFFFF; border-radius: 16px; border: 1px solid #E2E8F0; box-shadow: 0 4px 20px rgba(0,0,0,0.06); padding: 36px; }
-    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #DC2626; padding-bottom: 20px; }
-    .brand-logo { font-size: 26px; font-weight: 900; color: #DC2626; letter-spacing: -0.5px; display: flex; align-items: center; gap: 8px; }
-    .brand-sub { font-size: 11px; color: #64748B; font-weight: 600; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+    html, body { width: 100%; min-height: 100%; overflow-x: hidden; background: #F8FAFC; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #0F172A; padding: 16px 8px; }
+    
+    .print-bar { max-width: 820px; width: 100%; margin: 0 auto 12px auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+    .print-bar-title { font-size: 13px; color: #64748B; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+    .btn-group { display: flex; gap: 8px; }
+    .btn-action { border: none; padding: 9px 16px; border-radius: 8px; font-weight: 800; font-size: 12.5px; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: opacity 0.2s; }
+    .btn-download { background: #DC2626; color: white; box-shadow: 0 2px 8px rgba(220,38,38,0.3); }
+    .btn-print { background: #0F172A; color: white; }
+    .btn-action:hover { opacity: 0.9; }
+
+    .invoice-card { max-width: 820px; width: 100%; margin: 0 auto; background: #FFFFFF; border-radius: 16px; border: 1px solid #E2E8F0; box-shadow: 0 4px 20px rgba(0,0,0,0.06); padding: 24px; }
+    
+    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #DC2626; padding-bottom: 16px; flex-wrap: wrap; gap: 14px; }
+    .brand-section { display: flex; align-items: center; gap: 12px; }
+    .brand-logo-img { height: 48px; max-width: 120px; object-fit: contain; }
+    .brand-name { font-size: 22px; font-weight: 900; color: #DC2626; letter-spacing: -0.5px; }
+    .brand-sub { font-size: 11px; color: #64748B; font-weight: 600; margin-top: 2px; }
+    .brand-cert { font-size: 10.5px; color: #059669; font-weight: 700; margin-top: 3px; display: inline-block; }
+    
     .invoice-meta { text-align: right; }
     .invoice-title { font-size: 20px; font-weight: 900; color: #0F172A; letter-spacing: 0.5px; }
-    .invoice-num { font-size: 13px; font-weight: 700; color: #DC2626; margin-top: 3px; }
+    .invoice-num { font-size: 13px; font-weight: 800; color: #DC2626; margin-top: 2px; }
     .invoice-date { font-size: 12px; color: #64748B; margin-top: 2px; }
     .badge-paid { display: inline-block; background: #DCFCE7; color: #15803D; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 800; margin-top: 6px; }
-    .parties-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin: 24px 0; padding: 18px; background: #F8FAFC; border-radius: 12px; border: 1px solid #E2E8F0; }
-    .party-title { font-size: 11px; font-weight: 800; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+
+    .parties-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 18px 0; padding: 14px; background: #F8FAFC; border-radius: 12px; border: 1px solid #E2E8F0; }
+    .party-title { font-size: 10.5px; font-weight: 800; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
     .party-name { font-size: 14px; font-weight: 800; color: #0F172A; }
-    .party-detail { font-size: 12px; color: #475569; margin-top: 3px; line-height: 18px; }
-    .items-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-    .items-table th { background: #0F172A; color: #FFFFFF; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; padding: 12px; text-align: left; }
-    .items-table td { padding: 12px; border-bottom: 1px solid #E2E8F0; font-size: 12.5px; color: #334155; }
-    .items-table td.num { text-align: right; font-weight: 600; }
+    .party-detail { font-size: 12px; color: #475569; margin-top: 3px; line-height: 17px; word-break: break-word; }
+
+    .table-container { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 16px 0; border: 1px solid #E2E8F0; border-radius: 10px; }
+    .items-table { width: 100%; border-collapse: collapse; min-width: 520px; }
+    .items-table th { background: #0F172A; color: #FFFFFF; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; padding: 10px 12px; text-align: left; }
+    .items-table td { padding: 10px 12px; border-bottom: 1px solid #E2E8F0; font-size: 12px; color: #334155; }
+    .items-table td.num { text-align: right; font-weight: 600; white-space: nowrap; }
     .items-table th.num { text-align: right; }
+
     .totals-area { display: flex; justify-content: flex-end; margin-top: 10px; }
-    .totals-box { width: 320px; }
-    .totals-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 12.5px; color: #475569; }
-    .totals-row.grand { border-top: 2px solid #0F172A; padding-top: 10px; margin-top: 6px; font-size: 16px; font-weight: 900; color: #0F172A; }
+    .totals-box { width: 320px; max-width: 100%; }
+    .totals-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 12.5px; color: #475569; }
+    .totals-row.grand { border-top: 2px solid #0F172A; padding-top: 8px; margin-top: 6px; font-size: 15px; font-weight: 900; color: #0F172A; }
     .totals-row.grand .val { color: #DC2626; }
-    .compliance-strip { margin-top: 28px; padding: 14px; background: #FEF2F2; border-left: 4px solid #DC2626; border-radius: 8px; font-size: 11.5px; color: #991B1B; line-height: 18px; }
-    .signatures { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 36px; padding-top: 20px; border-top: 1px dashed #CBD5E1; }
-    .sig-block { font-size: 12px; color: #64748B; line-height: 18px; }
-    .sig-stamp { font-weight: 800; color: #0F172A; margin-top: 30px; font-size: 12px; }
-    .print-bar { max-width: 820px; margin: 0 auto 16px auto; display: flex; justify-content: space-between; align-items: center; }
-    .print-btn { background: #DC2626; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 800; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+
+    .compliance-strip { margin-top: 18px; padding: 12px; background: #FEF2F2; border-left: 4px solid #DC2626; border-radius: 8px; font-size: 11px; color: #991B1B; line-height: 16px; }
+    .signatures { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 24px; padding-top: 14px; border-top: 1px dashed #CBD5E1; flex-wrap: wrap; gap: 14px; }
+    .sig-block { font-size: 11.5px; color: #64748B; line-height: 17px; }
+    .sig-stamp { font-weight: 800; color: #0F172A; margin-top: 16px; font-size: 12px; }
+
+    @media (max-width: 640px) {
+      body { padding: 6px 4px; }
+      .invoice-card { padding: 14px 10px; border-radius: 12px; }
+      .header { flex-direction: column; align-items: flex-start; gap: 10px; }
+      .invoice-meta { text-align: left; }
+      .parties-grid { grid-template-columns: 1fr; gap: 10px; padding: 10px; }
+      .totals-box { width: 100%; }
+      .signatures { flex-direction: column; align-items: flex-start; }
+    }
+
     @media print {
       body { background: white; padding: 0; }
-      .invoice-card { box-shadow: none; border: none; padding: 0; }
-      .print-bar { display: none; }
+      .invoice-card { box-shadow: none; border: none; padding: 0; max-width: 100%; }
+      .print-bar { display: none !important; }
+      .table-container { border: none; overflow: visible; }
+      .items-table { min-width: 100%; }
     }
   </style>
 </head>
 <body>
   <div class="print-bar">
-    <div style="font-size: 13px; color: #64748B;">Official Tax Invoice • <strong>EXTRA DIESEL</strong></div>
-    <button class="print-btn" onclick="window.print()">🖨️ Print / Download PDF</button>
+    <div class="print-bar-title">Official Tax Invoice • <strong>EXTRA DIESEL</strong></div>
+    <div class="btn-group">
+      <button class="btn-action btn-download" onclick="downloadInvoicePDF()">📥 Download PDF</button>
+      <button class="btn-action btn-print" onclick="window.print()">🖨️ Print</button>
+    </div>
   </div>
-  <div class="invoice-card">
+
+  <div class="invoice-card" id="invoiceCard">
     <div class="header">
-      <div>
-        <div class="brand-logo">🔥 EXTRA DIESEL</div>
-        <div class="brand-sub">Aadhya Fuels & Infra • Doorstep Fueling Bowser Fleet</div>
-        <div style="font-size: 11px; color: #059669; font-weight: 700; margin-top: 4px;">✓ Legal Metrology Certified (Weights & Measures)</div>
+      <div class="brand-section">
+        ${logoBase64 ? `<img src="data:image/png;base64,${logoBase64}" alt="EXTRA DIESEL" class="brand-logo-img" />` : ''}
+        <div>
+          <div class="brand-name">EXTRA DIESEL</div>
+          <div class="brand-sub">Aadhya Fuels & Infra • Doorstep Fueling Bowser Fleet</div>
+          <div class="brand-cert">✓ Legal Metrology Certified (Weights & Measures)</div>
+        </div>
       </div>
       <div class="invoice-meta">
         <div class="invoice-title">TAX INVOICE</div>
@@ -1611,42 +1666,44 @@ app.get('/api/invoice/:orderId/html', (req, res) => {
       </div>
     </div>
 
-    <table class="items-table">
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Description of Goods / Services</th>
-          <th>HSN / SAC</th>
-          <th class="num">Qty</th>
-          <th class="num">Rate</th>
-          <th class="num">Taxable Amt</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>1</td>
-          <td>
-            <strong>High Speed BS-VI Diesel (HSD)</strong><br>
-            <span style="font-size: 11px; color: #64748B;">Automated calibrated bowser digital dispensing</span>
-          </td>
-          <td>27101951</td>
-          <td class="num">${order.liters} Liters</td>
-          <td class="num">₹${(Number(order.fuelRate) || 94.50).toFixed(2)}</td>
-          <td class="num">₹${fuelTotal.toFixed(2)}</td>
-        </tr>
-        ${delFee > 0 ? `
-        <tr>
-          <td>2</td>
-          <td>
-            <strong>Doorstep Bowser Transport & Fuel Dispensing Service</strong>
-          </td>
-          <td>996511</td>
-          <td class="num">1 Delivery</td>
-          <td class="num">₹${delFee.toFixed(2)}</td>
-          <td class="num">₹${delFee.toFixed(2)}</td>
-        </tr>` : ''}
-      </tbody>
-    </table>
+    <div class="table-container">
+      <table class="items-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Description of Goods / Services</th>
+            <th>HSN / SAC</th>
+            <th class="num">Qty</th>
+            <th class="num">Rate</th>
+            <th class="num">Taxable Amt</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1</td>
+            <td>
+              <strong>High Speed BS-VI Diesel (HSD)</strong><br>
+              <span style="font-size: 11px; color: #64748B;">Automated calibrated bowser digital dispensing</span>
+            </td>
+            <td>27101951</td>
+            <td class="num">${order.liters} Liters</td>
+            <td class="num">₹${(Number(order.fuelRate) || 94.50).toFixed(2)}</td>
+            <td class="num">₹${fuelTotal.toFixed(2)}</td>
+          </tr>
+          ${delFee > 0 ? `
+          <tr>
+            <td>2</td>
+            <td>
+              <strong>Doorstep Bowser Transport & Fuel Dispensing Service</strong>
+            </td>
+            <td>996511</td>
+            <td class="num">1 Delivery</td>
+            <td class="num">₹${delFee.toFixed(2)}</td>
+            <td class="num">₹${delFee.toFixed(2)}</td>
+          </tr>` : ''}
+        </tbody>
+      </table>
+    </div>
 
     <div class="totals-area">
       <div class="totals-box">
@@ -1686,6 +1743,39 @@ app.get('/api/invoice/:orderId/html', (req, res) => {
       </div>
     </div>
   </div>
+
+  <script>
+    function downloadInvoicePDF() {
+      const element = document.getElementById('invoiceCard');
+      const btn = document.querySelector('.btn-download');
+      const originalText = btn.innerHTML;
+      btn.innerHTML = '⏳ Saving PDF...';
+      btn.disabled = true;
+
+      const opt = {
+        margin: [8, 8, 8, 8],
+        filename: 'EXTRA_DIESEL_Invoice_${order.id}.pdf',
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, logging: false },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+
+      html2pdf().set(opt).from(element).save().then(() => {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+      }).catch((err) => {
+        console.error('PDF error:', err);
+        window.print();
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+      });
+    }
+
+    // Auto-trigger download if ?download=1 in query
+    if (window.location.search.includes('download=1') || window.location.search.includes('download=true')) {
+      setTimeout(downloadInvoicePDF, 600);
+    }
+  </script>
 </body>
 </html>`;
 

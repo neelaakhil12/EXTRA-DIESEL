@@ -10,7 +10,11 @@ import {
   useWindowDimensions,
   Linking,
   Modal,
+  Image,
+  Alert,
 } from 'react-native';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 import { ScreenName } from '../types';
@@ -54,6 +58,7 @@ export const MyOrdersScreen: React.FC<MyOrdersScreenProps> = ({
   const [orders, setOrders] = useState<OrderItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedInvoice, setSelectedInvoice] = useState<OrderItem | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'https://extradiesel.in';
 
@@ -98,15 +103,194 @@ export const MyOrdersScreen: React.FC<MyOrdersScreenProps> = ({
     return { label: 'Pending Confirmation', bg: '#FFFBEB', text: '#D97706', border: '#FDE68A' };
   };
 
-  // Open invoice link in browser / download HTML/PDF
-  const handleDownloadInvoice = (order: OrderItem) => {
-    const invoiceUrl = `${baseUrl}/api/invoice/${order.id}/html`;
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      window.open(invoiceUrl, '_blank');
-    } else {
-      Linking.openURL(invoiceUrl).catch(() => {
-        setSelectedInvoice(order);
+  // Generate real PDF file on device using expo-print and share/download
+  const handleDownloadPdf = async (order: OrderItem) => {
+    try {
+      setIsDownloading(true);
+
+      // On Web: Trigger direct download via browser endpoint
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.open(`${baseUrl}/api/invoice/${order.id}/html?download=1`, '_blank');
+        setIsDownloading(false);
+        return;
+      }
+
+      const fuelTotal = (Number(order.liters) || 200) * (Number(order.fuelRate) || 94.50);
+      const delFee = Number(order.deliveryFee) || 0;
+      const taxAmt = Number(order.tax) || 0;
+      const cgst = (taxAmt / 2).toFixed(2);
+      const sgst = (taxAmt / 2).toFixed(2);
+      const grandTotal = Number(order.total) || (fuelTotal + delFee + taxAmt);
+      const customerName = order.name || currentUser?.name || 'Valued Customer';
+      const customerPhone = order.phone || currentUser?.phone || '+91 9989551305';
+      const customerEmail = order.email || currentUser?.email || 'customer@example.com';
+
+      const htmlContent = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tax Invoice #${order.id}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #FFFFFF; color: #0F172A; padding: 24px; font-size: 13px; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2.5px solid #DC2626; padding-bottom: 16px; margin-bottom: 20px; }
+    .brand-title { font-size: 24px; font-weight: 900; color: #DC2626; }
+    .brand-sub { font-size: 11px; color: #64748B; font-weight: 600; margin-top: 3px; }
+    .brand-cert { font-size: 11px; color: #059669; font-weight: 700; margin-top: 3px; }
+    .inv-meta { text-align: right; }
+    .inv-title { font-size: 20px; font-weight: 900; color: #0F172A; }
+    .inv-num { font-size: 14px; font-weight: 800; color: #DC2626; margin-top: 2px; }
+    .inv-date { font-size: 12px; color: #64748B; margin-top: 2px; }
+    .badge-paid { display: inline-block; background: #DCFCE7; color: #15803D; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 800; margin-top: 6px; }
+    .parties { display: flex; justify-content: space-between; gap: 20px; margin-bottom: 20px; padding: 16px; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; }
+    .party-col { flex: 1; }
+    .party-lbl { font-size: 10px; font-weight: 800; color: #94A3B8; text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.5px; }
+    .party-name { font-size: 14px; font-weight: 800; color: #0F172A; }
+    .party-info { font-size: 12px; color: #475569; margin-top: 3px; line-height: 18px; }
+    .items-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; border: 1px solid #E2E8F0; border-radius: 8px; overflow: hidden; }
+    .items-table th { background: #0F172A; color: #FFFFFF; font-size: 11px; font-weight: 800; text-transform: uppercase; padding: 12px 14px; text-align: left; }
+    .items-table td { padding: 12px 14px; border-bottom: 1px solid #E2E8F0; font-size: 12.5px; }
+    .items-table td.num { text-align: right; font-weight: 600; }
+    .items-table th.num { text-align: right; }
+    .totals-wrap { display: flex; justify-content: flex-end; margin-bottom: 20px; }
+    .totals-box { width: 320px; }
+    .total-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 12.5px; color: #475569; }
+    .total-row.grand { border-top: 2px solid #0F172A; padding-top: 10px; margin-top: 6px; font-size: 16px; font-weight: 900; color: #0F172A; }
+    .total-row.grand .val { color: #DC2626; }
+    .compliance { padding: 12px 14px; background: #FEF2F2; border-left: 4px solid #DC2626; border-radius: 6px; font-size: 11px; color: #991B1B; line-height: 16px; margin-bottom: 24px; }
+    .footer { display: flex; justify-content: space-between; align-items: flex-end; padding-top: 16px; border-top: 1px dashed #CBD5E1; }
+    .footer-note { font-size: 11px; color: #94A3B8; line-height: 16px; }
+    .sign-stamp { text-align: right; font-size: 12px; font-weight: 800; color: #0F172A; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <div class="brand-title">🔥 EXTRA DIESEL</div>
+      <div class="brand-sub">Aadhya Fuels & Infra • Doorstep Fueling Bowser Fleet</div>
+      <div class="brand-cert">✓ Legal Metrology Certified (Weights & Measures)</div>
+    </div>
+    <div class="inv-meta">
+      <div class="inv-title">TAX INVOICE</div>
+      <div class="inv-num">#INV-${order.id}</div>
+      <div class="inv-date">Date: ${order.date || new Date().toLocaleDateString('en-GB')}</div>
+      <div class="badge-paid">✓ PAID VIA RAZORPAY</div>
+    </div>
+  </div>
+
+  <div class="parties">
+    <div class="party-col">
+      <div class="party-lbl">Supplier / Seller Details</div>
+      <div class="party-name">Aadhya Fuels & Infra</div>
+      <div class="party-info"><strong>GSTIN:</strong> 36AAACE1234F1Z5</div>
+      <div class="party-info">Plot 42, Hitech City, Hyderabad, Telangana - 500081</div>
+      <div class="party-info"><strong>Hotline:</strong> +91 9989551305 | support@extradiesel.in</div>
+    </div>
+    <div class="party-col">
+      <div class="party-lbl">Billed & Delivered To</div>
+      <div class="party-name">${customerName}</div>
+      <div class="party-info"><strong>Phone:</strong> ${customerPhone}</div>
+      <div class="party-info"><strong>Email:</strong> ${customerEmail}</div>
+      <div class="party-info"><strong>Site:</strong> ${order.address}</div>
+    </div>
+  </div>
+
+  <table class="items-table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Description of Goods / Services</th>
+        <th>HSN / SAC</th>
+        <th class="num">Qty</th>
+        <th class="num">Rate</th>
+        <th class="num">Taxable Amt</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>1</td>
+        <td>
+          <strong>High Speed BS-VI Diesel (HSD)</strong><br>
+          <span style="font-size: 11px; color: #64748B;">Automated calibrated bowser digital dispensing</span>
+        </td>
+        <td>27101951</td>
+        <td class="num">${order.liters} Liters</td>
+        <td class="num">₹${(Number(order.fuelRate) || 94.50).toFixed(2)}</td>
+        <td class="num">₹${fuelTotal.toFixed(2)}</td>
+      </tr>
+      ${delFee > 0 ? `
+      <tr>
+        <td>2</td>
+        <td><strong>Doorstep Bowser Transport & Fuel Dispensing</strong></td>
+        <td>996511</td>
+        <td class="num">1 Delivery</td>
+        <td class="num">₹${delFee.toFixed(2)}</td>
+        <td class="num">₹${delFee.toFixed(2)}</td>
+      </tr>` : ''}
+    </tbody>
+  </table>
+
+  <div class="totals-wrap">
+    <div class="totals-box">
+      <div class="total-row">
+        <span>Subtotal (Taxable Value):</span>
+        <span style="font-weight: 700;">₹${(fuelTotal + delFee).toFixed(2)}</span>
+      </div>
+      ${taxAmt > 0 ? `
+      <div class="total-row">
+        <span>CGST (2.5%):</span>
+        <span>₹${cgst}</span>
+      </div>
+      <div class="total-row">
+        <span>SGST (2.5%):</span>
+        <span>₹${sgst}</span>
+      </div>` : ''}
+      <div class="total-row grand">
+        <span>Total Amount Payable:</span>
+        <span class="val">₹${grandTotal.toFixed(2)}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="compliance">
+    <strong>Legal Metrology & Quality Declaration:</strong> Fuel dispensed with micro-filtered flow meters certified by the Department of Legal Metrology (Weights & Measures). Density BS-VI verified (820-845 kg/m³).
+  </div>
+
+  <div class="footer">
+    <div class="footer-note">
+      <div><strong>Payment Mode:</strong> Razorpay Online Prepaid (UPI / Cards / NetBanking)</div>
+      <div style="margin-top: 4px;">This is a computer-generated tax invoice and requires no physical signature.</div>
+    </div>
+    <div class="sign-stamp">
+      <div>For AADHYA FUELS & INFRA</div>
+      <div style="font-size: 11px; color: #64748B; margin-top: 4px;">Authorized Signatory</div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+      const { uri } = await Print.printToFileAsync({
+        html: htmlContent,
       });
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, {
+          UTI: '.pdf',
+          mimeType: 'application/pdf',
+          dialogTitle: `Download Extra Diesel Invoice #${order.id}`,
+        });
+      } else {
+        Alert.alert('Invoice PDF Generated', `PDF generated successfully.`);
+      }
+    } catch (err: any) {
+      console.warn('PDF download error:', err);
+      const invoiceUrl = `${baseUrl}/api/invoice/${order.id}/html?download=1`;
+      Linking.openURL(invoiceUrl).catch(() => {
+        Alert.alert('Notice', 'Could not open invoice.');
+      });
+    } finally {
+      setIsDownloading(false);
     }
   };
 
@@ -248,18 +432,21 @@ export const MyOrdersScreen: React.FC<MyOrdersScreenProps> = ({
                 {isInvoiceMode ? (
                   <TouchableOpacity
                     style={styles.downloadInvoiceBtn}
-                    onPress={() => handleDownloadInvoice(order)}
+                    onPress={() => handleDownloadPdf(order)}
                     activeOpacity={0.85}
+                    disabled={isDownloading}
                   >
                     <Ionicons name="download-outline" size={16} color={COLORS.white} />
-                    <Text style={styles.downloadInvoiceBtnText}>Download Tax Invoice (PDF)</Text>
+                    <Text style={styles.downloadInvoiceBtnText}>
+                      {isDownloading ? 'Generating PDF...' : 'Download Tax Invoice (PDF)'}
+                    </Text>
                   </TouchableOpacity>
                 ) : (
                   /* Orders Mode: Track Bowser + View Invoice side by side */
                   <>
                     <TouchableOpacity
                       style={styles.invoiceOutlineBtn}
-                      onPress={() => handleDownloadInvoice(order)}
+                      onPress={() => setSelectedInvoice(order)}
                       activeOpacity={0.8}
                     >
                       <Ionicons name="document-text-outline" size={15} color="#0F172A" />
@@ -305,7 +492,10 @@ export const MyOrdersScreen: React.FC<MyOrdersScreenProps> = ({
               {/* Modal Top Bar */}
               <View style={styles.modalHeader}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Ionicons name="flame" size={22} color="#DC2626" />
+                  <Image
+                    source={require('../../assets/images/logo.png')}
+                    style={{ width: 28, height: 28, resizeMode: 'contain' }}
+                  />
                   <Text style={styles.modalHeaderTitle}>TAX INVOICE</Text>
                 </View>
                 <TouchableOpacity
@@ -317,11 +507,19 @@ export const MyOrdersScreen: React.FC<MyOrdersScreenProps> = ({
               </View>
 
               <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-                {/* Brand Strip */}
+                {/* Brand Strip with Official Logo */}
                 <View style={styles.invoiceBrandStrip}>
-                  <Text style={styles.invoiceBrandName}>EXTRA DIESEL</Text>
-                  <Text style={styles.invoiceBrandSub}>Aadhya Fuels & Infra • GSTIN: 36AAACE1234F1Z5</Text>
-                  <Text style={styles.invoiceCert}>✓ Legal Metrology Verified • W&M/HYD/2026/FM-4910</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <Image
+                      source={require('../../assets/images/logo.png')}
+                      style={{ width: 44, height: 44, resizeMode: 'contain' }}
+                    />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.invoiceBrandName}>EXTRA DIESEL</Text>
+                      <Text style={styles.invoiceBrandSub}>Aadhya Fuels & Infra • GSTIN: 36AAACE1234F1Z5</Text>
+                      <Text style={styles.invoiceCert}>✓ Legal Metrology Verified • W&M/HYD/2026/FM-4910</Text>
+                    </View>
+                  </View>
                 </View>
 
                 {/* Metadata */}
@@ -360,7 +558,7 @@ export const MyOrdersScreen: React.FC<MyOrdersScreenProps> = ({
                       {selectedInvoice.liters}L
                     </Text>
                     <Text style={[styles.itemText, { flex: 1, textAlign: 'right', fontWeight: '700' }]}>
-                      ₹{((Number(selectedInvoice.liters) || 200) * 94.50).toFixed(2)}
+                      ₹{((Number(selectedInvoice.liters) || 200) * (Number(selectedInvoice.fuelRate) || 94.50)).toFixed(2)}
                     </Text>
                   </View>
                 </View>
@@ -396,11 +594,18 @@ export const MyOrdersScreen: React.FC<MyOrdersScreenProps> = ({
               <View style={styles.modalFooter}>
                 <TouchableOpacity
                   style={styles.modalPrintBtn}
-                  onPress={() => handleDownloadInvoice(selectedInvoice)}
+                  onPress={() => handleDownloadPdf(selectedInvoice)}
                   activeOpacity={0.85}
+                  disabled={isDownloading}
                 >
-                  <Ionicons name="print" size={17} color="#FFFFFF" />
-                  <Text style={styles.modalPrintBtnText}>Print / Download PDF</Text>
+                  {isDownloading ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <Ionicons name="download-outline" size={17} color="#FFFFFF" />
+                      <Text style={styles.modalPrintBtnText}>Download PDF</Text>
+                    </>
+                  )}
                 </TouchableOpacity>
               </View>
             </View>

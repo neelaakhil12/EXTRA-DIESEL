@@ -9,6 +9,7 @@ import {
   Alert,
   Platform,
   ActivityIndicator,
+  Modal,
   useWindowDimensions,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -65,6 +66,83 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({
     '01:00 PM - 05:00 PM',
     '06:00 PM - 10:00 PM',
   ]);
+
+  // Delivery Date Selection
+  const formatDateDisplay = (d: Date) => {
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+  const formatDateShort = (d: Date) => {
+    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  };
+
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const dayAfter = new Date(today);
+  dayAfter.setDate(dayAfter.getDate() + 2);
+
+  const [selectedDate, setSelectedDate] = useState<string>(formatDateDisplay(today));
+  const [showCalendarModal, setShowCalendarModal] = useState<boolean>(false);
+  const [calendarMonth, setCalendarMonth] = useState<Date>(new Date(today.getFullYear(), today.getMonth(), 1));
+
+  const quickDateOptions = [
+    { label: 'Today', dateStr: formatDateShort(today), formatted: formatDateDisplay(today) },
+    { label: 'Tomorrow', dateStr: formatDateShort(tomorrow), formatted: formatDateDisplay(tomorrow) },
+    { label: '+2 Days', dateStr: formatDateShort(dayAfter), formatted: formatDateDisplay(dayAfter) },
+  ];
+  const isCustomDateSelected = !quickDateOptions.some((q) => q.formatted === selectedDate);
+
+  // Helper for rendering days in month calendar
+  const renderCalendarDays = () => {
+    const year = calendarMonth.getFullYear();
+    const month = calendarMonth.getMonth();
+    const firstDayIndex = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+    const cells = [];
+    for (let i = 0; i < firstDayIndex; i++) {
+      cells.push(<View key={`empty-${i}`} style={styles.dayCell} />);
+    }
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const cellDate = new Date(year, month, day);
+      const isPast = cellDate < startOfToday;
+      const formatted = formatDateDisplay(cellDate);
+      const isSelected = selectedDate === formatted;
+      const isTodayDate = cellDate.getTime() === startOfToday.getTime();
+
+      cells.push(
+        <TouchableOpacity
+          key={`day-${day}`}
+          style={[
+            styles.dayCell,
+            isSelected && styles.dayCellSelected,
+            isTodayDate && !isSelected && styles.dayCellToday,
+          ]}
+          disabled={isPast}
+          onPress={() => {
+            setSelectedDate(formatted);
+            setShowCalendarModal(false);
+          }}
+          activeOpacity={0.7}
+        >
+          <Text
+            style={[
+              styles.dayCellText,
+              isPast && styles.dayCellTextDisabled,
+              isSelected && styles.dayCellTextSelected,
+              isTodayDate && !isSelected && styles.dayCellTextToday,
+            ]}
+          >
+            {day}
+          </Text>
+        </TouchableOpacity>
+      );
+    }
+    return cells;
+  };
+
   const [ratePerLiter, setRatePerLiter] = useState<number>(94.50);
   const [deliveryChargeUpTo500, setDeliveryChargeUpTo500] = useState<number>(0);
   const [deliveryChargeAbove500, setDeliveryChargeAbove500] = useState<number>(0);
@@ -314,6 +392,8 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({
             mapsLink: googleMapsLink,
             liters: liters.toString(),
             equipment: vehicleType,
+            deliveryDate: selectedDate,
+            deliverySlot: selectedSlot,
           },
           theme: {
             color: '#DC2626',
@@ -356,6 +436,8 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({
         total: totalAmount,
         equipment: vehicleType,
         deliverySlot: selectedSlot,
+        deliveryDate: selectedDate,
+        date: `${selectedDate} • ${selectedSlot}`,
         paymentId,
         paymentStatus,
         paymentMethod: 'Razorpay UPI / Cards / NetBanking',
@@ -509,7 +591,59 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({
               ))}
             </View>
 
-            {/* 3. Preferred Delivery Slot */}
+            {/* 3. Preferred Delivery Date */}
+            <View style={[styles.cardHeader, { marginTop: 18 }]}>
+              <Ionicons name="calendar" size={20} color={COLORS.primary} />
+              <Text style={styles.cardTitle}>Preferred Delivery Date</Text>
+            </View>
+
+            <View style={styles.dateChipsRow}>
+              {quickDateOptions.map((q) => {
+                const isSelected = selectedDate === q.formatted;
+                return (
+                  <TouchableOpacity
+                    key={q.label}
+                    style={[styles.dateChip, isSelected && styles.dateChipActive]}
+                    onPress={() => setSelectedDate(q.formatted)}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={[styles.dateChipLabel, isSelected && styles.dateChipLabelActive]}>
+                      {q.label}
+                    </Text>
+                    <Text style={[styles.dateChipSub, isSelected && styles.dateChipSubActive]}>
+                      {q.dateStr}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+              <TouchableOpacity
+                style={[styles.dateChip, isCustomDateSelected && styles.dateChipActive]}
+                onPress={() => setShowCalendarModal(true)}
+                activeOpacity={0.75}
+              >
+                <Ionicons
+                  name="calendar-outline"
+                  size={16}
+                  color={isCustomDateSelected ? '#FFFFFF' : COLORS.primary}
+                />
+                <Text style={[styles.dateChipLabel, isCustomDateSelected && styles.dateChipLabelActive]}>
+                  {isCustomDateSelected ? selectedDate.split(' ').slice(0, 2).join(' ') : 'Pick Date'}
+                </Text>
+                <Text style={[styles.dateChipSub, isCustomDateSelected && styles.dateChipSubActive]}>
+                  Calendar
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Selected Date & Slot Confirmation Banner */}
+            <View style={styles.scheduleBanner}>
+              <Ionicons name="time-outline" size={16} color="#DC2626" />
+              <Text style={styles.scheduleBannerText}>
+                Scheduled for <Text style={{ fontWeight: '800' }}>{selectedDate}</Text> during <Text style={{ fontWeight: '800' }}>{selectedSlot}</Text>
+              </Text>
+            </View>
+
+            {/* 4. Preferred Delivery Slot */}
             <View style={[styles.cardHeader, { marginTop: 18 }]}>
               <Ionicons name="time" size={20} color={COLORS.primary} />
               <Text style={styles.cardTitle}>Preferred Delivery Slot</Text>
@@ -564,7 +698,7 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({
 
             <View style={styles.summaryBadge}>
               <Text style={styles.summaryBadgeText}>
-                {liters}L • {vehicleType}
+                {liters}L • {vehicleType} • {selectedDate.split(' ').slice(0, 2).join(' ')}
               </Text>
             </View>
           </View>
@@ -706,6 +840,12 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({
               <Text style={styles.billLabel}>Base Diesel ({liters}L @ ₹{ratePerLiter.toFixed(2)})</Text>
               <Text style={styles.billValue}>₹{subtotal.toFixed(2)}</Text>
             </View>
+            <View style={styles.billRow}>
+              <Text style={styles.billLabel}>Scheduled Delivery</Text>
+              <Text style={[styles.billValue, { color: '#F87171', fontWeight: '800' }]}>
+                {selectedDate} • {selectedSlot}
+              </Text>
+            </View>
             {deliveryFee > 0 ? (
               <View style={styles.billRow}>
                 <Text style={styles.billLabel}>Doorstep Delivery Fee</Text>
@@ -746,6 +886,88 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({
           </TouchableOpacity>
         </View>
       )}
+
+      {/* ========================================================================= */}
+      {/* INTERACTIVE CALENDAR MODAL */}
+      {/* ========================================================================= */}
+      <Modal
+        visible={showCalendarModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowCalendarModal(false)}
+      >
+        <View style={styles.calendarModalOverlay}>
+          <View style={styles.calendarModalBox}>
+            {/* Modal Header */}
+            <View style={styles.calendarHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="calendar" size={20} color="#DC2626" />
+                <Text style={styles.calendarModalTitle}>Select Delivery Date</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.calendarCloseBtn}
+                onPress={() => setShowCalendarModal(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="close" size={22} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Month Navigator */}
+            <View style={styles.monthNavRow}>
+              <TouchableOpacity
+                style={styles.monthNavBtn}
+                onPress={() => {
+                  const prev = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1);
+                  const minMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+                  if (prev >= minMonth) {
+                    setCalendarMonth(prev);
+                  }
+                }}
+              >
+                <Ionicons name="chevron-back" size={20} color="#0F172A" />
+              </TouchableOpacity>
+
+              <Text style={styles.monthYearTitle}>
+                {calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+              </Text>
+
+              <TouchableOpacity
+                style={styles.monthNavBtn}
+                onPress={() => {
+                  const next = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1);
+                  setCalendarMonth(next);
+                }}
+              >
+                <Ionicons name="chevron-forward" size={20} color="#0F172A" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Day of Week Headers */}
+            <View style={styles.weekHeadersRow}>
+              {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((d) => (
+                <Text key={d} style={styles.weekHeaderCell}>{d}</Text>
+              ))}
+            </View>
+
+            {/* Calendar Days Grid */}
+            <View style={styles.daysGrid}>
+              {renderCalendarDays()}
+            </View>
+
+            {/* Modal Footer */}
+            <View style={styles.calendarModalFooter}>
+              <TouchableOpacity
+                style={styles.calendarConfirmBtn}
+                onPress={() => setShowCalendarModal(false)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.calendarConfirmBtnText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 };
@@ -1203,5 +1425,181 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.85)',
     fontWeight: '600',
     marginBottom: 2,
+  },
+  dateChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 10,
+  },
+  dateChip: {
+    flex: 1,
+    minWidth: 70,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dateChipActive: {
+    backgroundColor: '#DC2626',
+    borderColor: '#DC2626',
+  },
+  dateChipLabel: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#334155',
+  },
+  dateChipLabelActive: {
+    color: '#FFFFFF',
+  },
+  dateChipSub: {
+    fontSize: 10.5,
+    color: '#64748B',
+    marginTop: 2,
+    fontWeight: '600',
+  },
+  dateChipSubActive: {
+    color: 'rgba(255, 255, 255, 0.9)',
+  },
+  scheduleBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  scheduleBannerText: {
+    fontSize: 12,
+    color: '#991B1B',
+    flex: 1,
+  },
+  calendarModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  calendarModalBox: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  calendarHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  calendarModalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  calendarCloseBtn: {
+    padding: 4,
+  },
+  monthNavRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  monthNavBtn: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+  },
+  monthYearTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  weekHeadersRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  weekHeaderCell: {
+    width: `${100 / 7}%`,
+    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#94A3B8',
+  },
+  daysGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 12,
+  },
+  dayCell: {
+    width: `${100 / 7}%`,
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    marginVertical: 2,
+  },
+  dayCellSelected: {
+    backgroundColor: '#DC2626',
+    borderRadius: 18,
+  },
+  dayCellToday: {
+    borderWidth: 1.5,
+    borderColor: '#DC2626',
+    borderRadius: 18,
+  },
+  dayCellText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  dayCellTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+  },
+  dayCellTextToday: {
+    color: '#DC2626',
+    fontWeight: '800',
+  },
+  dayCellTextDisabled: {
+    color: '#CBD5E1',
+    fontWeight: '400',
+  },
+  calendarModalFooter: {
+    marginTop: 6,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  calendarConfirmBtn: {
+    backgroundColor: '#DC2626',
+    borderRadius: 12,
+    paddingVertical: 11,
+    alignItems: 'center',
+  },
+  calendarConfirmBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
 });
