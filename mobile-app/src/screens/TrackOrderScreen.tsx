@@ -33,6 +33,7 @@ interface TrackedOrder {
   status: 'pending' | 'assigned' | 'out_for_delivery' | 'delivered' | 'cancelled';
   statusText?: string;
   address: string;
+  slot?: string;
   assignedTo?: string | null;
   assignedToName?: string | null;
   vehicleNumber?: string | null;
@@ -276,45 +277,10 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
         <Text style={styles.etaText}>
           {isDelivered
             ? 'Delivered to Site • Meter Dispensed'
-            : `Estimated Arrival: In ~${etaMins} Mins (${distanceKm} km away)`}
+            : isOutForDelivery
+            ? `En Route • Bowser ${distanceKm} km away (ETA: ~${etaMins} mins)`
+            : `Scheduled Delivery Slot: ${activeOrder.slot || '08:00 AM - 12:00 PM'}`}
         </Text>
-      </View>
-
-      {/* Interactive Live Map (Zoomable, Pannable Leaflet OSM) */}
-      <View style={styles.mapCard}>
-        {Platform.OS === 'web' ? (
-          <iframe
-            srcDoc={getInteractiveMapHtml()}
-            title="Live Bowser Tracking Map"
-            style={{
-              width: '100%',
-              height: 320,
-              border: 'none',
-              borderRadius: 14,
-            } as any}
-          />
-        ) : (
-          <View style={styles.nativeMapBox}>
-            <Ionicons name="map" size={48} color={COLORS.primary} />
-            <Text style={styles.nativeMapTitle}>Interactive GPS Tracking Active</Text>
-            <Text style={styles.nativeMapSub}>Bowser TS 09 UB 4521 en route to your site.</Text>
-          </View>
-        )}
-
-        {/* Live Overlay Stats Pill */}
-        <View style={styles.mapOverlayPill}>
-          <Ionicons name="speedometer" size={16} color={COLORS.primary} />
-          <Text style={styles.mapOverlayText}>
-            {isDelivered
-              ? 'Arrived at Site • Dispenser Engaged'
-              : `Bowser ${distanceKm} km away • 35 km/h • ETA: ${etaMins}m`}
-          </Text>
-        </View>
-
-        <View style={styles.livePulsePill}>
-          <View style={styles.liveDot} />
-          <Text style={styles.liveDotText}>LIVE GPS</Text>
-        </View>
       </View>
 
       {/* Destination Site Card */}
@@ -330,6 +296,47 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
           <Text style={styles.siteMetaPill}>Date: {activeOrder.date}</Text>
         </View>
       </View>
+
+      {/* Interactive Live Map (ONLY shown when Bowser / Driver IS Assigned like Rapido / Swiggy) */}
+      {isAssigned ? (
+        <View style={styles.mapCard}>
+          {Platform.OS === 'web' ? (
+            <iframe
+              srcDoc={getInteractiveMapHtml()}
+              title="Live Bowser Tracking Map"
+              style={{
+                width: '100%',
+                height: 320,
+                border: 'none',
+                borderRadius: 14,
+              } as any}
+            />
+          ) : (
+            <View style={styles.nativeMapBox}>
+              <Ionicons name="map" size={48} color={COLORS.primary} />
+              <Text style={styles.nativeMapTitle}>Live GPS Bowser Tracking Active</Text>
+              <Text style={styles.nativeMapSub}>Bowser {bowserNo} en route to your site.</Text>
+            </View>
+          )}
+
+          {/* Live Overlay Stats Pill */}
+          <View style={styles.mapOverlayPill}>
+            <Ionicons name="speedometer" size={16} color={COLORS.primary} />
+            <Text style={styles.mapOverlayText}>
+              {isDelivered
+                ? 'Arrived at Site • Dispenser Engaged'
+                : isOutForDelivery
+                ? `Bowser ${bowserNo} en route • ETA: ~${etaMins}m`
+                : `Bowser Assigned • Preparing at depot`}
+            </Text>
+          </View>
+
+          <View style={styles.livePulsePill}>
+            <View style={styles.liveDot} />
+            <Text style={styles.liveDotText}>LIVE GPS</Text>
+          </View>
+        </View>
+      ) : null}
 
       {/* Driver & Bowser Card */}
       {!activeOrder.assignedToName ? (
@@ -447,7 +454,11 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
               Arrived at Site & Dispensing
             </Text>
             <Text style={styles.timelineItemTime}>
-              {isDelivered ? 'Dispensed with automated digital printout' : `Estimated ~${etaMins} mins`}
+              {isDelivered
+                ? 'Dispensed with automated digital printout'
+                : isOutForDelivery
+                ? `Bowser en route • Expected within slot (${activeOrder.slot || '08:00 AM - 12:00 PM'})`
+                : `Scheduled Slot: ${activeOrder.slot || '08:00 AM - 12:00 PM'}`}
             </Text>
           </View>
         </View>

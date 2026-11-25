@@ -223,7 +223,7 @@ export const Header: React.FC<HeaderProps> = ({
   // Home Screen: Mobile Location & Profile Bar
   return (
     <View style={[styles.container, { paddingTop: dynamicPaddingTop }]}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+      <StatusBar barStyle="light-content" />
       <View style={styles.homeHeader}>
         {/* Left: Location Pin & Site Selector */}
         <TouchableOpacity

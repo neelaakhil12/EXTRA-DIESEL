@@ -18,6 +18,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS } from '../constants/theme';
 import { APP_CONFIG } from '../constants/config';
 
@@ -30,6 +31,7 @@ interface UserData {
   role?: string;
   vehicleNumber?: string;
   profileImage?: string;
+  authProvider?: string;
 }
 
 interface LoginScreenProps {
@@ -183,7 +185,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
       onLoginSuccess({
         name: loginEmail.split('@')[0].toUpperCase(),
         email: loginEmail.trim(),
-        phone: '+91 9876543210',
+        phone: '',
         role: isAdmin ? 'admin' : isDelivery ? 'delivery' : 'customer',
       });
     }
@@ -270,15 +272,20 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
   };
 
   // 3. Handle Google Account Selection - Instant 0-second Login & Background Sync
-  const handleSelectGoogleAccount = (account: { name: string; email: string }) => {
+  const handleSelectGoogleAccount = async (account: { name: string; email: string }) => {
     const cleanEmail = account.email.toLowerCase().trim();
     const cleanName = (account.name && account.name.trim()) || cleanEmail.split('@')[0];
     const isAdmin = cleanEmail === 'aadhyafuels9@gmail.com';
+    let savedPhone = '';
+    try {
+      const sp = await AsyncStorage.getItem('ed_user_phone');
+      if (sp) savedPhone = sp;
+    } catch (e) {}
 
     const instantUser: UserData = {
       name: cleanName,
       email: cleanEmail,
-      phone: '',
+      phone: savedPhone,
       role: isAdmin ? 'admin' : 'customer',
       authProvider: 'google',
     };
@@ -293,9 +300,22 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: cleanEmail, name: cleanName }),
-    }).catch((err) => {
-      console.warn('Background Google Auth sync error:', err);
-    });
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.success && data?.user) {
+          if (data.user.phone) {
+            AsyncStorage.setItem('ed_user_phone', data.user.phone).catch(() => {});
+          }
+          onLoginSuccess({
+            ...data.user,
+            phone: data.user.phone || savedPhone,
+          });
+        }
+      })
+      .catch((err) => {
+        console.warn('Background Google Auth sync error:', err);
+      });
   };
 
   // 3. Handle Send OTP to Email via SMTP Backend
@@ -389,11 +409,21 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
       return;
     }
 
+    const cleanPhone = signupPhone.trim()
+      ? signupPhone.trim().startsWith('+91')
+        ? signupPhone.trim()
+        : `+91 ${signupPhone.trim()}`
+      : '';
+
     const userData = {
       name: fullName.trim(),
       email: signupEmail.trim().toLowerCase(),
-      phone: signupPhone ? `+91 ${signupPhone.trim()}` : '+91 9876543210',
+      phone: cleanPhone,
     };
+
+    if (cleanPhone) {
+      AsyncStorage.setItem('ed_user_phone', cleanPhone).catch(() => {});
+    }
 
     try {
       // Register in backend database and wait for persistent save

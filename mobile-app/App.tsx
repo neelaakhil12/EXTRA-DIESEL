@@ -30,14 +30,9 @@ import { SubscriptionScreen } from './src/screens/SubscriptionScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { AdminScreen } from './src/screens/AdminScreen';
 import { DeliveryDashboardScreen } from './src/screens/DeliveryDashboardScreen';
+import { NotificationsScreen } from './src/screens/NotificationsScreen';
 import { LocationModal, SavedLocation } from './src/components/LocationModal';
-import {
-  initNotifications,
-  getStoredNotifications,
-  deleteStoredNotification,
-  clearAllStoredNotifications,
-  AppNotification,
-} from './src/services/notificationService';
+import { initNotifications } from './src/services/notificationService';
 import { APP_CONFIG } from './src/constants/config';
 
 export default function App() {
@@ -109,9 +104,9 @@ function MainApp() {
     vehicleNumber?: string;
     profileImage?: string;
   }>({
-    name: 'Akhil Kumar',
-    email: 'aadhyafuels9@gmail.com',
-    phone: '+91 98765 43210',
+    name: '',
+    email: '',
+    phone: '',
     role: 'customer',
     profileImage: undefined,
   });
@@ -131,7 +126,12 @@ function MainApp() {
         if (stored) {
           const user = JSON.parse(stored);
           if (user && user.email) {
-            setCurrentUser((prev) => ({ ...prev, ...user }));
+            let phone = user.phone || '';
+            if (!phone) {
+              const savedPhone = await AsyncStorage.getItem('ed_user_phone');
+              if (savedPhone) phone = savedPhone;
+            }
+            setCurrentUser((prev) => ({ ...prev, ...user, phone: phone || prev.phone }));
             setIsLoggedIn(true);
           }
         }
@@ -185,10 +185,17 @@ function MainApp() {
   }, [currentUser.email, isLoggedIn]);
 
   const handleUpdateUser = (updatedData: { name?: string; phone?: string; profileImage?: string }) => {
-    setCurrentUser((prev) => ({
-      ...prev,
-      ...updatedData,
-    }));
+    setCurrentUser((prev) => {
+      const updated = {
+        ...prev,
+        ...updatedData,
+      };
+      AsyncStorage.setItem('ed_user_session', JSON.stringify(updated)).catch(() => {});
+      if (updatedData.phone) {
+        AsyncStorage.setItem('ed_user_phone', updatedData.phone).catch(() => {});
+      }
+      return updated;
+    });
   };
 
   // Navigate forward with history tracking
@@ -276,8 +283,35 @@ function MainApp() {
     }
   }, []);
 
-  // Handle splash completion
-  const handleSplashFinish = () => {
+  // Handle splash completion with guaranteed session restore (prevents auto-logout on restart/reopen)
+  const handleSplashFinish = async () => {
+    try {
+      let stored: string | null = null;
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        stored = localStorage.getItem('ed_user_session');
+      }
+      if (!stored) {
+        stored = await AsyncStorage.getItem('ed_user_session');
+      }
+
+      if (stored) {
+        const user = JSON.parse(stored);
+        if (user && user.email) {
+          let phone = user.phone || '';
+          if (!phone) {
+            const savedPhone = await AsyncStorage.getItem('ed_user_phone');
+            if (savedPhone) phone = savedPhone;
+          }
+          setCurrentUser((prev) => ({ ...prev, ...user, phone: phone || prev.phone }));
+          setIsLoggedIn(true);
+          setScreenStack(['home']);
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('Splash session check error:', e);
+    }
+
     if (isLoggedIn) {
       setScreenStack(['home']);
     } else {
@@ -366,7 +400,11 @@ function MainApp() {
       case 'track':
         return 'Live Bowser Track';
       case 'orders':
-        return 'Invoices';
+        return 'My Orders';
+      case 'invoices':
+        return 'Tax Invoices';
+      case 'notifications':
+        return 'Notifications';
       case 'subscription':
         return 'Subscriptions';
       case 'profile':
@@ -385,42 +423,20 @@ function MainApp() {
   // No back arrow buttons in header; app relies on Android nav buttons & system swipe gestures
   const showBackBtn = false;
 
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [notificationsList, setNotificationsList] = useState<AppNotification[]>([]);
-
   // Initialize System Status Bar Push Notifications
   useEffect(() => {
     let cleanupFn: (() => void) | undefined;
     const init = async () => {
       cleanupFn = await initNotifications(() => {
-        // Tapping status bar notification navigates to Notification Center
-        setShowNotifications(true);
+        // Tapping status bar notification navigates to full Notifications Screen
+        navigateTo('notifications');
       });
-      const stored = await getStoredNotifications();
-      setNotificationsList(stored);
     };
     init();
     return () => {
       cleanupFn?.();
     };
   }, []);
-
-  // Refresh notifications whenever modal opens
-  useEffect(() => {
-    if (showNotifications) {
-      getStoredNotifications().then(setNotificationsList);
-    }
-  }, [showNotifications]);
-
-  const handleDeleteNotification = async (id: string) => {
-    const updated = await deleteStoredNotification(id);
-    setNotificationsList(updated);
-  };
-
-  const handleClearAllNotifications = async () => {
-    await clearAllStoredNotifications();
-    setNotificationsList([]);
-  };
 
   useEffect(() => {
     if (Platform.OS === 'android') {
@@ -445,7 +461,7 @@ function MainApp() {
             liveFuelRate={liveFuelRate}
             showBack={showBackBtn}
             onBack={goBack}
-            onNotificationPress={() => setShowNotifications(true)}
+            onNotificationPress={() => navigateTo('notifications')}
             onProfilePress={() => navigateTo('profile')}
             currentScreen={currentScreen}
             onNavigate={(screen) => navigateTo(screen)}
@@ -498,6 +514,30 @@ function MainApp() {
 
           {currentScreen === 'orders' && (
             <MyOrdersScreen
+              mode="orders"
+              currentUser={currentUser}
+              onNavigate={(screen) => navigateTo(screen)}
+              onSelectOrder={(id) => {
+                setActiveTrackingOrderId(id);
+                navigateTo('track');
+              }}
+            />
+          )}
+
+          {currentScreen === 'invoices' && (
+            <MyOrdersScreen
+              mode="invoices"
+              currentUser={currentUser}
+              onNavigate={(screen) => navigateTo(screen)}
+              onSelectOrder={(id) => {
+                setActiveTrackingOrderId(id);
+                navigateTo('track');
+              }}
+            />
+          )}
+
+          {currentScreen === 'notifications' && (
+            <NotificationsScreen
               onNavigate={(screen) => navigateTo(screen)}
               onSelectOrder={(id) => {
                 setActiveTrackingOrderId(id);
@@ -545,108 +585,6 @@ function MainApp() {
             onNavigate={(screen) => navigateTo(screen)}
           />
         )}
-        {/* Notifications In-App Modal */}
-        <Modal
-          visible={showNotifications}
-          animationType="fade"
-          transparent={true}
-          onRequestClose={() => setShowNotifications(false)}
-        >
-          <View style={styles.modalBackdrop}>
-            <View style={styles.notifCard}>
-              <View style={styles.notifHeader}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Ionicons name="notifications" size={20} color={COLORS.primary} />
-                  <Text style={styles.notifTitle}>Notifications</Text>
-                  {notificationsList.length > 0 && (
-                    <View style={styles.notifCountBadge}>
-                      <Text style={styles.notifCountText}>{notificationsList.length}</Text>
-                    </View>
-                  )}
-                </View>
-
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  {notificationsList.length > 0 && (
-                    <TouchableOpacity onPress={handleClearAllNotifications} activeOpacity={0.7}>
-                      <Text style={styles.clearAllText}>Clear All</Text>
-                    </TouchableOpacity>
-                  )}
-                  <TouchableOpacity onPress={() => setShowNotifications(false)} style={styles.notifClose}>
-                    <Ionicons name="close" size={20} color={COLORS.dark} />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {notificationsList.length === 0 ? (
-                <View style={styles.emptyNotifBox}>
-                  <Ionicons name="notifications-off-outline" size={40} color="#94A3B8" />
-                  <Text style={styles.emptyNotifTitle}>No Notifications</Text>
-                  <Text style={styles.emptyNotifSub}>
-                    You will receive real-time updates when diesel orders are placed, bowser captains are assigned, and for scheduled refills.
-                  </Text>
-                </View>
-              ) : (
-                <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
-                  {notificationsList.map((notif, index) => {
-                    const iconName =
-                      notif.type === 'driver'
-                        ? 'bicycle'
-                        : notif.type === 'subscription'
-                        ? 'calendar'
-                        : notif.type === 'rate'
-                        ? 'flame'
-                        : 'cart';
-                    const iconColor =
-                      notif.type === 'driver'
-                        ? '#2563EB'
-                        : notif.type === 'subscription'
-                        ? '#059669'
-                        : notif.type === 'rate'
-                        ? '#D97706'
-                        : COLORS.primary;
-                    const iconBg =
-                      notif.type === 'driver'
-                        ? '#EFF6FF'
-                        : notif.type === 'subscription'
-                        ? '#ECFDF5'
-                        : notif.type === 'rate'
-                        ? '#FEF3C7'
-                        : '#FEF2F2';
-
-                    return (
-                      <View
-                        key={notif.id || index}
-                        style={[
-                          styles.notifItem,
-                          index === notificationsList.length - 1 && { borderBottomWidth: 0 },
-                        ]}
-                      >
-                        <View style={[styles.notifIconWrap, { backgroundColor: iconBg }]}>
-                          <Ionicons name={iconName} size={18} color={iconColor} />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Text style={styles.notifItemTitle}>{notif.title}</Text>
-                            <Text style={styles.notifTimeText}>{notif.date}</Text>
-                          </View>
-                          <Text style={styles.notifItemBody}>{notif.body}</Text>
-                        </View>
-                        <TouchableOpacity
-                          style={styles.notifDeleteBtn}
-                          onPress={() => handleDeleteNotification(notif.id)}
-                          activeOpacity={0.7}
-                        >
-                          <Ionicons name="trash-outline" size={16} color="#94A3B8" />
-                        </TouchableOpacity>
-                      </View>
-                    );
-                  })}
-                </ScrollView>
-              )}
-            </View>
-          </View>
-        </Modal>
-
         {/* Global Delivery Location Pin Modal (Prompts only on Home screen after login, and accessible via Header pill) */}
         <LocationModal
           visible={showLocationModal}

@@ -379,12 +379,13 @@ app.get('/api/location/reverse-geocode', async (req, res) => {
       if (osmRes.ok) {
         const osmData = await osmRes.json();
         const a = osmData.address || {};
-        colony = a.neighbourhood || a.residential || a.subdistrict || '';
+        colony = a.neighbourhood || a.residential || a.subdistrict || a.quarter || '';
         suburb = a.suburb || a.locality || '';
         street = a.road || a.pedestrian || a.street || '';
-        city = a.city || a.town || city;
+        city = a.city || a.town || a.village || city;
+        state = a.state || state;
         pincode = a.postcode || '';
-        landmark = a.amenity || a.commercial || '';
+        landmark = a.amenity || a.place_of_worship || a.temple || a.commercial || a.shop || a.leisure || a.tourism || a.building || '';
         plotNo = a.house_number || '';
       }
     } catch (osmErr) {
@@ -418,7 +419,7 @@ app.get('/api/location/reverse-geocode', async (req, res) => {
             });
 
             const poi = mbData.features.find(f => f.place_type && f.place_type.includes('poi'));
-            if (poi && poi.text) landmark = poi.text;
+            if (poi && poi.text && !landmark) landmark = poi.text;
           }
         }
       } catch (mbErr) {
@@ -431,9 +432,12 @@ app.get('/api/location/reverse-geocode', async (req, res) => {
       plotNo = '';
     }
 
-    const area = [colony, suburb].filter(Boolean).join(', ') || city;
-    const shortAddress = [colony || street, suburb || city].filter(Boolean).join(', ') || area;
-    const fullParts = [plotNo, street, colony, suburb, city, pincode].filter(Boolean);
+    let landmarkText = landmark ? (landmark.toLowerCase().startsWith('near') ? landmark : `near ${landmark}`) : '';
+    let plotText = plotNo ? (/^\d+$/.test(plotNo) ? `Plot No ${plotNo}` : plotNo) : '';
+
+    const area = [colony, suburb && suburb !== colony ? suburb : ''].filter(Boolean).join(', ') || city;
+    const shortAddress = [colony || street, suburb && suburb !== colony ? suburb : city].filter(Boolean).join(', ') || area;
+    const fullParts = [plotText, street, landmarkText, colony, suburb && suburb !== colony ? suburb : '', city, state ? `${state} ${pincode}`.trim() : pincode].filter(Boolean);
     const fullAddress = fullParts.join(', ') || `${city}, ${state}`;
 
     return res.json({
@@ -441,10 +445,10 @@ app.get('/api/location/reverse-geocode', async (req, res) => {
       location: {
         lat: latFloat,
         lon: lonFloat,
-        plotNo,
+        plotNo: plotText,
         street,
         area,
-        landmark,
+        landmark: landmarkText,
         city,
         state,
         pincode,
@@ -1115,10 +1119,10 @@ app.get('/api/user/delivery-sites', (req, res) => {
     const sites = user?.deliverySites || [
       {
         id: 'site-1',
-        name: 'Plot 42, Hitech City',
-        address: 'Survey 42, Phase 2, Near Mindspace, Madhapur, Hyderabad, Telangana 500081',
-        dgCapacity: '500 kVA (2 Units)',
-        accessNotes: 'Bowser Gate 2 Access',
+        name: 'Primary Site',
+        address: 'Site Location, Hyderabad, Telangana',
+        dgCapacity: '500 kVA',
+        accessNotes: 'Bowser Gate Access',
         isPrimary: true,
       },
       {
@@ -1494,6 +1498,201 @@ app.patch('/api/orders/:id/status', (req, res) => {
     res.json({ success: true, message: 'Order status updated successfully', order: allOrders[orderIndex] });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to update order status', details: error.message });
+  }
+});
+
+// 5. Generate & View/Download GST Tax Invoice HTML / PDF
+app.get('/api/invoice/:orderId/html', (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const allOrders = loadOrders();
+    const order = allOrders.find(o => o.id === orderId) || allOrders[0] || {
+      id: orderId,
+      name: 'Valued Customer',
+      email: 'customer@example.com',
+      phone: '+91 9989551305',
+      address: 'Hyderabad Site, Telangana',
+      liters: 200,
+      fuelRate: 94.50,
+      deliveryFee: 350,
+      tax: 962.50,
+      total: 20212.50,
+      date: new Date().toLocaleDateString('en-GB'),
+      paymentId: 'pay_online_success',
+      paymentStatus: 'paid',
+    };
+
+    const fuelTotal = (Number(order.liters) || 200) * (Number(order.fuelRate) || 94.50);
+    const delFee = Number(order.deliveryFee) || 0;
+    const taxAmt = Number(order.tax) || 0;
+    const cgst = (taxAmt / 2).toFixed(2);
+    const sgst = (taxAmt / 2).toFixed(2);
+    const grandTotal = Number(order.total) || (fuelTotal + delFee + taxAmt);
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tax Invoice #${order.id} - EXTRA DIESEL</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #F8FAFC; color: #0F172A; padding: 24px; }
+    .invoice-card { max-width: 820px; margin: 0 auto; background: #FFFFFF; border-radius: 16px; border: 1px solid #E2E8F0; box-shadow: 0 4px 20px rgba(0,0,0,0.06); padding: 36px; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #DC2626; padding-bottom: 20px; }
+    .brand-logo { font-size: 26px; font-weight: 900; color: #DC2626; letter-spacing: -0.5px; display: flex; align-items: center; gap: 8px; }
+    .brand-sub { font-size: 11px; color: #64748B; font-weight: 600; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .invoice-meta { text-align: right; }
+    .invoice-title { font-size: 20px; font-weight: 900; color: #0F172A; letter-spacing: 0.5px; }
+    .invoice-num { font-size: 13px; font-weight: 700; color: #DC2626; margin-top: 3px; }
+    .invoice-date { font-size: 12px; color: #64748B; margin-top: 2px; }
+    .badge-paid { display: inline-block; background: #DCFCE7; color: #15803D; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 800; margin-top: 6px; }
+    .parties-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin: 24px 0; padding: 18px; background: #F8FAFC; border-radius: 12px; border: 1px solid #E2E8F0; }
+    .party-title { font-size: 11px; font-weight: 800; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+    .party-name { font-size: 14px; font-weight: 800; color: #0F172A; }
+    .party-detail { font-size: 12px; color: #475569; margin-top: 3px; line-height: 18px; }
+    .items-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    .items-table th { background: #0F172A; color: #FFFFFF; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; padding: 12px; text-align: left; }
+    .items-table td { padding: 12px; border-bottom: 1px solid #E2E8F0; font-size: 12.5px; color: #334155; }
+    .items-table td.num { text-align: right; font-weight: 600; }
+    .items-table th.num { text-align: right; }
+    .totals-area { display: flex; justify-content: flex-end; margin-top: 10px; }
+    .totals-box { width: 320px; }
+    .totals-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 12.5px; color: #475569; }
+    .totals-row.grand { border-top: 2px solid #0F172A; padding-top: 10px; margin-top: 6px; font-size: 16px; font-weight: 900; color: #0F172A; }
+    .totals-row.grand .val { color: #DC2626; }
+    .compliance-strip { margin-top: 28px; padding: 14px; background: #FEF2F2; border-left: 4px solid #DC2626; border-radius: 8px; font-size: 11.5px; color: #991B1B; line-height: 18px; }
+    .signatures { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 36px; padding-top: 20px; border-top: 1px dashed #CBD5E1; }
+    .sig-block { font-size: 12px; color: #64748B; line-height: 18px; }
+    .sig-stamp { font-weight: 800; color: #0F172A; margin-top: 30px; font-size: 12px; }
+    .print-bar { max-width: 820px; margin: 0 auto 16px auto; display: flex; justify-content: space-between; align-items: center; }
+    .print-btn { background: #DC2626; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 800; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+    @media print {
+      body { background: white; padding: 0; }
+      .invoice-card { box-shadow: none; border: none; padding: 0; }
+      .print-bar { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="print-bar">
+    <div style="font-size: 13px; color: #64748B;">Official Tax Invoice • <strong>EXTRA DIESEL</strong></div>
+    <button class="print-btn" onclick="window.print()">🖨️ Print / Download PDF</button>
+  </div>
+  <div class="invoice-card">
+    <div class="header">
+      <div>
+        <div class="brand-logo">🔥 EXTRA DIESEL</div>
+        <div class="brand-sub">Aadhya Fuels & Infra • Doorstep Fueling Bowser Fleet</div>
+        <div style="font-size: 11px; color: #059669; font-weight: 700; margin-top: 4px;">✓ Legal Metrology Certified (Weights & Measures)</div>
+      </div>
+      <div class="invoice-meta">
+        <div class="invoice-title">TAX INVOICE</div>
+        <div class="invoice-num">#INV-${order.id}</div>
+        <div class="invoice-date">Date: ${order.date || new Date().toLocaleDateString('en-GB')}</div>
+        <div class="badge-paid">✓ PAID VIA RAZORPAY</div>
+      </div>
+    </div>
+
+    <div class="parties-grid">
+      <div>
+        <div class="party-title">Supplier / Seller Details</div>
+        <div class="party-name">Aadhya Fuels & Infra</div>
+        <div class="party-detail"><strong>GSTIN:</strong> 36AAACE1234F1Z5</div>
+        <div class="party-detail">Plot 42, Hitech City, Hyderabad, Telangana - 500081</div>
+        <div class="party-detail"><strong>Hotline:</strong> +91 9989551305 | support@extradiesel.in</div>
+      </div>
+      <div>
+        <div class="party-title">Billed & Delivered To</div>
+        <div class="party-name">${order.name || 'Valued Customer'}</div>
+        <div class="party-detail"><strong>Phone:</strong> ${order.phone || '+91 9989551305'}</div>
+        <div class="party-detail"><strong>Email:</strong> ${order.email || 'customer@example.com'}</div>
+        <div class="party-detail"><strong>Site Address:</strong> ${order.address || 'Delivery Site, Hyderabad'}</div>
+      </div>
+    </div>
+
+    <table class="items-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Description of Goods / Services</th>
+          <th>HSN / SAC</th>
+          <th class="num">Qty</th>
+          <th class="num">Rate</th>
+          <th class="num">Taxable Amt</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1</td>
+          <td>
+            <strong>High Speed BS-VI Diesel (HSD)</strong><br>
+            <span style="font-size: 11px; color: #64748B;">Automated calibrated bowser digital dispensing</span>
+          </td>
+          <td>27101951</td>
+          <td class="num">${order.liters} Liters</td>
+          <td class="num">₹${(Number(order.fuelRate) || 94.50).toFixed(2)}</td>
+          <td class="num">₹${fuelTotal.toFixed(2)}</td>
+        </tr>
+        ${delFee > 0 ? `
+        <tr>
+          <td>2</td>
+          <td>
+            <strong>Doorstep Bowser Transport & Fuel Dispensing Service</strong>
+          </td>
+          <td>996511</td>
+          <td class="num">1 Delivery</td>
+          <td class="num">₹${delFee.toFixed(2)}</td>
+          <td class="num">₹${delFee.toFixed(2)}</td>
+        </tr>` : ''}
+      </tbody>
+    </table>
+
+    <div class="totals-area">
+      <div class="totals-box">
+        <div class="totals-row">
+          <span>Subtotal (Taxable Value):</span>
+          <span style="font-weight: 700;">₹${(fuelTotal + delFee).toFixed(2)}</span>
+        </div>
+        ${taxAmt > 0 ? `
+        <div class="totals-row">
+          <span>CGST (2.5%):</span>
+          <span>₹${cgst}</span>
+        </div>
+        <div class="totals-row">
+          <span>SGST (2.5%):</span>
+          <span>₹${sgst}</span>
+        </div>` : ''}
+        <div class="totals-row grand">
+          <span>Total Amount Payable:</span>
+          <span class="val">₹${grandTotal.toFixed(2)}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="compliance-strip">
+      <strong>Legal Metrology & Quality Declaration:</strong> Fuel dispensed with micro-filtered flow meters certified by the Department of Legal Metrology (Weights & Measures). Density BS-VI verified (820-845 kg/m³). Tamper-evident automated digital register delivery.
+    </div>
+
+    <div class="signatures">
+      <div class="sig-block">
+        <div><strong>Payment Mode:</strong> Razorpay Online Prepaid (UPI / Cards / NetBanking)</div>
+        <div><strong>Transaction Status:</strong> Completed & Reconciled</div>
+        <div style="margin-top: 6px; font-size: 11px; color: #94A3B8;">This is a computer-generated tax invoice and requires no physical signature.</div>
+      </div>
+      <div style="text-align: right;">
+        <div class="sig-stamp">For AADHYA FUELS & INFRA</div>
+        <div style="font-size: 11px; color: #64748B; margin-top: 4px;">Authorized Signatory</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    res.setHeader('Content-Type', 'text/html');
+    res.send(html);
+  } catch (error) {
+    res.status(500).send('<h3>Failed to generate invoice</h3>');
   }
 });
 

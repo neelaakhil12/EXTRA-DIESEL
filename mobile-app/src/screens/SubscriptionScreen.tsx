@@ -104,7 +104,7 @@ export const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({
   // Toggle Active / Paused
   const handleToggleStatus = async () => {
     if (!activePlan) return;
-    const newStatus = activePlan.status === 'active' ? 'paused' : 'active';
+    const newStatus: 'active' | 'paused' = activePlan.status === 'active' ? 'paused' : 'active';
     try {
       const updated = { ...activePlan, status: newStatus };
       setActivePlan(updated);

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -17,14 +17,15 @@ import { APP_CONFIG } from '../constants/config';
 import * as Location from 'expo-location';
 
 export interface SavedLocation {
-  plotNo: string;
-  street: string;
-  area: string;
-  landmark: string;
-  city: string;
-  pincode: string;
+  plotNo?: string;
+  street?: string;
+  area?: string;
+  landmark?: string;
+  city?: string;
+  pincode?: string;
   fullAddress: string;
   shortAddress?: string;
+  locationLink?: string;
   siteName?: string;
   siteType?: string;
   lat?: number;
@@ -38,43 +39,24 @@ interface LocationModalProps {
   currentLocation?: SavedLocation | null;
 }
 
-interface PlaceSearchResult {
-  id: string;
-  name: string;
-  placeName: string;
-  lat: number;
-  lon: number;
-  plotNo?: string;
-  street?: string;
-  area?: string;
-  landmark?: string;
-  city?: string;
-  state?: string;
-  pincode?: string;
-}
-
 export const LocationModal: React.FC<LocationModalProps> = ({
   visible,
   onClose,
   onSaveLocation,
   currentLocation,
 }) => {
-  const [plotNo, setPlotNo] = useState(currentLocation?.plotNo || '');
-  const [street, setStreet] = useState(currentLocation?.street || '');
-  const [area, setArea] = useState(currentLocation?.area || '');
-  const [landmark, setLandmark] = useState(currentLocation?.landmark || '');
-  const [city, setCity] = useState(currentLocation?.city || 'Hyderabad');
-  const [pincode, setPincode] = useState(currentLocation?.pincode || '');
+  const [address, setAddress] = useState(currentLocation?.fullAddress || '');
+  const [locationLink, setLocationLink] = useState(
+    currentLocation?.locationLink ||
+    (currentLocation?.lat && currentLocation?.lon
+      ? `https://maps.google.com/?q=${currentLocation.lat.toFixed(6)},${currentLocation.lon.toFixed(6)}`
+      : '')
+  );
+  const [shortAddress, setShortAddress] = useState(currentLocation?.shortAddress || '');
   const [coords, setCoords] = useState<{ lat?: number; lon?: number }>({
     lat: currentLocation?.lat,
     lon: currentLocation?.lon,
   });
-
-  // Place Search & Autocomplete
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<PlaceSearchResult[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const searchTimeoutRef = useRef<any>(null);
 
   const [isLocating, setIsLocating] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
@@ -82,124 +64,61 @@ export const LocationModal: React.FC<LocationModalProps> = ({
   const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'https://extradiesel.in';
   const mapboxToken = APP_CONFIG.MAPBOX_ACCESS_TOKEN || '';
 
-  // Handle Search Input with Debounce
-  const handleSearchChange = (text: string) => {
-    setSearchQuery(text);
-    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-
-    if (text.trim().length < 2) {
-      setSearchResults([]);
-      setIsSearching(false);
-      return;
-    }
-
-    setIsSearching(true);
-    searchTimeoutRef.current = setTimeout(async () => {
-      await performPlaceSearch(text.trim());
-    }, 350);
-  };
-
-  const performPlaceSearch = async (query: string) => {
-    try {
-      // 1. Direct Mapbox Places API
-      if (mapboxToken) {
-        const mbUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxToken}&country=IN&proximity=78.4867,17.3850&types=poi,address,neighborhood,locality,place`;
-        const mbRes = await fetch(mbUrl);
-        if (mbRes.ok) {
-          const mbData = await mbRes.json();
-          if (mbData.features && mbData.features.length > 0) {
-            const results: PlaceSearchResult[] = mbData.features.map((f: any) => {
-              const ctx = f.context || [];
-              let pNo = f.address || '';
-              let st = f.text || '';
-              let ar = '';
-              let ct = 'Hyderabad';
-              let pin = '';
-              let lm = '';
-
-              ctx.forEach((c: any) => {
-                if (c.id.startsWith('postcode')) pin = c.text;
-                else if (c.id.startsWith('neighborhood') || c.id.startsWith('locality')) ar = c.text;
-                else if (c.id.startsWith('place')) ct = c.text;
-              });
-
-              if (f.place_type && f.place_type.includes('poi')) {
-                lm = f.text;
-              }
-
-              return {
-                id: f.id,
-                name: f.text,
-                placeName: f.place_name,
-                lat: f.center[1],
-                lon: f.center[0],
-                plotNo: pNo,
-                street: st,
-                area: ar || f.text,
-                landmark: lm,
-                city: ct,
-                pincode: pin,
-              };
-            });
-            setSearchResults(results);
-            setIsSearching(false);
-            return;
-          }
-        }
-      }
-
-      // 2. Fallback to Backend Search API
-      const res = await fetch(`${baseUrl}/api/location/search?query=${encodeURIComponent(query)}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.results) {
-          setSearchResults(data.results);
-          setIsSearching(false);
-          return;
-        }
-      }
-    } catch (e) {
-      console.warn('Place search error:', e);
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
-  const handleSelectSearchResult = (item: PlaceSearchResult) => {
-    setPlotNo(item.plotNo || '');
-    setStreet(item.street || item.name || '');
-    setArea(item.area || item.name || '');
-    setLandmark(item.landmark || '');
-    setCity(item.city || 'Hyderabad');
-    setPincode(item.pincode || '');
-    setCoords({ lat: item.lat, lon: item.lon });
-    setSearchResults([]);
-    setSearchQuery('');
-    setStatusMessage(`📍 Pinned: ${item.name} (${item.lat.toFixed(4)}, ${item.lon.toFixed(4)})`);
-    setTimeout(() => setStatusMessage(''), 4000);
-  };
-
-  const handleClearForm = () => {
-    setPlotNo('');
-    setStreet('');
-    setArea('');
-    setLandmark('');
-    setCity('Hyderabad');
-    setPincode('');
-    setCoords({});
-    setSearchQuery('');
-    setSearchResults([]);
-    setStatusMessage('Form cleared. Search or type your exact address.');
-    setTimeout(() => setStatusMessage(''), 3000);
-  };
-
-  // Apply location details from coordinates using Server Engine (OSM Colony + Mapbox)
+  // Apply location details from coordinates dynamically using Native Geocoder + Server OSM / Mapbox
   const applyCoordinatesLocation = async (latitude: number, longitude: number) => {
     try {
-      setStatusMessage('Pinning exact colony, street & landmark...');
+      setStatusMessage('Detecting detailed site address & landmarks...');
       setCoords({ lat: latitude, lon: longitude });
 
-      // 1. Primary: Server Reverse Geocode API (OSM Nominatim Colony + Mapbox Street/POI)
+      const mapsUrl = `https://maps.google.com/?q=${latitude.toFixed(6)},${longitude.toFixed(6)}`;
+      setLocationLink(mapsUrl);
+
+      let detectedPlot = '';
+      let detectedStreet = '';
+      let detectedLandmark = '';
+      let detectedColony = '';
+      let detectedSuburb = '';
+      let detectedCity = 'Hyderabad';
+      let detectedState = 'Telangana';
+      let detectedPincode = '';
+
+      // 1. Mobile Native Geocoder via expo-location (uses Android Google Play Services / iOS MapKit)
+      if (Platform.OS !== 'web') {
+        try {
+          const geoResults = await Location.reverseGeocodeAsync({ latitude, longitude });
+          if (geoResults && geoResults.length > 0) {
+            const g = geoResults[0];
+            const isPlusCode = (t?: string | null) => t && /^[A-Z0-9]{4,8}\+/i.test(t.trim());
+
+            if (g.name && !isPlusCode(g.name)) {
+              if (/^\d+/.test(g.name)) {
+                detectedPlot = `Plot No ${g.name}`;
+              } else if (g.name !== g.street) {
+                detectedLandmark = g.name;
+              }
+            }
+            if (g.streetNumber && !detectedPlot) {
+              detectedPlot = `Plot No ${g.streetNumber}`;
+            }
+            if (g.street && !isPlusCode(g.street)) {
+              detectedStreet = g.street;
+            }
+            if (g.district && !isPlusCode(g.district)) {
+              detectedColony = g.district;
+            }
+            if (g.subregion && g.subregion !== g.city && !isPlusCode(g.subregion)) {
+              detectedSuburb = g.subregion;
+            }
+            if (g.city) detectedCity = g.city;
+            if (g.region) detectedState = g.region;
+            if (g.postalCode) detectedPincode = g.postalCode;
+          }
+        } catch (nativeErr) {
+          console.warn('Native reverseGeocode error:', nativeErr);
+        }
+      }
+
+      // 2. Server Reverse Geocode API (OSM Nominatim + Mapbox Places POI)
       try {
         const res = await fetch(
           `${baseUrl}/api/location/reverse-geocode?lat=${latitude}&lon=${longitude}`
@@ -208,75 +127,98 @@ export const LocationModal: React.FC<LocationModalProps> = ({
           const data = await res.json();
           if (data.success && data.location) {
             const loc = data.location;
-            setPlotNo(loc.plotNo || '');
-            setStreet(loc.street || '');
-            setArea(loc.area || loc.city || 'Hyderabad');
-            setLandmark(loc.landmark || '');
-            setCity(loc.city || 'Hyderabad');
-            setPincode(loc.pincode || '');
-            setStatusMessage(`📍 Pinned: ${loc.area || loc.shortAddress}`);
-            setTimeout(() => setStatusMessage(''), 4000);
-            return;
+            if (loc.plotNo && !detectedPlot) {
+              detectedPlot = loc.plotNo.startsWith('Plot') ? loc.plotNo : `Plot No ${loc.plotNo}`;
+            }
+            if (loc.street && !detectedStreet) detectedStreet = loc.street;
+            if (loc.landmark && !detectedLandmark) detectedLandmark = loc.landmark;
+            if (loc.area) {
+              const parts = loc.area.split(',').map((p: string) => p.trim());
+              if (!detectedColony && parts[0]) detectedColony = parts[0];
+              if (!detectedSuburb && parts[1]) detectedSuburb = parts[1];
+            }
+            if (loc.city && detectedCity === 'Hyderabad') detectedCity = loc.city;
+            if (loc.state) detectedState = loc.state;
+            if (loc.pincode && !detectedPincode) detectedPincode = loc.pincode;
           }
         }
-      } catch (e1) {
-        console.warn('Backend geocoding error, falling back to Mapbox:', e1);
+      } catch (srvErr) {
+        console.warn('Backend geocode error:', srvErr);
       }
 
-      // 2. Direct Mapbox Places API fallback
-      if (mapboxToken) {
-        const mbUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${longitude},${latitude}.json?access_token=${mapboxToken}&types=address,poi,neighborhood,locality,place,postcode`;
-        const mbRes = await fetch(mbUrl);
+      // 3. Fallback Mapbox Places API directly if needed
+      if ((!detectedStreet || !detectedColony) && mapboxToken) {
+        try {
+          const mbUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${longitude},${latitude}.json?access_token=${mapboxToken}&types=address,poi,neighborhood,locality,place,postcode`;
+          const mbRes = await fetch(mbUrl);
+          if (mbRes.ok) {
+            const mbData = await mbRes.json();
+            if (mbData.features && mbData.features.length > 0) {
+              const feat = mbData.features[0];
+              const ctx = feat.context || [];
+              const isPlusCode = (t?: string | null) => t && /^[A-Z0-9]{4,8}\+/i.test(t.trim());
 
-        if (mbRes.ok) {
-          const mbData = await mbRes.json();
-          if (mbData.features && mbData.features.length > 0) {
-            const feat = mbData.features[0];
-            const ctx = feat.context || [];
+              if (!detectedStreet && feat.text && !isPlusCode(feat.text)) {
+                detectedStreet = feat.text;
+              }
+              ctx.forEach((c: any) => {
+                if (!detectedPincode && c.id.startsWith('postcode')) detectedPincode = c.text;
+                else if (!detectedColony && c.id.startsWith('neighborhood')) detectedColony = c.text;
+                else if (!detectedSuburb && c.id.startsWith('locality')) detectedSuburb = c.text;
+                else if (c.id.startsWith('place')) detectedCity = c.text;
+                else if (c.id.startsWith('region')) detectedState = c.text;
+              });
 
-            let st = feat.text && !/^[A-Z0-9]{4,8}\+/i.test(feat.text) ? feat.text : '';
-            let colony = '';
-            let locality = '';
-            let lm = '';
-            let ct = 'Hyderabad';
-            let pin = '';
-
-            ctx.forEach((c: any) => {
-              if (c.id.startsWith('postcode')) pin = c.text;
-              else if (c.id.startsWith('neighborhood')) colony = c.text;
-              else if (c.id.startsWith('locality')) locality = c.text;
-              else if (c.id.startsWith('place')) ct = c.text;
-            });
-
-            const poi = mbData.features.find((f: any) => f.place_type && f.place_type.includes('poi'));
-            if (poi && poi.text) lm = poi.text;
-
-            const ar = [colony, locality].filter(Boolean).join(', ') || locality || ct;
-            setPlotNo('');
-            setStreet(st);
-            setArea(ar);
-            setLandmark(lm);
-            setCity(ct);
-            setPincode(pin);
-
-            setStatusMessage(`📍 Pinned: ${ar}`);
-            setTimeout(() => setStatusMessage(''), 4000);
-            return;
+              const poi = mbData.features.find((f: any) => f.place_type && f.place_type.includes('poi'));
+              if (poi && poi.text && !detectedLandmark) detectedLandmark = poi.text;
+            }
           }
+        } catch (mbErr) {
+          console.warn('Mapbox direct error:', mbErr);
         }
       }
+
+      // Format Landmark neatly (e.g., "near Vinayaka mandapamu")
+      let landmarkStr = '';
+      if (detectedLandmark) {
+        landmarkStr = detectedLandmark.toLowerCase().startsWith('near')
+          ? detectedLandmark
+          : `near ${detectedLandmark}`;
+      } else if (detectedColony && detectedColony !== detectedSuburb) {
+        landmarkStr = `near ${detectedColony}`;
+      }
+
+      // Construct detailed address array
+      const addressParts = [
+        detectedPlot,
+        detectedStreet,
+        landmarkStr,
+        detectedColony,
+        detectedSuburb && detectedSuburb !== detectedColony ? detectedSuburb : '',
+        detectedCity,
+        detectedState ? `${detectedState} ${detectedPincode}`.trim() : detectedPincode,
+      ].filter(Boolean);
+
+      const fullDetailed = addressParts.join(', ') || `Site Location, ${detectedCity}, ${detectedState} ${detectedPincode}`.trim();
+      setAddress(fullDetailed);
+
+      // Short address for header pill (e.g., "Chaitanya Hills, Almasguda")
+      const shortHeader = [detectedColony || detectedStreet, detectedSuburb || detectedCity].filter(Boolean).join(', ') || detectedCity;
+      setShortAddress(shortHeader);
+
+      setStatusMessage(`📍 Pinned: ${shortHeader}`);
+      setTimeout(() => setStatusMessage(''), 4500);
     } catch (e) {
       console.warn('Geocoding error:', e);
+      setStatusMessage(`GPS pinned (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`);
+      setTimeout(() => setStatusMessage(''), 3000);
     }
-
-    setStatusMessage(`GPS pinned (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`);
-    setTimeout(() => setStatusMessage(''), 3000);
   };
 
-  // "Locate Me" GPS Reverse Geocoding (Native Mobile GPS + Web Geolocation)
+  // "Locate Me" GPS Reverse Geocoding
   const handleLocateMe = async () => {
     setIsLocating(true);
-    setStatusMessage('Fetching GPS location...');
+    setStatusMessage('Fetching live GPS coordinates...');
 
     // Mobile App Native GPS via expo-location
     if (Platform.OS !== 'web') {
@@ -331,39 +273,20 @@ export const LocationModal: React.FC<LocationModalProps> = ({
   };
 
   const handleConfirm = () => {
-    // Strip any raw Plus Codes (e.g. 8G7W+54M)
-    const isPlusCode = (t: string) => /^[A-Z0-9]{4,8}\+[A-Z0-9]{2,4}/i.test((t || '').trim());
-    const cleanPlot = isPlusCode(plotNo) ? '' : plotNo.trim();
-    const cleanStreet = isPlusCode(street) ? '' : street.trim();
-    const cleanArea = isPlusCode(area) ? '' : area.trim();
-    const cleanLm = landmark.trim();
-    const cleanCt = city.trim() || 'Hyderabad';
-    const cleanPin = pincode.trim();
+    const full = address.trim() || 'Site Delivery Location, Hyderabad';
+    const link = locationLink.trim() || (coords?.lat && coords?.lon ? `https://maps.google.com/?q=${coords.lat.toFixed(6)},${coords.lon.toFixed(6)}` : '');
 
-    const parts = [cleanPlot, cleanStreet, cleanLm ? `Near ${cleanLm}` : '', cleanArea, cleanCt, cleanPin].filter(Boolean);
-    const full = parts.join(', ');
-
-    // Prefer Colony / Area in short display so user always sees their exact locality
-    let short = '';
-    if (cleanPlot && cleanStreet) {
-      short = `${cleanPlot}, ${cleanStreet}`;
-    } else if (cleanStreet && cleanArea) {
-      short = `${cleanStreet}, ${cleanArea.split(',')[0]}`;
-    } else if (cleanArea) {
-      short = cleanArea;
-    } else {
-      short = cleanCt;
+    // Compute short address from full address if not set
+    let short = shortAddress;
+    if (!short) {
+      const parts = full.split(',').map((p) => p.trim()).filter((p) => !/^[A-Z0-9]{4,8}\+/i.test(p));
+      short = parts.slice(0, 2).join(', ') || parts[0] || 'Delivery Site';
     }
 
     const saved: SavedLocation = {
-      plotNo: cleanPlot,
-      street: cleanStreet,
-      area: cleanArea,
-      landmark: cleanLm,
-      city: cleanCt,
-      pincode: cleanPin,
       fullAddress: full,
       shortAddress: short,
+      locationLink: link,
       lat: coords?.lat,
       lon: coords?.lon,
     };
@@ -382,77 +305,17 @@ export const LocationModal: React.FC<LocationModalProps> = ({
               <View style={styles.pinIconWrap}>
                 <Ionicons name="location" size={22} color={COLORS.primary} />
               </View>
-              <View>
+              <View style={{ flex: 1 }}>
                 <Text style={styles.modalTitle}>Set Delivery Location</Text>
                 <Text style={styles.modalSub}>Doorstep Bowser Fueling Destination</Text>
               </View>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+            <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.7}>
               <Ionicons name="close" size={22} color="#0F172A" />
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-            {/* 1. Fast Location Search & Autocomplete Bar */}
-            <View style={styles.searchSection}>
-              <View style={styles.searchHeaderRow}>
-                <Text style={styles.fieldSectionHeading}>Search Area, Colony or Landmark</Text>
-                <TouchableOpacity onPress={handleClearForm} style={styles.clearFormBtn}>
-                  <Ionicons name="trash-outline" size={13} color="#EF4444" />
-                  <Text style={styles.clearFormText}>Clear Form</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.searchBar}>
-                <Ionicons name="search" size={18} color="#64748B" style={{ marginRight: 8 }} />
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="e.g. Madhapur, Kondapur, Kukatpally, Gachibowli..."
-                  placeholderTextColor="#94A3B8"
-                  value={searchQuery}
-                  onChangeText={handleSearchChange}
-                />
-                {isSearching ? (
-                  <ActivityIndicator size="small" color={COLORS.primary} />
-                ) : searchQuery.length > 0 ? (
-                  <TouchableOpacity onPress={() => { setSearchQuery(''); setSearchResults([]); }}>
-                    <Ionicons name="close-circle" size={18} color="#94A3B8" />
-                  </TouchableOpacity>
-                ) : null}
-              </View>
-
-              {/* Autocomplete Dropdown */}
-              {searchResults.length > 0 && (
-                <View style={styles.resultsDropdown}>
-                  {searchResults.map((item) => (
-                    <TouchableOpacity
-                      key={item.id}
-                      style={styles.resultItem}
-                      onPress={() => handleSelectSearchResult(item)}
-                      activeOpacity={0.7}
-                    >
-                      <View style={styles.resultIconWrap}>
-                        <Ionicons name="location-sharp" size={16} color={COLORS.primary} />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.resultTitle}>{item.name}</Text>
-                        <Text style={styles.resultSubtitle} numberOfLines={2}>
-                          {item.placeName}
-                        </Text>
-                      </View>
-                      <Ionicons name="arrow-forward-circle-outline" size={18} color="#94A3B8" />
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-            </View>
-
-            {/* Divider */}
-            <View style={styles.dividerRow}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>OR AUTO-DETECT</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
             {/* Locate Me Primary Action Button */}
             <TouchableOpacity
               style={styles.locateMeBtn}
@@ -467,110 +330,66 @@ export const LocationModal: React.FC<LocationModalProps> = ({
               )}
               <View style={{ flex: 1 }}>
                 <Text style={styles.locateMeBtnText}>Use Current Location (GPS)</Text>
-                <Text style={styles.locateMeBtnSub}>Auto-detect street, area, and nearby landmark</Text>
+                <Text style={styles.locateMeBtnSub}>Auto-detect full site address & Google Maps link</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.7)" />
             </TouchableOpacity>
 
-            {/* Desktop browser notice */}
-            {Platform.OS === 'web' && (
-              <View style={styles.desktopGpsNotice}>
-                <Ionicons name="information-circle-outline" size={14} color="#64748B" />
-                <Text style={styles.desktopGpsNoticeText}>
-                  On PC/Laptop browsers, Wi-Fi location can resolve to your ISP telecom node (e.g. BN Reddy / Almasguda). Use the Search bar above or edit fields below for exact doorstep delivery.
-                </Text>
-              </View>
-            )}
-
+            {/* Pinned Address Feedback Box */}
             {statusMessage ? (
               <View style={styles.statusBox}>
-                <Ionicons name="checkmark-circle" size={16} color="#059669" />
-                <Text style={styles.statusBoxText}>{statusMessage}</Text>
+                <Ionicons name="checkmark-circle" size={17} color="#059669" />
+                <Text style={styles.statusBoxText} numberOfLines={2}>{statusMessage}</Text>
               </View>
             ) : null}
 
-            {/* Address Fields Form */}
-            <View style={styles.addressFormHeaderRow}>
-              <Text style={styles.fieldSectionHeading}>Delivery Address & Landmark Details</Text>
-              {coords.lat && coords.lon && (
-                <View style={styles.coordsBadge}>
-                  <Ionicons name="locate" size={12} color="#059669" />
-                  <Text style={styles.coordsBadgeText}>
-                    GPS: {coords.lat.toFixed(4)}, {coords.lon.toFixed(4)}
-                  </Text>
-                </View>
-              )}
+            {/* Box 1: Delivery Address */}
+            <View style={{ marginBottom: 14, marginTop: 4 }}>
+              <View style={styles.inputHeaderRow}>
+                <Text style={styles.inputLabel}>DELIVERY ADDRESS *</Text>
+                <Text style={styles.inputHint}>(Full site details & landmark)</Text>
+              </View>
+              <TextInput
+                style={styles.addressTextArea}
+                placeholder="Enter or GPS-detect full delivery address (Plot/Door, Road, Landmark, Area, City, Pincode)"
+                placeholderTextColor="#94A3B8"
+                multiline={true}
+                numberOfLines={3}
+                value={address}
+                onChangeText={setAddress}
+                textAlignVertical="top"
+              />
             </View>
 
-            <View style={styles.fieldRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.inputLabel}>Plot / Door / Flat No. *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="e.g. Plot 42 / Gate 3"
-                  value={plotNo}
-                  onChangeText={setPlotNo}
-                />
+            {/* Box 2: Current Location Link */}
+            <View style={{ marginBottom: 16 }}>
+              <View style={styles.inputHeaderRow}>
+                <Text style={styles.inputLabel}>GPS LOCATION LINK (GOOGLE MAPS)</Text>
+                {coords.lat && coords.lon && (
+                  <View style={styles.coordsBadge}>
+                    <Ionicons name="locate" size={11} color="#059669" />
+                    <Text style={styles.coordsBadgeText}>GPS Pinned</Text>
+                  </View>
+                )}
               </View>
-              <View style={{ flex: 1.5 }}>
-                <Text style={styles.inputLabel}>Street / Road Name *</Text>
+              <View style={styles.linkInputWrap}>
+                <Ionicons name="globe-outline" size={18} color="#0284C7" style={{ marginRight: 8 }} />
                 <TextInput
-                  style={styles.textInput}
-                  placeholder="e.g. HITEC City Main Rd"
-                  value={street}
-                  onChangeText={setStreet}
-                />
-              </View>
-            </View>
-
-            <View style={{ marginBottom: 12 }}>
-              <Text style={styles.inputLabel}>Key Landmark (For Bowser Driver Navigation) *</Text>
-              <View style={styles.landmarkWrap}>
-                <Ionicons name="flag-outline" size={16} color={COLORS.primary} style={{ marginRight: 6 }} />
-                <TextInput
-                  style={[styles.textInput, { flex: 1, borderWidth: 0, paddingHorizontal: 0 }]}
-                  placeholder="e.g. Opposite Mindspace Gate 1 / Cyber Towers"
-                  value={landmark}
-                  onChangeText={setLandmark}
-                />
-              </View>
-            </View>
-
-            <View style={styles.fieldRow}>
-              <View style={{ flex: 1.5 }}>
-                <Text style={styles.inputLabel}>Area / Locality *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="e.g. Madhapur"
-                  value={area}
-                  onChangeText={setArea}
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.inputLabel}>City</Text>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="Hyderabad"
-                  value={city}
-                  onChangeText={setCity}
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.inputLabel}>Pincode</Text>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="500081"
-                  keyboardType="number-pad"
-                  value={pincode}
-                  onChangeText={setPincode}
+                  style={styles.linkInput}
+                  placeholder="https://maps.google.com/?q=lat,lon"
+                  placeholderTextColor="#94A3B8"
+                  value={locationLink}
+                  onChangeText={setLocationLink}
+                  autoCapitalize="none"
+                  autoCorrect={false}
                 />
               </View>
             </View>
           </ScrollView>
 
-          {/* Confirm Footer */}
+          {/* Modal Footer Confirmation */}
           <View style={styles.modalFooter}>
-            <TouchableOpacity style={styles.confirmBtn} onPress={handleConfirm} activeOpacity={0.85}>
+            <TouchableOpacity style={styles.confirmBtn} onPress={handleConfirm} activeOpacity={0.88}>
               <Ionicons name="checkmark-circle" size={18} color={COLORS.white} />
               <Text style={styles.confirmBtnText}>Confirm & Pin Delivery Site</Text>
             </TouchableOpacity>
@@ -590,25 +409,24 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   modalCard: {
-    width: '100%',
-    maxWidth: 540,
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
+    width: '100%',
+    maxWidth: 440,
     maxHeight: '90%',
-    overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.25,
     shadowRadius: 20,
-    elevation: 8,
+    elevation: 10,
+    overflow: 'hidden',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 15,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
@@ -616,130 +434,35 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    flex: 1,
   },
   pinIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: '#FEF2F2',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '800',
     color: '#0F172A',
   },
   modalSub: {
-    fontSize: 12,
+    fontSize: 11.5,
     color: '#64748B',
     marginTop: 2,
   },
   closeBtn: {
     padding: 6,
-    borderRadius: 8,
+    borderRadius: 20,
     backgroundColor: '#F1F5F9',
   },
   modalBody: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 10,
-  },
-  searchSection: {
-    marginBottom: 14,
-  },
-  searchHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  clearFormBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    backgroundColor: '#FEF2F2',
-  },
-  clearFormText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#EF4444',
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 13.5,
-    color: '#0F172A',
-  },
-  resultsDropdown: {
-    marginTop: 6,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-    maxHeight: 220,
-  },
-  resultItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  resultIconWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#FEF2F2',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  resultTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  resultSubtitle: {
-    fontSize: 11.5,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 10,
-    gap: 10,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#E2E8F0',
-  },
-  dividerText: {
-    fontSize: 10.5,
-    fontWeight: '700',
-    color: '#94A3B8',
-    letterSpacing: 0.5,
+    paddingHorizontal: 18,
+    paddingTop: 14,
+    paddingBottom: 6,
   },
   locateMeBtn: {
     flexDirection: 'row',
@@ -749,7 +472,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 13,
     borderRadius: 12,
-    marginBottom: 8,
+    marginBottom: 10,
     shadowColor: COLORS.primary,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.25,
@@ -758,30 +481,13 @@ const styles = StyleSheet.create({
   },
   locateMeBtnText: {
     color: COLORS.white,
-    fontSize: 14.5,
     fontWeight: '800',
+    fontSize: 14,
   },
   locateMeBtnSub: {
-    color: 'rgba(255,255,255,0.85)',
+    color: 'rgba(255, 255, 255, 0.85)',
     fontSize: 11,
     marginTop: 2,
-  },
-  desktopGpsNotice: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 6,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
-    padding: 8,
-    marginBottom: 12,
-  },
-  desktopGpsNoticeText: {
-    fontSize: 11,
-    color: '#64748B',
-    lineHeight: 15,
-    flex: 1,
   },
   statusBox: {
     flexDirection: 'row',
@@ -791,78 +497,81 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#A7F3D0',
     borderRadius: 8,
-    padding: 10,
-    marginBottom: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginBottom: 10,
   },
   statusBoxText: {
     fontSize: 12.5,
     color: '#065F46',
-    fontWeight: '600',
+    fontWeight: '700',
     flex: 1,
   },
-  addressFormHeaderRow: {
+  inputHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
-    marginTop: 4,
+    marginBottom: 6,
   },
-  fieldSectionHeading: {
-    fontSize: 12,
+  inputLabel: {
+    fontSize: 11.5,
     fontWeight: '800',
-    color: '#475569',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    color: '#334155',
+    letterSpacing: 0.3,
+  },
+  inputHint: {
+    fontSize: 11,
+    color: '#64748B',
   },
   coordsBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     backgroundColor: '#ECFDF5',
-    paddingHorizontal: 8,
+    paddingHorizontal: 7,
     paddingVertical: 3,
-    borderRadius: 12,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#A7F3D0',
   },
   coordsBadgeText: {
-    fontSize: 10.5,
+    fontSize: 10,
     fontWeight: '700',
     color: '#065F46',
   },
-  fieldRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 12,
-  },
-  inputLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#475569',
-    marginBottom: 4,
-  },
-  textInput: {
+  addressTextArea: {
     backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     fontSize: 13.5,
     color: '#0F172A',
+    fontWeight: '500',
+    minHeight: 82,
+    lineHeight: 20,
   },
-  landmarkWrap: {
+  linkInputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
     paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  linkInput: {
+    flex: 1,
+    fontSize: 13,
+    color: '#0F172A',
+    fontWeight: '500',
+    paddingVertical: 8,
   },
   modalFooter: {
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
     backgroundColor: '#FFFFFF',
@@ -874,7 +583,7 @@ const styles = StyleSheet.create({
     gap: 8,
     backgroundColor: '#059669',
     paddingVertical: 13,
-    borderRadius: 10,
+    borderRadius: 11,
     shadowColor: '#059669',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.25,
@@ -883,7 +592,7 @@ const styles = StyleSheet.create({
   },
   confirmBtnText: {
     color: COLORS.white,
-    fontSize: 15,
     fontWeight: '800',
+    fontSize: 14,
   },
 });

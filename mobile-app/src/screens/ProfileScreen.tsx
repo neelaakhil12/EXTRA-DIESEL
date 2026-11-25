@@ -99,12 +99,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onLogout, on
 
   const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'https://extradiesel.in';
 
-  // Current User Data
-  const userName = user?.name || 'Akhil Kumar';
-  const userPhone = user?.phone || '+91 98765 43210';
-  const userEmail = user?.email || 'aadhyafuels9@gmail.com';
-  const userCompany = user?.company || 'Aadhya Fuels & Infra';
-  const userGstin = user?.gstin || '36AAACE1234F1Z5';
+  // Current User Data (derived purely from session/props, no fake fallbacks)
+  const userName = user?.name || '';
+  const userPhone = user?.phone || '';
+  const userEmail = user?.email || '';
+  const userCompany = user?.company || '';
+  const userGstin = user?.gstin || '';
   const profileImage = user?.profileImage;
 
   // Navigation within Profile (sub-screens instead of small modals)
@@ -116,6 +116,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onLogout, on
   const [editPhone, setEditPhone] = useState(userPhone);
   const [editCompany, setEditCompany] = useState(userCompany);
   const [editGstin, setEditGstin] = useState(userGstin);
+
+  useEffect(() => {
+    if (user?.name !== undefined) setEditName(user.name);
+    if (user?.phone !== undefined) setEditPhone(user.phone);
+    if (user?.company !== undefined) setEditCompany(user.company);
+    if (user?.gstin !== undefined) setEditGstin(user.gstin);
+  }, [user?.name, user?.phone, user?.company, user?.gstin]);
 
   // Global Settings for B2B Credit, Hotline & PESO Compliance
   const [creditLimit, setCreditLimit] = useState<number>(500000);
@@ -152,6 +159,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onLogout, on
   const [siteFormAddress, setSiteFormAddress] = useState('');
   const [siteFormDg, setSiteFormDg] = useState('');
   const [siteFormNotes, setSiteFormNotes] = useState('');
+  const [siteFormIsPrimary, setSiteFormIsPrimary] = useState(true);
 
   // Load Settings, Terms & User profile from backend and local persistent storage
   useEffect(() => {
@@ -242,6 +250,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onLogout, on
       const data = await res.json();
       setIsSaving(false);
 
+      if (payload.phone) {
+        AsyncStorage.setItem('ed_user_phone', payload.phone).catch(() => {});
+      }
+
       if (data.success && data.user) {
         if (onUpdateUser) {
           onUpdateUser({
@@ -255,6 +267,15 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onLogout, on
         Alert.alert('Profile Updated', 'Your profile details have been saved successfully.');
         setActiveSubScreen(null);
       } else {
+        if (onUpdateUser) {
+          onUpdateUser({
+            name: payload.name,
+            phone: payload.phone,
+            company: payload.company,
+            gstin: payload.gstin,
+            profileImage: payload.profileImage || undefined,
+          });
+        }
         Alert.alert('Notice', data.error || 'Saved locally.');
         setActiveSubScreen(null);
       }
@@ -493,7 +514,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onLogout, on
             value={editPhone}
             onChangeText={setEditPhone}
             keyboardType="phone-pad"
-            placeholder="+91 98765 43210"
+            placeholder="e.g. 9989551305"
           />
 
           <Text style={styles.inputLabel}>Email Address (Account ID)</Text>
@@ -850,14 +871,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onLogout, on
   // =========================================================================
   const menuItems = [
     {
-      icon: 'location-outline',
-      label: 'Delivery Sites & Addresses',
-      action: () => setActiveSubScreen('sites'),
-    },
-    {
       icon: 'receipt-outline',
       label: 'Invoices',
-      action: () => onNavigate('orders'),
+      action: () => onNavigate('invoices'),
     },
     {
       icon: 'calendar-outline',

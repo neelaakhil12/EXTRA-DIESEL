@@ -74,6 +74,8 @@ export type ScreenName =
   | 'order' 
   | 'track' 
   | 'orders' 
+  | 'invoices'
+  | 'notifications'
   | 'subscription' 
   | 'profile' 
   | 'b2b'

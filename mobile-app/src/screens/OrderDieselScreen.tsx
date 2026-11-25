@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   useWindowDimensions,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 import { ScreenName } from '../types';
@@ -22,7 +23,7 @@ interface OrderDieselScreenProps {
   onOrderSuccess: (orderId: string) => void;
   onNavigate: (screen: ScreenName) => void;
   currentUser?: { name: string; email: string; phone?: string };
-  deliveryLocation?: { fullAddress: string; shortAddress?: string };
+  deliveryLocation?: { fullAddress: string; shortAddress?: string; locationLink?: string };
   onOpenLocationModal?: () => void;
 }
 
@@ -36,7 +37,11 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({
   const { width } = useWindowDimensions();
   const isDesktop = Platform.OS === 'web' && width >= 768;
 
-  // Customer Contact Details (Autofilled from currentUser)
+  // Step 1: 'config' (Fuel, Equipment & Slot)
+  // Step 2: 'checkout' (Delivery Site, Customer Details, Bill Summary & Razorpay Pay Now)
+  const [orderStep, setOrderStep] = useState<'config' | 'checkout'>('config');
+
+  // Customer Contact Details (Autofilled from currentUser / AsyncStorage / backend)
   const [customerName, setCustomerName] = useState<string>(currentUser?.name || '');
   const [customerPhone, setCustomerPhone] = useState<string>(currentUser?.phone || '');
   const [customerEmail, setCustomerEmail] = useState<string>(currentUser?.email || '');
@@ -45,7 +50,9 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({
   const [deliveryAddress, setDeliveryAddress] = useState<string>(
     deliveryLocation?.fullAddress || ''
   );
-  const [googleMapsLink, setGoogleMapsLink] = useState<string>('');
+  const [googleMapsLink, setGoogleMapsLink] = useState<string>(
+    deliveryLocation?.locationLink || ''
+  );
   const [isLocating, setIsLocating] = useState<boolean>(false);
   const [locateStatus, setLocateStatus] = useState<string>('');
 
@@ -65,16 +72,53 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({
   const [taxRatePercent, setTaxRatePercent] = useState<number>(0);
   const [isProcessingPayment, setIsProcessingPayment] = useState<boolean>(false);
 
-  // Sync props changes if user updates
+  // Load and sync customer contact details and fix phone autofill
   useEffect(() => {
-    if (currentUser?.name && !customerName) setCustomerName(currentUser.name);
-    if (currentUser?.phone && !customerPhone) setCustomerPhone(currentUser.phone);
-    if (currentUser?.email && !customerEmail) setCustomerEmail(currentUser.email);
+    const loadContactInfo = async () => {
+      try {
+        if (currentUser?.name && !customerName) setCustomerName(currentUser.name);
+        if (currentUser?.email && !customerEmail) setCustomerEmail(currentUser.email);
+
+        let phone = currentUser?.phone || customerPhone;
+
+        // Fallback 1: Local Storage
+        if (!phone) {
+          const storedPhone = await AsyncStorage.getItem('ed_user_phone');
+          if (storedPhone) phone = storedPhone;
+        }
+
+        // Fallback 2: Backend user profile API
+        if (!phone && (currentUser?.email || customerEmail)) {
+          const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'https://extradiesel.in';
+          const emailQuery = currentUser?.email || customerEmail;
+          const res = await fetch(`${baseUrl}/api/user/profile?email=${encodeURIComponent(emailQuery)}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success && data.user?.phone) {
+              phone = data.user.phone;
+            }
+          }
+        }
+
+        if (phone) {
+          setCustomerPhone(phone);
+          await AsyncStorage.setItem('ed_user_phone', phone);
+        }
+      } catch (err) {
+        console.warn('Error loading contact info:', err);
+      }
+    };
+
+    loadContactInfo();
   }, [currentUser]);
 
+  // Sync delivery location changes
   useEffect(() => {
-    if (deliveryLocation?.fullAddress && !deliveryAddress) {
+    if (deliveryLocation?.fullAddress) {
       setDeliveryAddress(deliveryLocation.fullAddress);
+    }
+    if (deliveryLocation?.locationLink) {
+      setGoogleMapsLink(deliveryLocation.locationLink);
     }
   }, [deliveryLocation]);
 
@@ -104,6 +148,12 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({
     fetchSettings();
   }, []);
 
+  // Save phone number to persistent storage whenever typed
+  const handlePhoneChange = (text: string) => {
+    setCustomerPhone(text);
+    AsyncStorage.setItem('ed_user_phone', text).catch(() => {});
+  };
+
   // Parse liters safely from manual input (Minimum 1 Liter)
   const parsedLiters = Math.max(1, parseInt(litersInput, 10) || 1);
   const liters = parsedLiters;
@@ -117,8 +167,9 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({
   const totalAmount = subtotal + deliveryFee + tax;
 
   const vehicleOptions = ['DG Set', 'Excavator', 'Commercial Fleet', 'Storage Tank'];
+  const quickLiterPresets = [100, 200, 500, 1000];
 
-  // GPS Locate Me Handler (Pins exact Colony, Landmark, Area via Mapbox & Reverse Geocode)
+  // GPS Locate Me Handler
   const handleLocateMe = async () => {
     try {
       setIsLocating(true);
@@ -158,28 +209,19 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({
         throw new Error('Unable to acquire coordinates');
       }
 
-      setLocateStatus('Reverse geocoding exact street & colony...');
+      setLocateStatus('Reverse geocoding exact street & landmark...');
       const geoRes = await fetch(`${baseUrl}/api/location/reverse-geocode?lat=${latitude}&lon=${longitude}`);
       const geoData = await geoRes.json();
 
       let detectedAddress = '';
       if (geoData.success && geoData.location) {
-        const l = geoData.location;
-        const parts = [
-          l.plotNo ? `Plot/Door: ${l.plotNo}` : '',
-          l.street || '',
-          l.area || '',
-          l.landmark ? `Near ${l.landmark}` : '',
-          l.city || 'Hyderabad',
-          l.pincode ? `PIN: ${l.pincode}` : '',
-        ].filter(Boolean);
-        detectedAddress = parts.join(', ');
+        detectedAddress = geoData.location.fullAddress || geoData.location.area || '';
       } else {
-        detectedAddress = `Lat: ${latitude.toFixed(6)}, Lon: ${longitude.toFixed(6)}`;
+        detectedAddress = `GPS Location (${latitude.toFixed(5)}, ${longitude.toFixed(5)})`;
       }
 
       setDeliveryAddress(detectedAddress);
-      setGoogleMapsLink(`https://maps.google.com/?q=${latitude},${longitude}`);
+      setGoogleMapsLink(`https://maps.google.com/?q=${latitude.toFixed(6)},${longitude.toFixed(6)}`);
       setLocateStatus('Location pinned successfully!');
       setTimeout(() => setLocateStatus(''), 4000);
     } catch (err: any) {
@@ -260,7 +302,6 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({
           image: 'https://extradiesel.in/assets/images/logo.png',
           order_id: razorpayOrderId,
           handler: async (response: any) => {
-            // Payment Success: Verify & Save Order
             await saveFinalOrder(orderId, response.razorpay_payment_id || 'pay_test_completed', 'paid');
           },
           prefill: {
@@ -289,7 +330,7 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({
         return;
       }
 
-      // 3. For Mobile App / Fallback: Record Payment & Order
+      // 3. For Mobile App: Record Payment & Order
       await saveFinalOrder(orderId, `pay_test_${Math.floor(100000 + Math.random() * 900000)}`, 'paid');
     } catch (err: any) {
       Alert.alert('Payment Failed', err.message || 'Unable to initialize Razorpay payment. Please try again.');
@@ -328,7 +369,12 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({
         body: JSON.stringify(orderPayload),
       });
 
-      // Trigger System Status Bar Push Notification & save to Notification Center
+      // Save phone number persistently
+      if (customerPhone) {
+        AsyncStorage.setItem('ed_user_phone', customerPhone).catch(() => {});
+      }
+
+      // Trigger System Status Bar Push Notification
       try {
         await sendSystemNotification(
           '🎉 Diesel Order Confirmed!',
@@ -353,264 +399,353 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({
         isDesktop && { maxWidth: 880, width: '100%', alignSelf: 'center', paddingVertical: 24 },
       ]}
       showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
     >
-      {/* 1. Customer Information Card (Autofilled) */}
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <Ionicons name="person-circle" size={20} color={COLORS.primary} />
-          <Text style={styles.cardTitle}>Customer Details</Text>
-          <View style={styles.autofillBadge}>
-            <Ionicons name="checkmark-done" size={12} color="#15803D" />
-            <Text style={styles.autofillBadgeText}>Autofilled</Text>
-          </View>
-        </View>
-
-        <View style={styles.formGrid}>
-          <View style={styles.formGroup}>
-            <Text style={styles.inputLabel}>Full Name *</Text>
-            <TextInput
-              style={styles.textInput}
-              value={customerName}
-              onChangeText={setCustomerName}
-              placeholder="Your Name"
-            />
+      {/* ========================================================================= */}
+      {/* STEP 1: CONFIGURE ORDER (Fuel Quantity, Equipment & Preferred Slot) */}
+      {/* ========================================================================= */}
+      {orderStep === 'config' ? (
+        <View>
+          {/* Rate & Compliance Strip */}
+          <View style={styles.rateCard}>
+            <View style={styles.rateCardLeft}>
+              <Ionicons name="flame" size={22} color="#DC2626" />
+              <View>
+                <Text style={styles.rateCardTitle}>Today's Live Rate (Hyderabad)</Text>
+                <Text style={styles.rateCardSub}>BS-VI High Speed Doorstep Bowser Fuel</Text>
+              </View>
+            </View>
+            <View style={styles.rateBadge}>
+              <Text style={styles.rateBadgeText}>₹{ratePerLiter.toFixed(2)} / L</Text>
+            </View>
           </View>
 
-          <View style={styles.formGroup}>
-            <Text style={styles.inputLabel}>Mobile Phone *</Text>
-            <TextInput
-              style={styles.textInput}
-              value={customerPhone}
-              onChangeText={setCustomerPhone}
-              placeholder="+91 98765 43210"
-              keyboardType="phone-pad"
-            />
-          </View>
-        </View>
+          {/* 1. Fuel Quantity Selector */}
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <Ionicons name="funnel" size={20} color={COLORS.primary} />
+              <Text style={styles.cardTitle}>Fuel Quantity (Liters)</Text>
+            </View>
 
-        <View style={[styles.formGroup, { marginTop: 10 }]}>
-          <Text style={styles.inputLabel}>Email Address (For Tax Invoices) *</Text>
-          <TextInput
-            style={styles.textInput}
-            value={customerEmail}
-            onChangeText={setCustomerEmail}
-            placeholder="name@company.com"
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
-        </View>
-      </View>
+            {/* Stepper & Direct Manual Input control */}
+            <View style={styles.stepperContainer}>
+              <TouchableOpacity
+                style={styles.stepBtn}
+                onPress={() => {
+                  const current = parseInt(litersInput, 10) || 1;
+                  const nextVal = Math.max(1, current - (current > 50 ? 50 : 1));
+                  setLitersInput(String(nextVal));
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="remove" size={22} color={COLORS.dark} />
+              </TouchableOpacity>
 
-      {/* 2. Delivery Location Card with Locate Me Button & Maps Link */}
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <Ionicons name="location" size={20} color={COLORS.primary} />
-          <Text style={styles.cardTitle}>Delivery Site & GPS Pin</Text>
-        </View>
+              <View style={styles.qtyDisplay}>
+                <TextInput
+                  style={styles.qtyInputText}
+                  value={litersInput}
+                  onChangeText={(text) => {
+                    const clean = text.replace(/[^0-9]/g, '');
+                    setLitersInput(clean);
+                  }}
+                  keyboardType="number-pad"
+                  placeholder="1"
+                  placeholderTextColor="#94A3B8"
+                />
+                <Text style={styles.qtyUnit}>Liters (BS-VI Diesel)</Text>
+              </View>
 
-        <View style={styles.locateRow}>
-          <TouchableOpacity
-            style={styles.locateMeBtn}
-            onPress={handleLocateMe}
-            disabled={isLocating}
-            activeOpacity={0.8}
-          >
-            {isLocating ? (
-              <ActivityIndicator size="small" color={COLORS.white} />
-            ) : (
-              <Ionicons name="navigate" size={17} color={COLORS.white} />
-            )}
-            <Text style={styles.locateMeBtnText}>
-              {isLocating ? 'Locating...' : '📍 Locate Me (GPS Reverse Geocode)'}
+              <TouchableOpacity
+                style={styles.stepBtn}
+                onPress={() => {
+                  const current = parseInt(litersInput, 10) || 0;
+                  const nextVal = current + 50;
+                  setLitersInput(String(nextVal));
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="add" size={22} color={COLORS.dark} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Quick Presets */}
+            <View style={styles.presetRow}>
+              {quickLiterPresets.map((preset) => (
+                <TouchableOpacity
+                  key={preset}
+                  style={[styles.presetBtn, liters === preset && styles.presetBtnActive]}
+                  onPress={() => setLitersInput(String(preset))}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.presetBtnText, liters === preset && styles.presetBtnTextActive]}>
+                    {preset}L
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.qtyHelpText}>
+              Enter any custom fuel quantity from 1 Liter upwards for direct bowser dispensing.
             </Text>
-          </TouchableOpacity>
+          </View>
 
-          {onOpenLocationModal && (
-            <TouchableOpacity
-              style={styles.changeModalBtn}
-              onPress={onOpenLocationModal}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="map-outline" size={15} color={COLORS.primary} />
-              <Text style={styles.changeModalBtnText}>Pin Details</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+          {/* 2. Equipment / Vehicle Type */}
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <Ionicons name="construct" size={20} color={COLORS.primary} />
+              <Text style={styles.cardTitle}>Equipment / Vehicle Type</Text>
+            </View>
+            <View style={styles.pillRow}>
+              {vehicleOptions.map((v) => (
+                <TouchableOpacity
+                  key={v}
+                  style={[styles.pill, vehicleType === v && styles.pillActive]}
+                  onPress={() => setVehicleType(v)}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[styles.pillText, vehicleType === v && styles.pillTextActive]}>{v}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
 
-        {locateStatus ? (
-          <Text style={styles.locateStatusText}>{locateStatus}</Text>
-        ) : null}
+            {/* 3. Preferred Delivery Slot */}
+            <View style={[styles.cardHeader, { marginTop: 18 }]}>
+              <Ionicons name="time" size={20} color={COLORS.primary} />
+              <Text style={styles.cardTitle}>Preferred Delivery Slot</Text>
+            </View>
+            {slotOptions.map((slot) => (
+              <TouchableOpacity
+                key={slot}
+                style={[styles.slotItem, selectedSlot === slot && styles.slotItemActive]}
+                onPress={() => setSelectedSlot(slot)}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={selectedSlot === slot ? 'radio-button-on' : 'radio-button-off'}
+                  size={18}
+                  color={selectedSlot === slot ? COLORS.primary : COLORS.muted}
+                />
+                <Text style={[styles.slotText, selectedSlot === slot && styles.slotTextActive]}>
+                  {slot}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
 
-        <View style={[styles.formGroup, { marginTop: 12 }]}>
-          <Text style={styles.inputLabel}>Delivery Site Address (Colony, Plot, Landmark) *</Text>
-          <TextInput
-            style={[styles.textInput, styles.textArea]}
-            value={deliveryAddress}
-            onChangeText={setDeliveryAddress}
-            placeholder="e.g. Plot 42, Hitech City Phase 2, Near Mindspace West Gate, Madhapur, Hyderabad, 500081"
-            multiline
-            numberOfLines={3}
-          />
-        </View>
-
-        <View style={[styles.formGroup, { marginTop: 10 }]}>
-          <Text style={styles.inputLabel}>Google Maps Link / Coordinates (Optional)</Text>
-          <TextInput
-            style={styles.textInput}
-            value={googleMapsLink}
-            onChangeText={setGoogleMapsLink}
-            placeholder="Paste Google Maps URL or Location Link here"
-            autoCapitalize="none"
-          />
-        </View>
-      </View>
-
-      {/* 3. Fuel Quantity Selector (Manual Input from 1 Liter Upwards) */}
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <Ionicons name="funnel" size={20} color={COLORS.primary} />
-          <Text style={styles.cardTitle}>Fuel Quantity (Liters)</Text>
-        </View>
-
-        {/* Stepper & Direct Manual Input control */}
-        <View style={styles.stepperContainer}>
+          {/* Proceed Button */}
           <TouchableOpacity
-            style={styles.stepBtn}
-            onPress={() => {
-              const current = parseInt(litersInput, 10) || 1;
-              const nextVal = Math.max(1, current - (current > 50 ? 50 : 1));
-              setLitersInput(String(nextVal));
-            }}
-            activeOpacity={0.7}
+            style={styles.proceedBtn}
+            onPress={() => setOrderStep('checkout')}
+            activeOpacity={0.88}
           >
-            <Ionicons name="remove" size={22} color={COLORS.dark} />
-          </TouchableOpacity>
-
-          <View style={styles.qtyDisplay}>
-            <TextInput
-              style={styles.qtyInputText}
-              value={litersInput}
-              onChangeText={(text) => {
-                const clean = text.replace(/[^0-9]/g, '');
-                setLitersInput(clean);
-              }}
-              keyboardType="number-pad"
-              placeholder="1"
-            />
-            <Text style={styles.qtyUnit}>Liters (BS-VI Diesel)</Text>
-          </View>
-
-          <TouchableOpacity
-            style={styles.stepBtn}
-            onPress={() => {
-              const current = parseInt(litersInput, 10) || 0;
-              const nextVal = current + 50;
-              setLitersInput(String(nextVal));
-            }}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="add" size={22} color={COLORS.dark} />
-          </TouchableOpacity>
-        </View>
-
-        <Text style={{ textAlign: 'center', fontSize: 12, color: '#64748B', marginTop: 2 }}>
-          Enter any custom fuel quantity from 1 Liter to any required volume.
-        </Text>
-      </View>
-
-      {/* 4. Equipment Type & Preferred Slot */}
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <Ionicons name="construct" size={20} color={COLORS.primary} />
-          <Text style={styles.cardTitle}>Equipment / Vehicle Type</Text>
-        </View>
-        <View style={styles.pillRow}>
-          {vehicleOptions.map((v) => (
-            <TouchableOpacity
-              key={v}
-              style={[styles.pill, vehicleType === v && styles.pillActive]}
-              onPress={() => setVehicleType(v)}
-              activeOpacity={0.75}
-            >
-              <Text style={[styles.pillText, vehicleType === v && styles.pillTextActive]}>{v}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <View style={[styles.cardHeader, { marginTop: 16 }]}>
-          <Ionicons name="time" size={20} color={COLORS.primary} />
-          <Text style={styles.cardTitle}>Preferred Delivery Slot</Text>
-        </View>
-        {slotOptions.map((slot) => (
-          <TouchableOpacity
-            key={slot}
-            style={[styles.slotItem, selectedSlot === slot && styles.slotItemActive]}
-            onPress={() => setSelectedSlot(slot)}
-            activeOpacity={0.7}
-          >
-            <Ionicons
-              name={selectedSlot === slot ? 'radio-button-on' : 'radio-button-off'}
-              size={18}
-              color={selectedSlot === slot ? COLORS.primary : COLORS.muted}
-            />
-            <Text style={[styles.slotText, selectedSlot === slot && styles.slotTextActive]}>
-              {slot}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {/* 5. Itemized Bill Summary (Real-time Autofill) */}
-      <View style={styles.billCard}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={styles.billTitle}>Bill Summary</Text>
-          <View style={styles.secureBadge}>
-            <Ionicons name="shield-checkmark" size={13} color="#15803D" />
-            <Text style={styles.secureBadgeText}>100% BS-VI Pure</Text>
-          </View>
-        </View>
-        <View style={styles.billRow}>
-          <Text style={styles.billLabel}>Base Diesel ({liters}L @ ₹{ratePerLiter.toFixed(2)})</Text>
-          <Text style={styles.billValue}>₹{subtotal.toFixed(2)}</Text>
-        </View>
-        {deliveryFee > 0 ? (
-          <View style={styles.billRow}>
-            <Text style={styles.billLabel}>Doorstep Delivery Fee</Text>
-            <Text style={styles.billValue}>₹{deliveryFee.toFixed(2)}</Text>
-          </View>
-        ) : null}
-        {gstRate > 0 && tax > 0 ? (
-          <View style={styles.billRow}>
-            <Text style={styles.billLabel}>GST ({(gstRate * 100).toFixed(0)}%)</Text>
-            <Text style={styles.billValue}>₹{tax.toFixed(2)}</Text>
-          </View>
-        ) : null}
-        <View style={styles.divider} />
-        <View style={styles.totalRow}>
-          <Text style={styles.totalLabel}>Total Payable</Text>
-          <Text style={styles.totalValue}>₹{totalAmount.toFixed(2)}</Text>
-        </View>
-      </View>
-
-      {/* 6. Razorpay Payment Button */}
-      <TouchableOpacity
-        style={[styles.orderButton, isProcessingPayment && { opacity: 0.7 }]}
-        onPress={handleConfirmOrderAndPay}
-        disabled={isProcessingPayment}
-        activeOpacity={0.85}
-      >
-        {isProcessingPayment ? (
-          <ActivityIndicator size="small" color={COLORS.white} />
-        ) : (
-          <>
             <View>
-              <Text style={styles.orderButtonSub}>Pay ₹{totalAmount.toFixed(2)} via Razorpay</Text>
-              <Text style={styles.orderButtonMain}>Confirm & Pay Order</Text>
+              <Text style={styles.proceedBtnSub}>{liters} Liters • Est. ₹{subtotal.toLocaleString('en-IN')}</Text>
+              <Text style={styles.proceedBtnMain}>Proceed to Checkout</Text>
             </View>
             <Ionicons name="arrow-forward" size={22} color={COLORS.white} />
-          </>
-        )}
-      </TouchableOpacity>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        /* ========================================================================= */
+        /* STEP 2: CHECKOUT PAGE (Site Location, Customer Info, Bill Summary & Pay) */
+        /* ========================================================================= */
+        <View>
+          {/* Back & Order Summary Navigation Bar */}
+          <View style={styles.checkoutNavHeader}>
+            <TouchableOpacity
+              style={styles.backBtn}
+              onPress={() => setOrderStep('config')}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="arrow-back" size={18} color="#0F172A" />
+              <Text style={styles.backBtnText}>Change Quantity / Slot</Text>
+            </TouchableOpacity>
+
+            <View style={styles.summaryBadge}>
+              <Text style={styles.summaryBadgeText}>
+                {liters}L • {vehicleType}
+              </Text>
+            </View>
+          </View>
+
+          {/* 1. Delivery Site & GPS Pin Card */}
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <Ionicons name="location" size={20} color={COLORS.primary} />
+              <Text style={styles.cardTitle}>Delivery Site & GPS Pin</Text>
+              {deliveryAddress ? (
+                <View style={styles.pinnedBadge}>
+                  <Ionicons name="checkmark-circle" size={12} color="#059669" />
+                  <Text style={styles.pinnedBadgeText}>Pinned</Text>
+                </View>
+              ) : null}
+            </View>
+
+            <View style={styles.locateRow}>
+              <TouchableOpacity
+                style={styles.locateMeBtn}
+                onPress={handleLocateMe}
+                disabled={isLocating}
+                activeOpacity={0.8}
+              >
+                {isLocating ? (
+                  <ActivityIndicator size="small" color={COLORS.white} />
+                ) : (
+                  <Ionicons name="navigate" size={17} color={COLORS.white} />
+                )}
+                <Text style={styles.locateMeBtnText}>
+                  {isLocating ? 'Locating...' : 'Use Current Location (GPS)'}
+                </Text>
+              </TouchableOpacity>
+
+              {onOpenLocationModal && (
+                <TouchableOpacity
+                  style={styles.changeModalBtn}
+                  onPress={onOpenLocationModal}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="map-outline" size={15} color={COLORS.primary} />
+                  <Text style={styles.changeModalBtnText}>Pin Details</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {locateStatus ? (
+              <Text style={styles.locateStatusText}>{locateStatus}</Text>
+            ) : null}
+
+            <View style={[styles.formGroup, { marginTop: 12 }]}>
+              <Text style={styles.inputLabel}>Delivery Site Address *</Text>
+              <TextInput
+                style={[styles.textInput, styles.textArea]}
+                value={deliveryAddress}
+                onChangeText={setDeliveryAddress}
+                placeholder="Enter or GPS-pin site address (Door/Plot, Road, Landmark, Area, City, Pincode)"
+                placeholderTextColor="#94A3B8"
+                multiline
+                numberOfLines={3}
+              />
+            </View>
+
+            <View style={[styles.formGroup, { marginTop: 10 }]}>
+              <Text style={styles.inputLabel}>GPS Location Link (Google Maps)</Text>
+              <TextInput
+                style={styles.textInput}
+                value={googleMapsLink}
+                onChangeText={setGoogleMapsLink}
+                placeholder="https://maps.google.com/?q=lat,lon"
+                placeholderTextColor="#94A3B8"
+                autoCapitalize="none"
+              />
+            </View>
+          </View>
+
+          {/* 2. Customer Contact Details (Autofilled) */}
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <Ionicons name="person-circle" size={20} color={COLORS.primary} />
+              <Text style={styles.cardTitle}>Customer Details</Text>
+              {customerPhone ? (
+                <View style={styles.autofillBadge}>
+                  <Ionicons name="checkmark-done" size={12} color="#15803D" />
+                  <Text style={styles.autofillBadgeText}>Autofilled</Text>
+                </View>
+              ) : null}
+            </View>
+
+            <View style={styles.formGrid}>
+              <View style={styles.formGroup}>
+                <Text style={styles.inputLabel}>Full Name *</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={customerName}
+                  onChangeText={setCustomerName}
+                  placeholder="Your Full Name"
+                  placeholderTextColor="#94A3B8"
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.inputLabel}>Mobile Phone *</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={customerPhone}
+                  onChangeText={handlePhoneChange}
+                  placeholder="10-digit mobile number"
+                  placeholderTextColor="#94A3B8"
+                  keyboardType="phone-pad"
+                />
+              </View>
+            </View>
+
+            <View style={[styles.formGroup, { marginTop: 10 }]}>
+              <Text style={styles.inputLabel}>Email Address (For Tax Invoices) *</Text>
+              <TextInput
+                style={styles.textInput}
+                value={customerEmail}
+                onChangeText={setCustomerEmail}
+                placeholder="name@example.com"
+                placeholderTextColor="#94A3B8"
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+            </View>
+          </View>
+
+          {/* 3. Itemized Bill Summary */}
+          <View style={styles.billCard}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={styles.billTitle}>Bill Summary</Text>
+              <View style={styles.secureBadge}>
+                <Ionicons name="shield-checkmark" size={13} color="#15803D" />
+                <Text style={styles.secureBadgeText}>100% BS-VI Pure</Text>
+              </View>
+            </View>
+            <View style={styles.billRow}>
+              <Text style={styles.billLabel}>Base Diesel ({liters}L @ ₹{ratePerLiter.toFixed(2)})</Text>
+              <Text style={styles.billValue}>₹{subtotal.toFixed(2)}</Text>
+            </View>
+            {deliveryFee > 0 ? (
+              <View style={styles.billRow}>
+                <Text style={styles.billLabel}>Doorstep Delivery Fee</Text>
+                <Text style={styles.billValue}>₹{deliveryFee.toFixed(2)}</Text>
+              </View>
+            ) : null}
+            {gstRate > 0 && tax > 0 ? (
+              <View style={styles.billRow}>
+                <Text style={styles.billLabel}>GST ({(gstRate * 100).toFixed(0)}%)</Text>
+                <Text style={styles.billValue}>₹{tax.toFixed(2)}</Text>
+              </View>
+            ) : null}
+            <View style={styles.divider} />
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Total Payable</Text>
+              <Text style={styles.totalValue}>₹{totalAmount.toFixed(2)}</Text>
+            </View>
+          </View>
+
+          {/* 4. Pay Now via Razorpay Button */}
+          <TouchableOpacity
+            style={[styles.orderButton, isProcessingPayment && { opacity: 0.7 }]}
+            onPress={handleConfirmOrderAndPay}
+            disabled={isProcessingPayment}
+            activeOpacity={0.88}
+          >
+            {isProcessingPayment ? (
+              <ActivityIndicator size="small" color={COLORS.white} />
+            ) : (
+              <>
+                <View>
+                  <Text style={styles.orderButtonSub}>Total: ₹{totalAmount.toFixed(2)} (Incl. Taxes)</Text>
+                  <Text style={styles.orderButtonMain}>Pay Now via Razorpay</Text>
+                </View>
+                <Ionicons name="arrow-forward" size={22} color={COLORS.white} />
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
     </ScrollView>
   );
 };
@@ -624,6 +759,45 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: Platform.OS === 'android' ? 100 : 85,
   },
+  rateCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 14,
+  },
+  rateCardLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  rateCardTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#991B1B',
+  },
+  rateCardSub: {
+    fontSize: 11,
+    color: '#B91C1C',
+    marginTop: 1,
+  },
+  rateBadge: {
+    backgroundColor: '#DC2626',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  rateBadgeText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
   card: {
     backgroundColor: COLORS.white,
     borderRadius: 16,
@@ -631,6 +805,11 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     borderWidth: 1,
     borderColor: COLORS.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 2,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -658,156 +837,96 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#15803D',
   },
-  formGrid: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  formGroup: {
-    flex: 1,
-  },
-  inputLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#475569',
-    marginBottom: 6,
-  },
-  textInput: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: COLORS.dark,
-  },
-  textArea: {
-    height: 70,
-    textAlignVertical: 'top',
-  },
-  locateRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 6,
-  },
-  locateMeBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: COLORS.primary,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-  },
-  locateMeBtnText: {
-    color: COLORS.white,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  changeModalBtn: {
+  pinnedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FEE2E2',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 10,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
   },
-  changeModalBtnText: {
-    color: COLORS.primary,
-    fontSize: 13,
+  pinnedBadgeText: {
+    fontSize: 11,
     fontWeight: '700',
-  },
-  locateStatusText: {
-    fontSize: 12,
-    color: '#16A34A',
-    fontWeight: '600',
-    marginTop: 4,
-  },
-  quickGrid: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 14,
-  },
-  quickButton: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: COLORS.background,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  quickButtonActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  quickButtonText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.dark,
-  },
-  quickButtonTextActive: {
-    color: COLORS.white,
+    color: '#059669',
   },
   stepperContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 16,
-    marginBottom: 14,
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    padding: 8,
+    marginVertical: 4,
   },
   stepBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#F1F5F9',
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: COLORS.white,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 1,
   },
   qtyDisplay: {
     alignItems: 'center',
-    minWidth: 120,
+    flex: 1,
   },
   qtyInputText: {
-    fontSize: 34,
-    fontWeight: '900',
-    color: COLORS.dark,
-    textAlign: 'center',
-    paddingVertical: 2,
-    borderBottomWidth: 2,
-    borderBottomColor: COLORS.primary,
-    minWidth: 90,
-  },
-  qtyDisplayText: {
     fontSize: 32,
     fontWeight: '900',
     color: COLORS.dark,
+    textAlign: 'center',
+    minWidth: 120,
+    paddingVertical: 0,
   },
   qtyUnit: {
     fontSize: 12,
     fontWeight: '600',
-    color: COLORS.muted,
+    color: '#64748B',
+    marginTop: 2,
   },
-  freeDeliveryBadge: {
+  presetRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#ECFDF5',
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-    borderRadius: 10,
-    padding: 10,
+    gap: 8,
+    marginTop: 12,
   },
-  freeDeliveryText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.greenDark,
+  presetBtn: {
     flex: 1,
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 9,
+    borderRadius: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  presetBtnActive: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#DC2626',
+  },
+  presetBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  presetBtnTextActive: {
+    color: '#DC2626',
+    fontWeight: '800',
+  },
+  qtyHelpText: {
+    textAlign: 'center',
+    fontSize: 11.5,
+    color: '#64748B',
+    marginTop: 10,
   },
   pillRow: {
     flexDirection: 'row',
@@ -816,11 +935,11 @@ const styles = StyleSheet.create({
   },
   pill: {
     paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingVertical: 10,
+    borderRadius: 10,
     backgroundColor: '#F1F5F9',
     borderWidth: 1,
-    borderColor: 'transparent',
+    borderColor: '#E2E8F0',
   },
   pillActive: {
     backgroundColor: '#FEF2F2',
@@ -833,17 +952,18 @@ const styles = StyleSheet.create({
   },
   pillTextActive: {
     color: COLORS.primary,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   slotItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    paddingVertical: 10,
+    paddingVertical: 11,
     paddingHorizontal: 12,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
     marginBottom: 8,
   },
   slotItemActive: {
@@ -851,38 +971,178 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEF2F2',
   },
   slotText: {
-    fontSize: 13,
+    fontSize: 13.5,
+    fontWeight: '600',
     color: COLORS.dark,
-    fontWeight: '500',
   },
   slotTextActive: {
     color: COLORS.primary,
+    fontWeight: '800',
+  },
+  proceedBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#DC2626',
+    paddingHorizontal: 18,
+    paddingVertical: 15,
+    borderRadius: 14,
+    marginTop: 4,
+    marginBottom: 20,
+    shadowColor: '#DC2626',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  proceedBtnMain: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#FFFFFF',
+  },
+  proceedBtnSub: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.85)',
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  checkoutNavHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  backBtnText: {
+    fontSize: 12.5,
     fontWeight: '700',
+    color: '#0F172A',
+  },
+  summaryBadge: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  summaryBadgeText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#1D4ED8',
+  },
+  locateRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 8,
+  },
+  locateMeBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: COLORS.primary,
+    paddingVertical: 11,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+  },
+  locateMeBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: COLORS.white,
+  },
+  changeModalBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#FEF2F2',
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  changeModalBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  locateStatusText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#059669',
+    marginVertical: 4,
+  },
+  formGrid: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  formGroup: {
+    flex: 1,
+    marginBottom: 6,
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#334155',
+    marginBottom: 5,
+  },
+  textInput: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 13.5,
+    color: '#0F172A',
+    fontWeight: '500',
+  },
+  textArea: {
+    height: 75,
+    textAlignVertical: 'top',
+    paddingTop: 10,
   },
   billCard: {
     backgroundColor: '#0F172A',
     borderRadius: 16,
-    padding: 18,
+    padding: 16,
     marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   billTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
-    color: COLORS.white,
+    color: '#FFFFFF',
   },
   secureBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#1E293B',
+    backgroundColor: '#052e16',
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#15803D',
   },
   secureBadgeText: {
-    fontSize: 11,
-    color: '#86EFAC',
-    fontWeight: '700',
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#4ADE80',
   },
   billRow: {
     flexDirection: 'row',
@@ -894,9 +1154,9 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
   },
   billValue: {
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: '700',
-    color: COLORS.white,
+    color: '#FFFFFF',
   },
   divider: {
     height: 1,
@@ -911,35 +1171,37 @@ const styles = StyleSheet.create({
   totalLabel: {
     fontSize: 15,
     fontWeight: '800',
-    color: COLORS.white,
+    color: '#FFFFFF',
   },
   totalValue: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '900',
     color: '#F87171',
   },
   orderButton: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 14,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    shadowColor: COLORS.primary,
+    backgroundColor: '#DC2626',
+    paddingHorizontal: 18,
+    paddingVertical: 15,
+    borderRadius: 14,
+    marginBottom: 20,
+    shadowColor: '#DC2626',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.35,
     shadowRadius: 8,
     elevation: 4,
+  },
+  orderButtonMain: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#FFFFFF',
   },
   orderButtonSub: {
     fontSize: 12,
     color: 'rgba(255, 255, 255, 0.85)',
     fontWeight: '600',
-  },
-  orderButtonMain: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: COLORS.white,
+    marginBottom: 2,
   },
 });

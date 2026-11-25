@@ -3877,4 +3877,72 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
+  emptyCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+  },
+  emptySubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+  },
+  orderCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 16,
+  },
+  orderCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  orderIdText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  badge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  badgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  orderCardBody: {
+    marginTop: 10,
+    gap: 6,
+  },
+  orderDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  orderDetailText: {
+    fontSize: 13,
+    color: '#334155',
+    flex: 1,
+  },
+  orderMetaText: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  orderCardFooter: {
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    paddingTop: 10,
+    marginTop: 8,
+  },
+  vehicleRow: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 14,
+  },
 });
