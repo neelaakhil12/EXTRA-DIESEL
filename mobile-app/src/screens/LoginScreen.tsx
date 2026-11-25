@@ -234,6 +234,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
       setIsCheckingGoogleAuth(true);
 
       await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      // Always clear cached session so the Google Account Picker dialog displays with all emails every time
+      try {
+        await GoogleSignin.signOut();
+      } catch (signOutErr) {
+        // Ignore if no prior session was active
+      }
       const response = await GoogleSignin.signIn();
       setIsCheckingGoogleAuth(false);
 

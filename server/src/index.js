@@ -437,7 +437,7 @@ app.get('/api/location/reverse-geocode', async (req, res) => {
 
     const area = [colony, suburb && suburb !== colony ? suburb : ''].filter(Boolean).join(', ') || city;
     const shortAddress = [colony || street, suburb && suburb !== colony ? suburb : city].filter(Boolean).join(', ') || area;
-    const fullParts = [plotText, street, landmarkText, colony, suburb && suburb !== colony ? suburb : '', city, state ? `${state} ${pincode}`.trim() : pincode].filter(Boolean);
+    const fullParts = [plotText, street, colony, landmarkText, suburb && suburb !== colony ? suburb : '', city, state ? `${state} ${pincode}`.trim() : pincode].filter(Boolean);
     const fullAddress = fullParts.join(', ') || `${city}, ${state}`;
 
     return res.json({
@@ -447,6 +447,8 @@ app.get('/api/location/reverse-geocode', async (req, res) => {
         lon: lonFloat,
         plotNo: plotText,
         street,
+        colony,
+        suburb,
         area,
         landmark: landmarkText,
         city,
@@ -1420,6 +1422,7 @@ app.post('/api/orders', (req, res) => {
       status: 'pending',
       statusText: 'Order Placed - Pending Confirmation',
       address: address || 'Plot 42, Hitech City, Hyderabad',
+      mapsLink: req.body.mapsLink || req.body.googleMapsLink || req.body.locationLink || null,
       vehicleType: vehicleType || req.body.equipment || 'DG Set',
       slot: slot || deliverySlot || '08:00 AM - 12:00 PM',
       deliverySlot: deliverySlot || slot || '08:00 AM - 12:00 PM',

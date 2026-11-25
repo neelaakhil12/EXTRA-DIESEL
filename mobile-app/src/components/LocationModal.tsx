@@ -82,43 +82,8 @@ export const LocationModal: React.FC<LocationModalProps> = ({
       let detectedState = 'Telangana';
       let detectedPincode = '';
 
-      // 1. Mobile Native Geocoder via expo-location (uses Android Google Play Services / iOS MapKit)
-      if (Platform.OS !== 'web') {
-        try {
-          const geoResults = await Location.reverseGeocodeAsync({ latitude, longitude });
-          if (geoResults && geoResults.length > 0) {
-            const g = geoResults[0];
-            const isPlusCode = (t?: string | null) => t && /^[A-Z0-9]{4,8}\+/i.test(t.trim());
-
-            if (g.name && !isPlusCode(g.name)) {
-              if (/^\d+/.test(g.name)) {
-                detectedPlot = `Plot No ${g.name}`;
-              } else if (g.name !== g.street) {
-                detectedLandmark = g.name;
-              }
-            }
-            if (g.streetNumber && !detectedPlot) {
-              detectedPlot = `Plot No ${g.streetNumber}`;
-            }
-            if (g.street && !isPlusCode(g.street)) {
-              detectedStreet = g.street;
-            }
-            if (g.district && !isPlusCode(g.district)) {
-              detectedColony = g.district;
-            }
-            if (g.subregion && g.subregion !== g.city && !isPlusCode(g.subregion)) {
-              detectedSuburb = g.subregion;
-            }
-            if (g.city) detectedCity = g.city;
-            if (g.region) detectedState = g.region;
-            if (g.postalCode) detectedPincode = g.postalCode;
-          }
-        } catch (nativeErr) {
-          console.warn('Native reverseGeocode error:', nativeErr);
-        }
-      }
-
-      // 2. Server Reverse Geocode API (OSM Nominatim + Mapbox Places POI)
+      // 1. Primary: Server Reverse Geocode API (OSM Nominatim + Mapbox Places POI)
+      // Accurately detects Indian residential colonies (e.g., Chaitanya Hills, Almasguda)
       try {
         const res = await fetch(
           `${baseUrl}/api/location/reverse-geocode?lat=${latitude}&lon=${longitude}`
@@ -127,27 +92,30 @@ export const LocationModal: React.FC<LocationModalProps> = ({
           const data = await res.json();
           if (data.success && data.location) {
             const loc = data.location;
-            if (loc.plotNo && !detectedPlot) {
-              detectedPlot = loc.plotNo.startsWith('Plot') ? loc.plotNo : `Plot No ${loc.plotNo}`;
-            }
-            if (loc.street && !detectedStreet) detectedStreet = loc.street;
-            if (loc.landmark && !detectedLandmark) detectedLandmark = loc.landmark;
-            if (loc.area) {
-              const parts = loc.area.split(',').map((p: string) => p.trim());
-              if (!detectedColony && parts[0]) detectedColony = parts[0];
-              if (!detectedSuburb && parts[1]) detectedSuburb = parts[1];
-            }
-            if (loc.city && detectedCity === 'Hyderabad') detectedCity = loc.city;
+            if (loc.plotNo) detectedPlot = loc.plotNo.startsWith('Plot') ? loc.plotNo : `Plot No ${loc.plotNo}`;
+            if (loc.street) detectedStreet = loc.street;
+            if (loc.colony) detectedColony = loc.colony;
+            if (loc.suburb) detectedSuburb = loc.suburb;
+            if (loc.landmark) detectedLandmark = loc.landmark;
+            if (loc.city) detectedCity = loc.city;
             if (loc.state) detectedState = loc.state;
-            if (loc.pincode && !detectedPincode) detectedPincode = loc.pincode;
+            if (loc.pincode) detectedPincode = loc.pincode;
+
+            if (loc.fullAddress) {
+              setAddress(loc.fullAddress);
+              setShortAddress(loc.shortAddress || loc.area || `${detectedColony || detectedStreet}, ${detectedSuburb || detectedCity}`);
+              setStatusMessage(`📍 Pinned: ${loc.shortAddress || loc.area || detectedColony}`);
+              setTimeout(() => setStatusMessage(''), 4500);
+              return;
+            }
           }
         }
       } catch (srvErr) {
         console.warn('Backend geocode error:', srvErr);
       }
 
-      // 3. Fallback Mapbox Places API directly if needed
-      if ((!detectedStreet || !detectedColony) && mapboxToken) {
+      // 2. Direct Mapbox Places API Fallback if server is unreachable
+      if (mapboxToken) {
         try {
           const mbUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${longitude},${latitude}.json?access_token=${mapboxToken}&types=address,poi,neighborhood,locality,place,postcode`;
           const mbRes = await fetch(mbUrl);
@@ -178,22 +146,57 @@ export const LocationModal: React.FC<LocationModalProps> = ({
         }
       }
 
+      // 3. Fallback Native Geocoder via expo-location if needed
+      if ((!detectedStreet || !detectedColony) && Platform.OS !== 'web') {
+        try {
+          const geoResults = await Location.reverseGeocodeAsync({ latitude, longitude });
+          if (geoResults && geoResults.length > 0) {
+            const g = geoResults[0];
+            const isPlusCode = (t?: string | null) => t && /^[A-Z0-9]{4,8}\+/i.test(t.trim());
+
+            if (g.name && !isPlusCode(g.name)) {
+              if (/^\d+/.test(g.name) && !detectedPlot) {
+                detectedPlot = `Plot No ${g.name}`;
+              } else if (g.name !== g.street && !detectedLandmark) {
+                detectedLandmark = g.name;
+              }
+            }
+            if (g.streetNumber && !detectedPlot) {
+              detectedPlot = `Plot No ${g.streetNumber}`;
+            }
+            if (g.street && !isPlusCode(g.street) && !detectedStreet) {
+              detectedStreet = g.street;
+            }
+            if (g.district && !isPlusCode(g.district) && !detectedColony) {
+              detectedColony = g.district;
+            }
+            if (g.subregion && g.subregion !== g.city && !isPlusCode(g.subregion) && !detectedSuburb) {
+              detectedSuburb = g.subregion;
+            }
+            if (g.city) detectedCity = g.city;
+            if (g.region) detectedState = g.region;
+            if (g.postalCode) detectedPincode = g.postalCode;
+          }
+        } catch (nativeErr) {
+          console.warn('Native reverseGeocode error:', nativeErr);
+        }
+      }
+
       // Format Landmark neatly (e.g., "near Vinayaka mandapamu")
       let landmarkStr = '';
       if (detectedLandmark) {
         landmarkStr = detectedLandmark.toLowerCase().startsWith('near')
           ? detectedLandmark
           : `near ${detectedLandmark}`;
-      } else if (detectedColony && detectedColony !== detectedSuburb) {
-        landmarkStr = `near ${detectedColony}`;
       }
 
-      // Construct detailed address array
+      // Construct detailed address array in standard Indian delivery sequence:
+      // [Road No / Street], [Colony Name], [Landmark], [Suburb], [City], [State Pincode]
       const addressParts = [
         detectedPlot,
         detectedStreet,
-        landmarkStr,
         detectedColony,
+        landmarkStr,
         detectedSuburb && detectedSuburb !== detectedColony ? detectedSuburb : '',
         detectedCity,
         detectedState ? `${detectedState} ${detectedPincode}`.trim() : detectedPincode,

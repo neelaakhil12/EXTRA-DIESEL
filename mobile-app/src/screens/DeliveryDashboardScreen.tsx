@@ -40,6 +40,7 @@ interface DeliveryOrder {
   status: 'pending' | 'assigned' | 'out_for_delivery' | 'delivered' | 'cancelled';
   statusText?: string;
   address: string;
+  mapsLink?: string | null;
   vehicleType?: string;
   slot?: string;
   assignedTo?: string | null;
@@ -125,10 +126,28 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
     Linking.openURL(`tel:${phone}`);
   };
 
-  // Open Maps Navigation
-  const handleOpenMaps = (address: string) => {
-    const query = encodeURIComponent(address);
-    Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`);
+  // Open Maps Navigation directly to customer's exact pinned GPS site
+  const handleOpenMaps = (order: DeliveryOrder) => {
+    // 1. If exact Google Maps GPS link exists
+    if (order.mapsLink && order.mapsLink.trim()) {
+      let url = order.mapsLink.trim();
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = `https://${url}`;
+      }
+      Linking.openURL(url);
+      return;
+    }
+
+    // 2. If address string contains latitude, longitude coordinates
+    const coordMatch = order.address && order.address.match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
+    if (coordMatch) {
+      Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${coordMatch[1]},${coordMatch[2]}`);
+      return;
+    }
+
+    // 3. Fallback to delivery address query
+    const query = encodeURIComponent(order.address);
+    Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${query}`);
   };
 
   // Split orders into Assigned (Active) and Completed
@@ -152,7 +171,7 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
 
         <View style={styles.driverHeaderRight}>
           <TouchableOpacity style={styles.refreshIconBtn} onPress={loadDriverOrders}>
-            <Ionicons name="reload" size={18} color={COLORS.primary} />
+            <Ionicons name="reload" size={18} color="#FFFFFF" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.logoutBtn} onPress={onLogout}>
             <Ionicons name="log-out-outline" size={18} color="#DC2626" />
@@ -217,14 +236,14 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
                 <View key={order.id} style={styles.deliveryCard}>
                   {/* Order Top Bar */}
                   <View style={styles.deliveryCardTop}>
-                    <View>
+                    <View style={{ flex: 1, marginRight: 8 }}>
                       <Text style={styles.deliveryOrderId}>#{order.id}</Text>
                       <Text style={styles.deliveryOrderDate}>{order.date}</Text>
                     </View>
                     <View
                       style={[
                         styles.statusTag,
-                        { backgroundColor: isOutForDelivery ? '#EFF6FF' : '#FEF3C7' },
+                        { backgroundColor: isOutForDelivery ? '#EFF6FF' : '#FEF3C7', alignSelf: 'flex-start' },
                       ]}
                     >
                       <Text
@@ -233,7 +252,7 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
                           { color: isOutForDelivery ? '#2563EB' : '#D97706' },
                         ]}
                       >
-                        {isOutForDelivery ? 'En Route (Out for Delivery)' : 'Assigned - Action Needed'}
+                        {isOutForDelivery ? '🚚 En Route' : '📋 Assigned'}
                       </Text>
                     </View>
                   </View>
@@ -273,7 +292,7 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
 
                     <TouchableOpacity
                       style={styles.mapBtn}
-                      onPress={() => handleOpenMaps(order.address)}
+                      onPress={() => handleOpenMaps(order)}
                       activeOpacity={0.8}
                     >
                       <Ionicons name="navigate" size={16} color="#2563EB" />
@@ -381,11 +400,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#0F172A',
-    paddingHorizontal: 18,
-    paddingVertical: 16,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#1E293B',
+    borderBottomColor: '#B91C1C',
   },
   driverHeaderLeft: {
     flex: 1,
@@ -394,7 +413,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#059669',
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
@@ -413,7 +432,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   driverHeaderVehicle: {
-    color: '#94A3B8',
+    color: 'rgba(255, 255, 255, 0.88)',
     fontSize: 12,
     marginTop: 2,
     fontWeight: '600',
@@ -427,7 +446,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 8,
-    backgroundColor: '#1E293B',
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -435,7 +454,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 8,
-    backgroundColor: '#FEF2F2',
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
   },

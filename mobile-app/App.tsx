@@ -457,7 +457,7 @@ function MainApp() {
         <StatusBar barStyle="dark-content" />
 
         {/* Top Status Bar Spacer - Keeps status bar in standard phone color (#FFFFFF) and prevents red bleed */}
-        {showHeader && topInset > 0 && (
+        {(showHeader || currentScreen === 'delivery' || currentScreen === 'admin') && topInset > 0 && (
           <View style={{ height: topInset, backgroundColor: '#FFFFFF', width: '100%' }} />
         )}
 
