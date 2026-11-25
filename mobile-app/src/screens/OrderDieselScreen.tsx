@@ -492,9 +492,9 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({
           <View style={styles.rateCard}>
             <View style={styles.rateCardLeft}>
               <Ionicons name="flame" size={22} color="#DC2626" />
-              <View>
-                <Text style={styles.rateCardTitle}>Today's Live Rate (Hyderabad)</Text>
-                <Text style={styles.rateCardSub}>BS-VI High Speed Doorstep Bowser Fuel</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.rateCardTitle}>Today's Diesel Rate</Text>
+                <Text style={styles.rateCardSub}>Hyderabad • BS-VI Pure Fuel</Text>
               </View>
             </View>
             <View style={styles.rateBadge}>
@@ -998,22 +998,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     flex: 1,
+    marginRight: 8,
   },
   rateCardTitle: {
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: '800',
     color: '#991B1B',
   },
   rateCardSub: {
     fontSize: 11,
     color: '#B91C1C',
-    marginTop: 1,
+    marginTop: 2,
+    fontWeight: '500',
   },
   rateBadge: {
     backgroundColor: '#DC2626',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 8,
+    flexShrink: 0,
   },
   rateBadgeText: {
     fontSize: 13,
