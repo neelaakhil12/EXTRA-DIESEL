@@ -144,6 +144,51 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
   const [isCheckingGoogleAuth, setIsCheckingGoogleAuth] = useState(false);
   const [customGoogleEmail, setCustomGoogleEmail] = useState('');
 
+  // Premium App Alert Dialog State (Replaces ugly dark browser-like native OS alerts)
+  const [customAlert, setCustomAlert] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    type?: 'error' | 'warning' | 'info' | 'success';
+    primaryText?: string;
+    onPrimary?: () => void;
+    secondaryText?: string;
+    onSecondary?: () => void;
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    type: 'error',
+    primaryText: 'OK',
+  });
+
+  const showAppAlert = (
+    title: string,
+    message: string,
+    options?: {
+      type?: 'error' | 'warning' | 'info' | 'success';
+      primaryText?: string;
+      onPrimary?: () => void;
+      secondaryText?: string;
+      onSecondary?: () => void;
+    }
+  ) => {
+    setCustomAlert({
+      visible: true,
+      title,
+      message,
+      type: options?.type || (title.toLowerCase().includes('success') ? 'success' : 'error'),
+      primaryText: options?.primaryText || 'OK',
+      onPrimary: options?.onPrimary,
+      secondaryText: options?.secondaryText,
+      onSecondary: options?.onSecondary,
+    });
+  };
+
+  const hideAppAlert = () => {
+    setCustomAlert((prev) => ({ ...prev, visible: false }));
+  };
+
   // Signup inputs
   const [fullName, setFullName] = useState('');
   const [signupPhone, setSignupPhone] = useState('');
@@ -163,11 +208,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
   // 1. Handle Email/Password Login (Differentiates Delivery Partner and Customer)
   const handleLogin = async () => {
     if (!loginEmail.trim() || !loginEmail.includes('@')) {
-      Alert.alert('Invalid Email', 'Please enter a valid email address.');
+      showAppAlert('Invalid Email', 'Please enter a valid email address.', { type: 'warning' });
       return;
     }
     if (!loginPassword || loginPassword.length < 6) {
-      Alert.alert('Invalid Password', 'Password must be at least 6 characters.');
+      showAppAlert('Invalid Password', 'Password must be at least 6 characters.', { type: 'warning' });
       return;
     }
 
@@ -189,21 +234,27 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
       if (data.success && data.user) {
         onLoginSuccess(data.user);
       } else {
-        Alert.alert(
-          data.error?.toLowerCase().includes('account not found') ? 'Account Not Found' : 'Login Failed',
-          data.error || 'Invalid credentials. Please check your email and password.'
+        const isNotFound = data.error?.toLowerCase().includes('account not found');
+        showAppAlert(
+          isNotFound ? 'Account Not Found' : 'Login Failed',
+          data.error || 'Invalid credentials. Please check your email and password.',
+          {
+            type: 'error',
+            primaryText: isNotFound && userRoleTab === 'customer' ? 'Sign Up' : 'OK',
+            onPrimary: isNotFound && userRoleTab === 'customer' ? () => setAuthMode('signup') : undefined,
+          }
         );
       }
     } catch (err: any) {
       setIsLoggingIn(false);
-      Alert.alert('Connection Error', 'Unable to reach the authentication server. Please check your internet connection.');
+      showAppAlert('Connection Error', 'Unable to reach the authentication server. Please check your internet connection.', { type: 'warning' });
     }
   };
 
   // Forgot Password: Send OTP to user's registered email
   const handleSendForgotOtp = async () => {
     if (!forgotEmail.trim() || !forgotEmail.includes('@')) {
-      Alert.alert('Invalid Email', 'Please enter your registered email address.');
+      showAppAlert('Invalid Email', 'Please enter your registered email address.', { type: 'warning' });
       return;
     }
     try {
@@ -217,28 +268,28 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
       setIsSendingForgotOtp(false);
       if (data.success) {
         setForgotOtpSent(true);
-        Alert.alert('Code Sent', `A 6-digit password reset code has been sent to ${forgotEmail.trim()}.`);
+        showAppAlert('Code Sent', `A 6-digit password reset code has been sent to ${forgotEmail.trim()}.`, { type: 'success' });
       } else {
-        Alert.alert('Reset Failed', data.error || 'No account registered with this email.');
+        showAppAlert('Reset Failed', data.error || 'No account registered with this email.', { type: 'error' });
       }
     } catch (e) {
       setIsSendingForgotOtp(false);
-      Alert.alert('Connection Error', 'Unable to reach the server. Please check your internet connection.');
+      showAppAlert('Connection Error', 'Unable to reach the server. Please check your internet connection.', { type: 'warning' });
     }
   };
 
   // Forgot Password: Submit OTP and update new password
   const handleResetPasswordSubmit = async () => {
     if (!forgotOtp || forgotOtp.trim().length !== 6) {
-      Alert.alert('Enter OTP', 'Please enter the 6-digit code sent to your email.');
+      showAppAlert('Enter OTP', 'Please enter the 6-digit code sent to your email.', { type: 'warning' });
       return;
     }
     if (!forgotNewPassword || forgotNewPassword.length < 6) {
-      Alert.alert('Password Length', 'New password must be at least 6 characters.');
+      showAppAlert('Password Length', 'New password must be at least 6 characters.', { type: 'warning' });
       return;
     }
     if (forgotNewPassword !== forgotConfirmPassword) {
-      Alert.alert('Password Mismatch', 'Passwords do not match. Please re-enter.');
+      showAppAlert('Password Mismatch', 'Passwords do not match. Please re-enter.', { type: 'warning' });
       return;
     }
 
@@ -256,19 +307,19 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
       const data = await res.json();
       setIsResettingPassword(false);
       if (data.success) {
-        Alert.alert('Success', 'Password reset successfully! You can now log in with your new password.');
         setLoginEmail(forgotEmail.trim());
         setShowForgotModal(false);
         setForgotOtpSent(false);
         setForgotOtp('');
         setForgotNewPassword('');
         setForgotConfirmPassword('');
+        showAppAlert('Success', 'Password reset successfully! You can now log in with your new password.', { type: 'success' });
       } else {
-        Alert.alert('Verification Failed', data.error || 'Invalid or expired OTP.');
+        showAppAlert('Verification Failed', data.error || 'Invalid or expired OTP.', { type: 'error' });
       }
     } catch (e) {
       setIsResettingPassword(false);
-      Alert.alert('Connection Error', 'Unable to reach the server. Please check your internet connection.');
+      showAppAlert('Connection Error', 'Unable to reach the server. Please check your internet connection.', { type: 'warning' });
     }
   };
 
@@ -349,7 +400,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
       } else if (error?.code === statusCodes.IN_PROGRESS) {
         return;
       } else if (error?.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
-        Alert.alert('Play Services Unavailable', 'Google Play Services is not available or outdated.');
+        showAppAlert('Play Services Unavailable', 'Google Play Services is not available or outdated.', { type: 'warning' });
       } else {
         console.warn('Native Google Sign-In error:', error);
         setShowGoogleModal(true);
@@ -377,9 +428,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
       if (data?.success && data?.user) {
         if (userRoleTab === 'delivery') {
           if (data.user.role !== 'delivery') {
-            Alert.alert(
+            showAppAlert(
               'Access Denied',
-              'This Google account is not registered as an authorized Delivery Partner. Please contact Extra Diesel admin for driver credentials.'
+              'This Google account is not registered as an authorized Delivery Partner. Please contact Extra Diesel admin for driver credentials.',
+              { type: 'error' }
             );
             return;
           }
@@ -389,22 +441,27 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
         }
         onLoginSuccess(data.user);
       } else {
-        Alert.alert(
+        showAppAlert(
           'Account Not Found',
-          data?.error || 'No Extra Diesel account found with this Google ID. Please click Sign Up to register.'
+          data?.error || 'No Extra Diesel account found with this Google ID. Please click Sign Up to create your Extra Diesel account.',
+          {
+            type: 'error',
+            primaryText: userRoleTab === 'customer' ? 'Sign Up' : 'OK',
+            onPrimary: userRoleTab === 'customer' ? () => setAuthMode('signup') : undefined,
+          }
         );
       }
     } catch (err) {
       setIsCheckingGoogleAuth(false);
       setShowGoogleModal(false);
-      Alert.alert('Sign-In Error', 'Unable to verify account with server. Please check your internet connection.');
+      showAppAlert('Sign-In Error', 'Unable to verify account with server. Please check your internet connection.', { type: 'warning' });
     }
   };
 
   // 3. Handle Send OTP to Email via SMTP Backend
   const handleSendEmailOtp = async () => {
     if (!signupEmail.trim() || !signupEmail.includes('@')) {
-      Alert.alert('Invalid Email', 'Please enter a valid email address to receive OTP.');
+      showAppAlert('Invalid Email', 'Please enter a valid email address to receive OTP.', { type: 'warning' });
       return;
     }
 
@@ -423,13 +480,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
         setIsEmailVerified(false);
         setEmailOtp('');
       } else {
-        Alert.alert('Unable to Send OTP', data.error || 'Could not send verification email. Please check your email address.');
+        showAppAlert('Unable to Send OTP', data.error || 'Could not send verification email. Please check your email address.', { type: 'error' });
       }
     } catch (err: any) {
       setIsSendingOtp(false);
-      Alert.alert(
+      showAppAlert(
         'Connection Error',
-        'Unable to connect to server. Please check your internet connection.'
+        'Unable to connect to server. Please check your internet connection.',
+        { type: 'warning' }
       );
     }
   };
@@ -437,7 +495,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
   // 4. Handle Verify Inline OTP via Backend
   const handleVerifyInlineOtp = async () => {
     if (!emailOtp || emailOtp.trim().length !== 6) {
-      Alert.alert('Enter OTP', 'Please enter the 6-digit code sent to your email.');
+      showAppAlert('Enter OTP', 'Please enter the 6-digit code sent to your email.', { type: 'warning' });
       return;
     }
 
@@ -454,41 +512,42 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
       if (data.success && data.verified) {
         setIsEmailVerified(true);
       } else {
-        Alert.alert('Incorrect OTP', data.error || 'Please check the 6-digit code in your email and try again.');
+        showAppAlert('Incorrect OTP', data.error || 'Please check the 6-digit code in your email and try again.', { type: 'error' });
       }
     } catch (err) {
       setIsVerifyingOtp(false);
-      Alert.alert('Verification Failed', 'Unable to verify OTP with server. Please check your internet connection.');
+      showAppAlert('Verification Failed', 'Unable to verify OTP with server. Please check your internet connection.', { type: 'warning' });
     }
   };
 
   // 5. Handle Final Create Account Submit
   const handleCreateAccount = async () => {
     if (!fullName.trim()) {
-      Alert.alert('Name Required', 'Please enter your full name or company name.');
+      showAppAlert('Name Required', 'Please enter your full name or company name.', { type: 'warning' });
       return;
     }
     if (!signupEmail.trim() || !signupEmail.includes('@')) {
-      Alert.alert('Email Required', 'Please enter a valid email address.');
+      showAppAlert('Email Required', 'Please enter a valid email address.', { type: 'warning' });
       return;
     }
     if (!otpSent) {
-      Alert.alert('Verify Email', 'Please click "Send OTP" to verify your email address first.');
+      showAppAlert('Verify Email', 'Please click "Send OTP" to verify your email address first.', { type: 'warning' });
       return;
     }
     if (!isEmailVerified) {
-      Alert.alert(
+      showAppAlert(
         'Email Verification Required',
-        'Please enter the 6-digit OTP sent to your email and click "Verify" before proceeding.'
+        'Please enter the 6-digit OTP sent to your email and click "Verify" before proceeding.',
+        { type: 'warning' }
       );
       return;
     }
     if (!signupPassword || signupPassword.length < 6) {
-      Alert.alert('Password Required', 'Password must be at least 6 characters.');
+      showAppAlert('Password Required', 'Password must be at least 6 characters.', { type: 'warning' });
       return;
     }
     if (signupPassword !== confirmPassword) {
-      Alert.alert('Password Mismatch', 'Passwords do not match. Please re-enter.');
+      showAppAlert('Password Mismatch', 'Passwords do not match. Please re-enter.', { type: 'warning' });
       return;
     }
 
@@ -1290,6 +1349,88 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
           </View>
         </View>
       </Modal>
+
+      {/* Premium In-App Alert Modal (Replaces browser / native OS black box alert) */}
+      <Modal
+        visible={customAlert.visible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={hideAppAlert}
+      >
+        <View style={styles.appAlertOverlay}>
+          <View style={[styles.appAlertCard, isDesktop && { maxWidth: 400 }]}>
+            {/* Top Alert Icon with Type Styling */}
+            <View
+              style={[
+                styles.appAlertIconWrap,
+                customAlert.type === 'error' && { backgroundColor: '#FEE2E2' },
+                customAlert.type === 'warning' && { backgroundColor: '#FEF3C7' },
+                customAlert.type === 'success' && { backgroundColor: '#DCFCE7' },
+                customAlert.type === 'info' && { backgroundColor: '#DBEAFE' },
+              ]}
+            >
+              <Ionicons
+                name={
+                  customAlert.type === 'success'
+                    ? 'checkmark-circle'
+                    : customAlert.type === 'warning'
+                    ? 'warning'
+                    : customAlert.type === 'info'
+                    ? 'information-circle'
+                    : 'alert-circle'
+                }
+                size={34}
+                color={
+                  customAlert.type === 'success'
+                    ? '#16A34A'
+                    : customAlert.type === 'warning'
+                    ? '#D97706'
+                    : customAlert.type === 'info'
+                    ? '#2563EB'
+                    : '#DC2626'
+                }
+              />
+            </View>
+
+            {/* Alert Title */}
+            <Text style={styles.appAlertTitle}>{customAlert.title}</Text>
+
+            {/* Alert Message */}
+            <Text style={styles.appAlertMessage}>{customAlert.message}</Text>
+
+            {/* Action Buttons Row */}
+            <View style={styles.appAlertActionsRow}>
+              {customAlert.secondaryText && (
+                <TouchableOpacity
+                  style={styles.appAlertSecondaryBtn}
+                  onPress={() => {
+                    hideAppAlert();
+                    customAlert.onSecondary?.();
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.appAlertSecondaryText}>{customAlert.secondaryText}</Text>
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity
+                style={[
+                  styles.appAlertPrimaryBtn,
+                  customAlert.type === 'success' && { backgroundColor: '#16A34A' },
+                  customAlert.type === 'warning' && { backgroundColor: '#D97706' },
+                ]}
+                onPress={() => {
+                  hideAppAlert();
+                  customAlert.onPrimary?.();
+                }}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.appAlertPrimaryText}>{customAlert.primaryText || 'OK'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 };
@@ -1887,5 +2028,81 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     lineHeight: 14,
     textAlign: 'center',
+  },
+  // In-App Alert Dialog Styles
+  appAlertOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    zIndex: 9999,
+  },
+  appAlertCard: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 8px 10px -6px rgba(0, 0, 0, 0.2)',
+    elevation: 10,
+  },
+  appAlertIconWrap: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  appAlertTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+    textAlign: 'center',
+    marginBottom: 8,
+    letterSpacing: -0.2,
+  },
+  appAlertMessage: {
+    fontSize: 14,
+    color: '#475569',
+    textAlign: 'center',
+    lineHeight: 21,
+    marginBottom: 20,
+    paddingHorizontal: 8,
+  },
+  appAlertActionsRow: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: 12,
+  },
+  appAlertSecondaryBtn: {
+    flex: 1,
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  appAlertSecondaryText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  appAlertPrimaryBtn: {
+    flex: 1,
+    backgroundColor: COLORS.primary,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0 4px 6px -1px rgba(213, 0, 0, 0.25)',
+    elevation: 3,
+  },
+  appAlertPrimaryText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.2,
   },
 });
