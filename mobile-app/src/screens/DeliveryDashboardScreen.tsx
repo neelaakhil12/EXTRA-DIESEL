@@ -13,6 +13,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import * as Location from 'expo-location';
+import { io, Socket } from 'socket.io-client';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 import { ScreenName } from '../types';
@@ -74,6 +75,8 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
   const [captainCoords, setCaptainCoords] = useState<{ lat: number; lon: number } | null>(null);
   const [lastGpsSyncTime, setLastGpsSyncTime] = useState<string | null>(null);
   const gpsIntervalRef = useRef<any>(null);
+  const locationSubRef = useRef<any>(null);
+  const socketRef = useRef<Socket | null>(null);
 
   // Cash on Delivery Collection Modal State
   const [cashCollectOrder, setCashCollectOrder] = useState<DeliveryOrder | null>(null);
@@ -81,17 +84,49 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
   const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'https://extradiesel.in';
   const driverEmail = currentUser?.email || 'delivery@extradiesel.in';
 
-  // Broadcast current GPS location to backend for all active assigned orders
-  const broadcastLocation = async (lat: number, lon: number) => {
+  // Initialize Socket.io connection for sub-second live GPS transmission
+  useEffect(() => {
+    const socket = io(baseUrl, {
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: 15,
+      reconnectionDelay: 1000,
+    });
+
+    socketRef.current = socket;
+
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, [baseUrl]);
+
+  // Broadcast current GPS location to backend & socket room for all active assigned orders
+  const broadcastLocation = async (lat: number, lon: number, heading?: number, speed?: number) => {
     try {
       const activeList = orders.filter((o) => o.status === 'out_for_delivery' || o.status === 'arrived' || o.status === 'assigned');
       for (const order of activeList) {
-        await fetch(`${baseUrl}/api/orders/${order.id}/location`, {
+        // 1. Instant Socket.io emission (sub-second delivery to customer map)
+        if (socketRef.current) {
+          socketRef.current.emit('captain_location_update', {
+            orderId: order.id,
+            lat,
+            lon,
+            heading: heading ?? null,
+            speed: speed ?? null,
+            driverEmail,
+          });
+        }
+
+        // 2. HTTP POST Fallback for database persistence
+        fetch(`${baseUrl}/api/orders/${order.id}/location`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             lat,
             lon,
+            heading: heading ?? null,
+            speed: speed ?? null,
             driverEmail,
           }),
         }).catch(() => {});
@@ -111,7 +146,7 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
               const coords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
               setCaptainCoords(coords);
               setIsGpsActive(true);
-              broadcastLocation(coords.lat, coords.lon);
+              broadcastLocation(coords.lat, coords.lon, pos.coords.heading ?? undefined, pos.coords.speed ?? undefined);
             },
             () => {
               // Fallback to default depot location coordinates
@@ -138,7 +173,7 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
       const coords = { lat: loc.coords.latitude, lon: loc.coords.longitude };
       setCaptainCoords(coords);
       setIsGpsActive(true);
-      broadcastLocation(coords.lat, coords.lon);
+      broadcastLocation(coords.lat, coords.lon, loc.coords.heading ?? undefined, loc.coords.speed ?? undefined);
     } catch (e: any) {
       console.warn('GPS location request error:', e);
       setIsGpsActive(false);
@@ -151,34 +186,92 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
     setIsGpsActive(false);
   };
 
-  // Periodic GPS Location Transmitter (every 10 seconds while GPS is active)
+  // Live GPS Location Watcher & Transmitter (every 3 seconds when out for delivery, 8s otherwise)
   useEffect(() => {
-    if (isGpsActive) {
-      gpsIntervalRef.current = setInterval(async () => {
-        try {
-          if (Platform.OS === 'web') {
-            if (typeof navigator !== 'undefined' && navigator.geolocation) {
-              navigator.geolocation.getCurrentPosition((pos) => {
-                const c = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-                setCaptainCoords(c);
-                broadcastLocation(c.lat, c.lon);
-              });
-            }
-          } else {
-            const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-            const c = { lat: loc.coords.latitude, lon: loc.coords.longitude };
-            setCaptainCoords(c);
-            broadcastLocation(c.lat, c.lon);
-          }
-        } catch (e) {}
-      }, 10000);
-    } else {
+    if (!isGpsActive) {
       if (gpsIntervalRef.current) clearInterval(gpsIntervalRef.current);
+      if (locationSubRef.current) {
+        locationSubRef.current.remove?.();
+        locationSubRef.current = null;
+      }
+      return;
     }
 
-    return () => {
-      if (gpsIntervalRef.current) clearInterval(gpsIntervalRef.current);
-    };
+    const hasOutForDelivery = orders.some((o) => o.status === 'out_for_delivery');
+    const intervalMs = hasOutForDelivery ? 3000 : 8000;
+
+    // Web geolocation watcher or timer
+    if (Platform.OS === 'web') {
+      let watchId: number | null = null;
+      if (typeof navigator !== 'undefined' && navigator.geolocation) {
+        watchId = navigator.geolocation.watchPosition(
+          (pos) => {
+            const c = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+            setCaptainCoords(c);
+            broadcastLocation(c.lat, c.lon, pos.coords.heading ?? undefined, pos.coords.speed ?? undefined);
+          },
+          () => {},
+          { enableHighAccuracy: true, maximumAge: 2000, timeout: 5000 }
+        );
+      }
+
+      gpsIntervalRef.current = setInterval(() => {
+        if (typeof navigator !== 'undefined' && navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition((pos) => {
+            const c = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+            setCaptainCoords(c);
+            broadcastLocation(c.lat, c.lon, pos.coords.heading ?? undefined, pos.coords.speed ?? undefined);
+          }, () => {}, { enableHighAccuracy: true });
+        }
+      }, intervalMs);
+
+      return () => {
+        if (watchId !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
+          navigator.geolocation.clearWatch(watchId);
+        }
+        if (gpsIntervalRef.current) clearInterval(gpsIntervalRef.current);
+      };
+    } else {
+      // Native Expo Location Watcher
+      let isMounted = true;
+      (async () => {
+        try {
+          const sub = await Location.watchPositionAsync(
+            {
+              accuracy: Location.Accuracy.High,
+              timeInterval: intervalMs,
+              distanceInterval: 3,
+            },
+            (loc) => {
+              if (!isMounted) return;
+              const c = { lat: loc.coords.latitude, lon: loc.coords.longitude };
+              setCaptainCoords(c);
+              broadcastLocation(c.lat, c.lon, loc.coords.heading ?? undefined, loc.coords.speed ?? undefined);
+            }
+          );
+          locationSubRef.current = sub;
+        } catch (err) {
+          // Fallback interval
+          gpsIntervalRef.current = setInterval(async () => {
+            try {
+              const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+              const c = { lat: loc.coords.latitude, lon: loc.coords.longitude };
+              setCaptainCoords(c);
+              broadcastLocation(c.lat, c.lon, loc.coords.heading ?? undefined, loc.coords.speed ?? undefined);
+            } catch (e) {}
+          }, intervalMs);
+        }
+      })();
+
+      return () => {
+        isMounted = false;
+        if (locationSubRef.current) {
+          locationSubRef.current.remove?.();
+          locationSubRef.current = null;
+        }
+        if (gpsIntervalRef.current) clearInterval(gpsIntervalRef.current);
+      };
+    }
   }, [isGpsActive, orders]);
 
   // Load driver's assigned orders

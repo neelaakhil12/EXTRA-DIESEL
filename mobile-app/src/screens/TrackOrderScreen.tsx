@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { io, Socket } from 'socket.io-client';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 import { ScreenName } from '../types';
@@ -63,11 +64,29 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
   const [loading, setLoading] = useState(true);
   const [activeOrder, setActiveOrder] = useState<TrackedOrder | null>(null);
   const [recentOrders, setRecentOrders] = useState<TrackedOrder[]>([]);
-  const [etaMins, setEtaMins] = useState(18);
-  const [distanceKm, setDistanceKm] = useState(2.8);
   const [parentScrollEnabled, setParentScrollEnabled] = useState(true);
 
+  const webViewRef = useRef<any>(null);
+  const iframeRef = useRef<any>(null);
+  const socketRef = useRef<Socket | null>(null);
+
   const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'https://extradiesel.in';
+
+  // Helper to push real-time GPS coordinates to Leaflet Map iframe or WebView
+  const sendCoordsToMap = (lat: number, lon: number, heading?: number | null) => {
+    const payload = JSON.stringify({ type: 'BOWSER_GPS', lat, lon, heading: heading ?? null });
+    try {
+      if (Platform.OS === 'web') {
+        if (iframeRef.current && (iframeRef.current as any).contentWindow) {
+          (iframeRef.current as any).contentWindow.postMessage(payload, '*');
+        }
+      } else {
+        if (webViewRef.current) {
+          webViewRef.current.postMessage(payload);
+        }
+      }
+    } catch (e) {}
+  };
 
   // Load Order Data
   useEffect(() => {
@@ -104,7 +123,63 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
     fetchOrderData();
   }, [orderId, currentUser?.email]);
 
-  // Periodic 8-second polling to update Captain's live GPS movement from backend
+  // Real-Time Socket.io Live Tracking Connection
+  useEffect(() => {
+    if (!activeOrder?.id || activeOrder.status === 'delivered') return;
+
+    const socket = io(baseUrl, {
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: 25,
+      reconnectionDelay: 1000,
+    });
+    socketRef.current = socket;
+
+    socket.on('connect', () => {
+      socket.emit('join_order_track', activeOrder.id);
+    });
+
+    // Receive sub-second live GPS coordinates broadcast from Bowser Captain's phone
+    socket.on('bowser_location_changed', (data: { orderId: string; lat: number; lon: number; heading?: number | null; speed?: number | null }) => {
+      if (data && data.orderId === activeOrder.id) {
+        setActiveOrder((prev) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            captainLat: data.lat,
+            captainLon: data.lon,
+            captainHeading: data.heading,
+            captainSpeed: data.speed,
+            lastLocationUpdate: new Date().toISOString(),
+          };
+        });
+        sendCoordsToMap(data.lat, data.lon, data.heading);
+      }
+    });
+
+    // Receive immediate status transitions (e.g. Assigned -> Out for Delivery -> Arrived)
+    socket.on('order_status_changed', (data: { orderId: string; status: any; statusText?: string; order?: any }) => {
+      if (data && data.orderId === activeOrder.id) {
+        setActiveOrder((prev) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            ...(data.order || {}),
+            status: data.status,
+            statusText: data.statusText || prev.statusText,
+          };
+        });
+      }
+    });
+
+    return () => {
+      socket.emit('leave_order_track', activeOrder.id);
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, [activeOrder?.id, baseUrl]);
+
+  // Periodic 8-second polling fallback to keep order state in sync
   useEffect(() => {
     if (!activeOrder?.id || activeOrder.status === 'delivered') return;
 
@@ -117,6 +192,9 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
             ...prev,
             ...data.order,
           }));
+          if (data.order.captainLat && data.order.captainLon) {
+            sendCoordsToMap(data.order.captainLat, data.order.captainLon, data.order.captainHeading);
+          }
         }
       } catch (e) {}
     }, 8000);
@@ -124,14 +202,36 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
     return () => clearInterval(pollTimer);
   }, [activeOrder?.id, activeOrder?.status]);
 
-  // Live ETA simulation countdown
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setEtaMins((prev) => (prev > 5 ? prev - 1 : 8));
-      setDistanceKm((prev) => (prev > 0.8 ? parseFloat((prev - 0.2).toFixed(1)) : 1.2));
-    }, 45000);
-    return () => clearInterval(timer);
-  }, []);
+  // Calculate genuine Haversine distance between Bowser and Delivery Site
+  const calcDistance = useMemo(() => {
+    if (!activeOrder?.captainLat || !activeOrder?.captainLon) return null;
+    let dLat = 17.313112;
+    let dLon = 78.545285;
+    if (activeOrder.mapsLink) {
+      const q = activeOrder.mapsLink.match(/(?:q|destination|query)=(-?\d+\.\d+),(-?\d+\.\d+)/);
+      if (q) {
+        dLat = parseFloat(q[1]);
+        dLon = parseFloat(q[2]);
+      }
+    } else if (activeOrder.address) {
+      const c = activeOrder.address.match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
+      if (c) {
+        dLat = parseFloat(c[1]);
+        dLon = parseFloat(c[2]);
+      }
+    }
+    const R = 6371; // km
+    const dL = ((dLat - activeOrder.captainLat) * Math.PI) / 180;
+    const dO = ((dLon - activeOrder.captainLon) * Math.PI) / 180;
+    const a =
+      Math.sin(dL / 2) * Math.sin(dL / 2) +
+      Math.cos((activeOrder.captainLat * Math.PI) / 180) *
+        Math.cos((dLat * Math.PI) / 180) *
+        Math.sin(dO / 2) *
+        Math.sin(dO / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return parseFloat((R * c).toFixed(1));
+  }, [activeOrder?.captainLat, activeOrder?.captainLon, activeOrder?.address, activeOrder?.mapsLink]);
 
   // Listen for driver assignment update & trigger status bar push notification ONLY once per driver assignment
   useEffect(() => {
@@ -488,7 +588,8 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
     requestAnimationFrame(animateFrame);
 
     function updateTankerPos(newLat, newLon, explicitAngle) {
-      var bearing = explicitAngle !== undefined && explicitAngle !== null
+      if (typeof newLat !== 'number' || typeof newLon !== 'number' || isNaN(newLat) || isNaN(newLon)) return;
+      var bearing = (explicitAngle !== undefined && explicitAngle !== null && !isNaN(explicitAngle))
         ? explicitAngle
         : calculateBearing(curLat, curLon, newLat, newLon);
       targetLat = newLat;
@@ -496,16 +597,33 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
       targetAngle = bearing;
     }
 
-    // Step progression along route - ONLY active if Bowser Captain clicked Start Delivery (out_for_delivery)
-    if (isTripActive) {
-      var routeIdx = 1;
-      setInterval(function() {
-        routeIdx = (routeIdx + 1) % waypoints.length;
-        if (routeIdx === 0) routeIdx = 1;
-        var nextPt = waypoints[routeIdx];
-        updateTankerPos(nextPt[0], nextPt[1]);
-      }, 3500);
+    // Real-Time GPS updates via Web & Mobile WebView messages (Sub-second sync)
+    function onIncomingGps(data) {
+      if (!data) return;
+      var nLat = parseFloat(data.lat);
+      var nLon = parseFloat(data.lon);
+      if (!isNaN(nLat) && !isNaN(nLon)) {
+        updateTankerPos(nLat, nLon, data.heading);
+      }
     }
+
+    window.addEventListener('message', function(event) {
+      try {
+        var msg = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (msg && (msg.type === 'BOWSER_GPS' || msg.lat !== undefined)) {
+          onIncomingGps(msg);
+        }
+      } catch (err) {}
+    });
+
+    document.addEventListener('message', function(event) {
+      try {
+        var msg = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (msg && (msg.type === 'BOWSER_GPS' || msg.lat !== undefined)) {
+          onIncomingGps(msg);
+        }
+      } catch (err) {}
+    });
 
     map.fitBounds(L.latLngBounds([depot, site]), { padding: [40, 40] });
   </script>
@@ -564,6 +682,7 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
       >
         {Platform.OS === 'web' ? (
           <iframe
+            ref={iframeRef}
             srcDoc={getInteractiveMapHtml()}
             title="Live Bowser Tracking Map"
             style={{
@@ -575,6 +694,7 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
           />
         ) : (
           <WebView
+            ref={webViewRef}
             originWhitelist={['*']}
             source={{ html: getInteractiveMapHtml() }}
             style={{
@@ -616,7 +736,7 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
         </View>
       </View>
 
-      {/* Swiggy / Rapido Style Live ETA & Status Bottom Card */}
+      {/* Swiggy / Rapido Style Live Status & ETA Bottom Card */}
       <View style={styles.swiggyBottomCard}>
         <View style={styles.bottomCardHandle} />
 
@@ -627,17 +747,35 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
                 ? 'Delivered at Site'
                 : activeOrder.status === 'arrived'
                 ? 'Captain Arrived at Site'
-                : `Arriving in ~${etaMins} mins`}
+                : isTripActive
+                ? (calcDistance !== null ? `Bowser En Route • ${calcDistance} km away` : 'Bowser En Route to Destination')
+                : isAssigned
+                ? 'Bowser Captain Assigned'
+                : 'Order Confirmed'}
             </Text>
             <Text style={styles.etaDistanceText}>
               {isDelivered
-                ? '100% BS-VI Pure Dispensed'
-                : `${distanceKm} km away • Bowser moving at ${activeOrder.captainSpeed || 36} km/h`}
+                ? '100% BS-VI Pure Dispensed • Complete'
+                : activeOrder.status === 'arrived'
+                ? 'Captain ready to connect hose & dispense fuel'
+                : isTripActive
+                ? (activeOrder.captainSpeed && activeOrder.captainSpeed > 0
+                    ? `Live GPS Active • Bowser moving at ${Math.round(activeOrder.captainSpeed)} km/h`
+                    : 'Real-time Live GPS Active • Connected via WebSocket')
+                : isAssigned
+                ? 'Tanker loading and safety check at dispatch depot'
+                : `Scheduled Slot: ${activeOrder.slot || '08:00 AM - 12:00 PM'}`}
             </Text>
           </View>
-          <View style={styles.etaPillBadge}>
-            <Ionicons name="speedometer" size={15} color="#2563EB" />
-            <Text style={styles.etaPillBadgeText}>~{etaMins}m</Text>
+          <View style={[styles.etaPillBadge, isTripActive && { backgroundColor: '#DCFCE7' }]}>
+            <Ionicons
+              name={isTripActive ? 'navigate' : isDelivered ? 'checkmark-circle' : 'time-outline'}
+              size={15}
+              color={isTripActive ? '#059669' : isDelivered ? '#059669' : '#64748B'}
+            />
+            <Text style={[styles.etaPillBadgeText, isTripActive && { color: '#059669' }]}>
+              {isTripActive ? 'LIVE' : isDelivered ? 'DONE' : isAssigned ? 'PREP' : 'WAIT'}
+            </Text>
           </View>
         </View>
 

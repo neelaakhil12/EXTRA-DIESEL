@@ -7,6 +7,8 @@ import Razorpay from 'razorpay';
 import nodemailer from 'nodemailer';
 import fs from 'fs';
 import path from 'path';
+import http from 'http';
+import { Server as SocketIOServer } from 'socket.io';
 import { fileURLToPath } from 'url';
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
@@ -208,7 +210,63 @@ function saveOrders(orders) {
 }
 
 const app = express();
+const server = http.createServer(app);
+const io = new SocketIOServer(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST', 'PATCH'],
+  },
+  pingTimeout: 30000,
+  pingInterval: 10000,
+});
+
 const PORT = process.env.PORT || 5000;
+
+// Socket.io Real-Time Rooms & GPS Events
+io.on('connection', (socket) => {
+  // Join a specific order tracking channel
+  socket.on('join_order_track', (orderId) => {
+    if (orderId) {
+      socket.join(`order_${orderId}`);
+      console.log(`[Socket.io] Client ${socket.id} joined channel order_${orderId}`);
+    }
+  });
+
+  socket.on('leave_order_track', (orderId) => {
+    if (orderId) {
+      socket.leave(`order_${orderId}`);
+    }
+  });
+
+  // Captain emits live coordinates directly through WebSocket
+  socket.on('captain_location_update', (data) => {
+    const { orderId, lat, lon, heading, speed } = data || {};
+    if (orderId && lat !== undefined && lon !== undefined) {
+      const allOrders = loadOrders();
+      const orderIndex = allOrders.findIndex((o) => o.id === orderId);
+      if (orderIndex !== -1) {
+        allOrders[orderIndex].captainLat = Number(lat);
+        allOrders[orderIndex].captainLon = Number(lon);
+        if (heading !== undefined) allOrders[orderIndex].captainHeading = Number(heading);
+        if (speed !== undefined) allOrders[orderIndex].captainSpeed = Number(speed);
+        allOrders[orderIndex].lastLocationUpdate = new Date().toISOString();
+        saveOrders(allOrders);
+      }
+
+      // Instant broadcast to customer tracking screen
+      io.to(`order_${orderId}`).emit('bowser_location_changed', {
+        orderId,
+        lat: Number(lat),
+        lon: Number(lon),
+        heading: heading !== undefined ? Number(heading) : null,
+        speed: speed !== undefined ? Number(speed) : null,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  });
+
+  socket.on('disconnect', () => {});
+});
 
 // Enable CORS for frontend domains
 app.use(cors({
@@ -1751,6 +1809,14 @@ app.post('/api/admin/orders/assign', (req, res) => {
     saveOrders(allOrders);
     console.log(`[Orders] Assigned order #${orderId} to ${allOrders[orderIndex].assignedToName} (${deliveryBoyEmail})`);
 
+    // Emit live status update to customer tracking room
+    io.to(`order_${orderId}`).emit('order_status_changed', {
+      orderId,
+      status: allOrders[orderIndex].status,
+      statusText: allOrders[orderIndex].statusText,
+      order: allOrders[orderIndex],
+    });
+
     res.json({ success: true, message: 'Order assigned successfully', order: allOrders[orderIndex] });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to assign order', details: error.message });
@@ -1807,6 +1873,14 @@ app.patch('/api/orders/:id/status', (req, res) => {
     saveOrders(allOrders);
     console.log(`[Orders] Updated order #${id} status to ${status} (paymentStatus: ${allOrders[orderIndex].paymentStatus})`);
 
+    // Emit live status update to customer tracking room
+    io.to(`order_${id}`).emit('order_status_changed', {
+      orderId: id,
+      status: allOrders[orderIndex].status,
+      statusText: allOrders[orderIndex].statusText,
+      order: allOrders[orderIndex],
+    });
+
     res.json({ success: true, message: 'Order status updated successfully', order: allOrders[orderIndex] });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to update order status', details: error.message });
@@ -1837,6 +1911,16 @@ app.post('/api/orders/:id/location', (req, res) => {
     allOrders[orderIndex].lastLocationUpdate = new Date().toISOString();
 
     saveOrders(allOrders);
+
+    // Instant broadcast via WebSocket to live customer map
+    io.to(`order_${id}`).emit('bowser_location_changed', {
+      orderId: id,
+      lat: allOrders[orderIndex].captainLat,
+      lon: allOrders[orderIndex].captainLon,
+      heading: allOrders[orderIndex].captainHeading || null,
+      speed: allOrders[orderIndex].captainSpeed || null,
+      timestamp: allOrders[orderIndex].lastLocationUpdate,
+    });
 
     res.json({
       success: true,
@@ -2398,8 +2482,8 @@ if (fs.existsSync(DIST_PATH)) {
   });
 }
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Extra Diesel AWS Backend running on port ${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Extra Diesel AWS Backend with Socket.io running on port ${PORT}`);
   console.log(`📍 S3 Bucket: ${S3_BUCKET} (${process.env.AWS_REGION || 'ap-south-1'})`);
   console.log(`⛽ Live Rate: ₹${currentSettings.dieselRate}/L | Delivery 0-500L: ₹${currentSettings.deliveryChargeUpTo500}`);
 });
