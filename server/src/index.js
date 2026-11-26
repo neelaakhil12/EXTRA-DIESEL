@@ -1250,7 +1250,7 @@ app.post('/api/admin/reset-password', (req, res) => {
   }
 });
 
-// Auth 5: Native Google Auth (Auto-creates customer account seamlessly on first sign-in)
+// Auth 5: Native Google Auth (Requires existing registered account; un-registered users must Sign Up)
 app.post('/api/auth/google-auth', (req, res) => {
   try {
     const { email, name } = req.body;
@@ -1263,21 +1263,25 @@ app.post('/api/auth/google-auth', (req, res) => {
     const adminEmails = ['aadhyafuels9@gmail.com'];
     const isAdmin = adminEmails.includes(key);
 
-    if (!existingUser) {
-      // First-time Google user -> Seamlessly create account!
+    if (!existingUser && !isAdmin) {
+      return res.status(404).json({
+        success: false,
+        accountNotFound: true,
+        error: 'Account not found. No account is registered with this Google ID. Please click Sign Up to create your Extra Diesel account.',
+      });
+    }
+
+    if (!existingUser && isAdmin) {
       existingUser = {
-        name: (name && name.trim()) || key.split('@')[0],
+        name: (name && name.trim()) || 'Extra Diesel Admin',
         email: key,
-        phone: '',
-        role: isAdmin ? 'admin' : 'customer',
+        phone: '+91 9876543210',
+        role: 'admin',
         authProvider: 'google',
         createdAt: new Date().toISOString(),
       };
       registeredUsers.set(key, existingUser);
       saveUsers(registeredUsers);
-      console.log(`[Google Auth] Created and persisted new user: ${existingUser.name} (${existingUser.email}) - Role: ${existingUser.role}`);
-    } else {
-      console.log(`[Google Auth] Authenticated user: ${existingUser.name} (${existingUser.email}) - Role: ${existingUser.role}`);
     }
 
     return res.json({
