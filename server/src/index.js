@@ -238,29 +238,65 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Captain emits live coordinates directly through WebSocket
+  // Captain emits live coordinates directly through WebSocket (sub-second sync)
   socket.on('captain_location_update', (data) => {
-    const { orderId, lat, lon, heading, speed } = data || {};
-    if (orderId && lat !== undefined && lon !== undefined) {
-      const allOrders = loadOrders();
-      const orderIndex = allOrders.findIndex((o) => o.id === orderId);
-      if (orderIndex !== -1) {
-        allOrders[orderIndex].captainLat = Number(lat);
-        allOrders[orderIndex].captainLon = Number(lon);
-        if (heading !== undefined) allOrders[orderIndex].captainHeading = Number(heading);
-        if (speed !== undefined) allOrders[orderIndex].captainSpeed = Number(speed);
-        allOrders[orderIndex].lastLocationUpdate = new Date().toISOString();
-        saveOrders(allOrders);
-      }
+    const { orderId, driverEmail, lat, lon, heading, speed } = data || {};
+    if (lat === undefined || lon === undefined) return;
 
-      // Instant broadcast to customer tracking screen
-      io.to(`order_${orderId}`).emit('bowser_location_changed', {
-        orderId,
-        lat: Number(lat),
-        lon: Number(lon),
-        heading: heading !== undefined ? Number(heading) : null,
-        speed: speed !== undefined ? Number(speed) : null,
-        timestamp: new Date().toISOString(),
+    const numLat = Number(lat);
+    const numLon = Number(lon);
+    if (isNaN(numLat) || isNaN(numLon)) return;
+
+    const allOrders = loadOrders();
+    const ordersToBroadcast = [];
+
+    if (orderId) {
+      const idx = allOrders.findIndex((o) => o.id === orderId);
+      if (idx !== -1) {
+        allOrders[idx].captainLat = numLat;
+        allOrders[idx].captainLon = numLon;
+        if (heading !== undefined && heading !== null && !isNaN(Number(heading))) {
+          allOrders[idx].captainHeading = Number(heading);
+        }
+        if (speed !== undefined && speed !== null && !isNaN(Number(speed))) {
+          allOrders[idx].captainSpeed = Number(speed);
+        }
+        allOrders[idx].lastLocationUpdate = new Date().toISOString();
+        ordersToBroadcast.push(allOrders[idx]);
+      }
+    } else if (driverEmail) {
+      const normEmail = driverEmail.toLowerCase().trim();
+      allOrders.forEach((o) => {
+        if (
+          o.assignedTo &&
+          o.assignedTo.toLowerCase().trim() === normEmail &&
+          (o.status === 'out_for_delivery' || o.status === 'arrived' || o.status === 'assigned')
+        ) {
+          o.captainLat = numLat;
+          o.captainLon = numLon;
+          if (heading !== undefined && heading !== null && !isNaN(Number(heading))) {
+            o.captainHeading = Number(heading);
+          }
+          if (speed !== undefined && speed !== null && !isNaN(Number(speed))) {
+            o.captainSpeed = Number(speed);
+          }
+          o.lastLocationUpdate = new Date().toISOString();
+          ordersToBroadcast.push(o);
+        }
+      });
+    }
+
+    if (ordersToBroadcast.length > 0) {
+      saveOrders(allOrders);
+      ordersToBroadcast.forEach((ord) => {
+        io.to(`order_${ord.id}`).emit('bowser_location_changed', {
+          orderId: ord.id,
+          lat: numLat,
+          lon: numLon,
+          heading: ord.captainHeading ?? null,
+          speed: ord.captainSpeed ?? null,
+          timestamp: new Date().toISOString(),
+        });
       });
     }
   });

@@ -77,6 +77,12 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
   const gpsIntervalRef = useRef<any>(null);
   const locationSubRef = useRef<any>(null);
   const socketRef = useRef<Socket | null>(null);
+  const ordersRef = useRef<DeliveryOrder[]>(orders);
+
+  // Keep ordersRef in sync with latest orders state to avoid stale closure in timers
+  useEffect(() => {
+    ordersRef.current = orders;
+  }, [orders]);
 
   // Cash on Delivery Collection Modal State
   const [cashCollectOrder, setCashCollectOrder] = useState<DeliveryOrder | null>(null);
@@ -89,7 +95,7 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
     const socket = io(baseUrl, {
       transports: ['websocket', 'polling'],
       reconnection: true,
-      reconnectionAttempts: 15,
+      reconnectionAttempts: 25,
       reconnectionDelay: 1000,
     });
 
@@ -104,9 +110,13 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
   // Broadcast current GPS location to backend & socket room for all active assigned orders
   const broadcastLocation = async (lat: number, lon: number, heading?: number, speed?: number) => {
     try {
-      const activeList = orders.filter((o) => o.status === 'out_for_delivery' || o.status === 'arrived' || o.status === 'assigned');
+      const currentOrders = ordersRef.current && ordersRef.current.length > 0 ? ordersRef.current : orders;
+      const activeList = currentOrders.filter(
+        (o) => o.status === 'out_for_delivery' || o.status === 'arrived' || o.status === 'assigned'
+      );
+
+      // 1. Broadcast specifically to each active order's tracking room
       for (const order of activeList) {
-        // 1. Instant Socket.io emission (sub-second delivery to customer map)
         if (socketRef.current) {
           socketRef.current.emit('captain_location_update', {
             orderId: order.id,
@@ -118,7 +128,7 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
           });
         }
 
-        // 2. HTTP POST Fallback for database persistence
+        // HTTP POST fallback
         fetch(`${baseUrl}/api/orders/${order.id}/location`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -131,6 +141,18 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
           }),
         }).catch(() => {});
       }
+
+      // 2. Also emit driver-level broadcast so server automatically routes to all orders assigned to this driver
+      if (socketRef.current) {
+        socketRef.current.emit('captain_location_update', {
+          driverEmail,
+          lat,
+          lon,
+          heading: heading ?? null,
+          speed: speed ?? null,
+        });
+      }
+
       setLastGpsSyncTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
     } catch (e) {}
   };
@@ -186,7 +208,7 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
     setIsGpsActive(false);
   };
 
-  // Live GPS Location Watcher & Transmitter (every 12-15 seconds for optimal battery & AWS server efficiency)
+  // Live GPS Location Watcher & Transmitter (continuous 5 seconds interval)
   useEffect(() => {
     if (!isGpsActive) {
       if (gpsIntervalRef.current) clearInterval(gpsIntervalRef.current);
@@ -197,82 +219,42 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
       return;
     }
 
-    const hasOutForDelivery = orders.some((o) => o.status === 'out_for_delivery');
-    const intervalMs = hasOutForDelivery ? 12000 : 15000; // 12s en route, 15s otherwise
+    const intervalMs = 5000; // Exact 5-second automatic update
 
-    // Web geolocation watcher or timer
-    if (Platform.OS === 'web') {
-      let watchId: number | null = null;
-      if (typeof navigator !== 'undefined' && navigator.geolocation) {
-        watchId = navigator.geolocation.watchPosition(
-          (pos) => {
-            const c = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-            setCaptainCoords(c);
-            broadcastLocation(c.lat, c.lon, pos.coords.heading ?? undefined, pos.coords.speed ?? undefined);
-          },
-          () => {},
-          { enableHighAccuracy: true, maximumAge: 10000, timeout: 10000 }
-        );
-      }
+    // Robust function to get current location and broadcast to Socket.io and DB
+    const fetchAndTransmitCoords = async () => {
+      try {
+        if (Platform.OS === 'web') {
+          if (typeof navigator !== 'undefined' && navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+              (pos) => {
+                const c = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+                setCaptainCoords(c);
+                broadcastLocation(c.lat, c.lon, pos.coords.heading ?? undefined, pos.coords.speed ?? undefined);
+              },
+              () => {},
+              { enableHighAccuracy: true, maximumAge: 3000, timeout: 5000 }
+            );
+          }
+        } else {
+          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+          const c = { lat: loc.coords.latitude, lon: loc.coords.longitude };
+          setCaptainCoords(c);
+          broadcastLocation(c.lat, c.lon, loc.coords.heading ?? undefined, loc.coords.speed ?? undefined);
+        }
+      } catch (err) {}
+    };
 
-      gpsIntervalRef.current = setInterval(() => {
-        if (typeof navigator !== 'undefined' && navigator.geolocation) {
-          navigator.geolocation.getCurrentPosition((pos) => {
-            const c = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-            setCaptainCoords(c);
-            broadcastLocation(c.lat, c.lon, pos.coords.heading ?? undefined, pos.coords.speed ?? undefined);
-          }, () => {}, { enableHighAccuracy: true });
-        }
-      }, intervalMs);
+    // Immediate ping
+    fetchAndTransmitCoords();
 
-      return () => {
-        if (watchId !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
-          navigator.geolocation.clearWatch(watchId);
-        }
-        if (gpsIntervalRef.current) clearInterval(gpsIntervalRef.current);
-      };
-    } else {
-      // Native Expo Location Watcher (12s interval, min 10 meters distance change)
-      let isMounted = true;
-      (async () => {
-        try {
-          const sub = await Location.watchPositionAsync(
-            {
-              accuracy: Location.Accuracy.Balanced,
-              timeInterval: intervalMs,
-              distanceInterval: 10,
-            },
-            (loc) => {
-              if (!isMounted) return;
-              const c = { lat: loc.coords.latitude, lon: loc.coords.longitude };
-              setCaptainCoords(c);
-              broadcastLocation(c.lat, c.lon, loc.coords.heading ?? undefined, loc.coords.speed ?? undefined);
-            }
-          );
-          locationSubRef.current = sub;
-        } catch (err) {
-          // Fallback interval
-          gpsIntervalRef.current = setInterval(async () => {
-            try {
-              const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-              const c = { lat: loc.coords.latitude, lon: loc.coords.longitude };
-              setCaptainCoords(c);
-              broadcastLocation(c.lat, c.lon, loc.coords.heading ?? undefined, loc.coords.speed ?? undefined);
-            } catch (e) {}
-          }, intervalMs);
-        }
-      })();
+    // Repeating timer every 5 seconds without requiring manual screen refresh
+    gpsIntervalRef.current = setInterval(fetchAndTransmitCoords, intervalMs);
 
-      return () => {
-        isMounted = false;
-        if (locationSubRef.current) {
-          locationSubRef.current.remove?.();
-          locationSubRef.current = null;
-        }
-        if (gpsIntervalRef.current) clearInterval(gpsIntervalRef.current);
-      };
-    }
-  }, [isGpsActive, orders]);
+    return () => {
+      if (gpsIntervalRef.current) clearInterval(gpsIntervalRef.current);
+    };
+  }, [isGpsActive]);
 
   // Load driver's assigned orders
   const loadDriverOrders = async () => {

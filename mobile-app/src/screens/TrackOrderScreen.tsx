@@ -179,7 +179,7 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
     };
   }, [activeOrder?.id, baseUrl]);
 
-  // Periodic 15-second polling fallback to keep order state in sync with minimal server load
+  // Periodic 5-second polling fallback to keep order state in sync continuously
   useEffect(() => {
     if (!activeOrder?.id || activeOrder.status === 'delivered') return;
 
@@ -197,7 +197,7 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
           }
         }
       } catch (e) {}
-    }, 15000);
+    }, 5000);
 
     return () => clearInterval(pollTimer);
   }, [activeOrder?.id, activeOrder?.status]);
@@ -546,14 +546,16 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
     });
     L.marker(site, { icon: siteIcon }).addTo(map);
 
-    // 3. Fuel Depot Marker
-    var depotIcon = L.divIcon({
-      className: 'depot-marker-box',
-      html: '<div style="display:flex; flex-direction:column; align-items:center;"><div style="font-size:24px;">⛽</div><div class="depot-pill">Terminal Depot</div></div>',
-      iconSize: [100, 48],
-      iconAnchor: [50, 42]
-    });
-    L.marker(depot, { icon: depotIcon }).addTo(map);
+    // 3. Fuel Depot Marker (Disappears as soon as Bowser Captain starts delivery!)
+    if (isStationaryAtDepot) {
+      var depotIcon = L.divIcon({
+        className: 'depot-marker-box',
+        html: '<div style="display:flex; flex-direction:column; align-items:center;"><div style="font-size:24px;">⛽</div><div class="depot-pill">Terminal Depot</div></div>',
+        iconSize: [100, 48],
+        iconAnchor: [50, 42]
+      });
+      L.marker(depot, { icon: depotIcon }).addTo(map);
+    }
 
     // 4. Custom 2D/3D Top-Down Fuel Tanker Icon Marker
     var tankerStatusLabel = isTripActive
@@ -575,9 +577,10 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
 
     function calculateBearing(lat1, lon1, lat2, lon2) {
       var dLon = (lon2 - lon1) * Math.PI / 180;
-      var y = Math.sin(dLon) * Math.cos(lat2 * Math.PI / 180);
-      var x = Math.cos(lat1 * Math.PI / 180) * Math.sin(lat2 * Math.PI / 180) -
-              Math.sin(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.cos(dLon);
+      var lat1Rad = lat1 * Math.PI / 180;
+      var lat2Rad = lat2 * Math.PI / 180;
+      var y = Math.sin(dLon) * Math.cos(lat2Rad);
+      var x = Math.cos(lat1Rad) * Math.sin(lat2Rad) - Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLon);
       var brng = Math.atan2(y, x) * 180 / Math.PI;
       return (brng + 360) % 360;
     }
@@ -608,12 +611,21 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
 
     function updateTankerPos(newLat, newLon, explicitAngle) {
       if (typeof newLat !== 'number' || typeof newLon !== 'number' || isNaN(newLat) || isNaN(newLon)) return;
-      var bearing = (explicitAngle !== undefined && explicitAngle !== null && !isNaN(explicitAngle))
-        ? explicitAngle
-        : calculateBearing(curLat, curLon, newLat, newLon);
+
+      // Calculate forward driving angle whenever truck moves > 3-4 meters
+      var dLat = newLat - curLat;
+      var dLon = newLon - curLon;
+      var hasMoved = (Math.abs(dLat) > 0.00003 || Math.abs(dLon) > 0.00003);
+
+      if (hasMoved) {
+        var bearing = (typeof explicitAngle === 'number' && explicitAngle > 0 && explicitAngle <= 360)
+          ? explicitAngle
+          : calculateBearing(curLat, curLon, newLat, newLon);
+        targetAngle = bearing;
+      }
+
       targetLat = newLat;
       targetLon = newLon;
-      targetAngle = bearing;
     }
 
     // Real-Time GPS updates via Web & Mobile WebView messages (Sub-second sync)
@@ -644,7 +656,10 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
       } catch (err) {}
     });
 
-    map.fitBounds(L.latLngBounds([depot, site]), { padding: [40, 40] });
+    var viewBounds = isTripActive
+      ? L.latLngBounds([livePos, site])
+      : L.latLngBounds([depot, site]);
+    map.fitBounds(viewBounds, { padding: [40, 40] });
   </script>
 </body>
 </html>`;
