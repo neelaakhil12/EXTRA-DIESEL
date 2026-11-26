@@ -1230,31 +1230,30 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
       <Modal
         visible={showForgotModal}
         transparent={true}
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setShowForgotModal(false)}
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.forgotModalOverlay}
+          style={{ flex: 1 }}
         >
-          <View style={[styles.forgotModalCard, isDesktop && { maxWidth: 440 }]}>
-            <View style={styles.forgotModalHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Ionicons name="key-outline" size={22} color={COLORS.primary} />
-                <Text style={styles.forgotModalTitle}>Reset Password</Text>
+          <ScrollView
+            contentContainerStyle={styles.forgotModalScrollOverlay}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+          >
+            <View style={[styles.forgotModalCard, isDesktop && { maxWidth: 440 }]}>
+              <View style={styles.forgotModalHeader}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Ionicons name="key-outline" size={22} color={COLORS.primary} />
+                  <Text style={styles.forgotModalTitle}>Reset Password</Text>
+                </View>
+                <TouchableOpacity onPress={() => setShowForgotModal(false)} style={styles.closeBtn}>
+                  <Ionicons name="close" size={20} color="#64748B" />
+                </TouchableOpacity>
               </View>
-              <TouchableOpacity onPress={() => setShowForgotModal(false)} style={styles.closeBtn}>
-                <Ionicons name="close" size={20} color="#64748B" />
-              </TouchableOpacity>
-            </View>
 
-            <ScrollView
-              style={styles.forgotModalScrollView}
-              contentContainerStyle={styles.forgotModalScrollContent}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-              bounces={true}
-            >
               <Text style={styles.forgotModalSub}>
                 Enter your registered Extra Diesel email address to receive a 6-digit password reset verification code.
               </Text>
@@ -1356,8 +1355,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
                   </TouchableOpacity>
                 </>
               )}
-            </ScrollView>
-          </View>
+            </View>
+          </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
 
@@ -1543,32 +1542,26 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   // Forgot Password Modal
-  forgotModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+  forgotModalScrollOverlay: {
+    flexGrow: 1,
+    backgroundColor: 'rgba(0,0,0,0.65)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 36,
   },
   forgotModalCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
-    paddingTop: 20,
+    paddingTop: 22,
     paddingHorizontal: 22,
-    paddingBottom: 16,
+    paddingBottom: 22,
     width: '100%',
-    maxHeight: '88%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 10,
     elevation: 6,
-  },
-  forgotModalScrollView: {
-    width: '100%',
-  },
-  forgotModalScrollContent: {
-    paddingBottom: 14,
   },
   forgotModalHeader: {
     flexDirection: 'row',
