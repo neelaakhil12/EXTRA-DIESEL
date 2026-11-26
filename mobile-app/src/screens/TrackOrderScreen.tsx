@@ -10,7 +10,6 @@ import {
   useWindowDimensions,
   ActivityIndicator,
 } from 'react-native';
-import { WebView } from 'react-native-webview';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
@@ -32,7 +31,7 @@ interface TrackedOrder {
   date: string;
   liters: number;
   total: number;
-  status: 'pending' | 'assigned' | 'out_for_delivery' | 'delivered' | 'cancelled';
+  status: 'pending' | 'assigned' | 'out_for_delivery' | 'arrived' | 'delivered' | 'cancelled';
   statusText?: string;
   address: string;
   mapsLink?: string | null;
@@ -41,6 +40,9 @@ interface TrackedOrder {
   assignedToName?: string | null;
   vehicleNumber?: string | null;
   createdAt?: string;
+  dispatchedAt?: string;
+  arrivedAt?: string;
+  deliveredAt?: string;
 }
 
 export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
@@ -105,24 +107,70 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
 
   // Listen for driver assignment update & trigger status bar push notification ONLY once per driver assignment
   useEffect(() => {
-    if (activeOrder?.assignedToName && activeOrder.id) {
-      const checkAndNotify = async () => {
-        try {
-          const key = `ed_notif_driver_${activeOrder.id}_${activeOrder.assignedToName}`;
-          const alreadySent = await AsyncStorage.getItem(key);
-          if (!alreadySent) {
-            await AsyncStorage.setItem(key, 'true');
+    if (!activeOrder?.id) return;
+
+    const checkAndNotify = async () => {
+      try {
+        // 1. Captain Assigned Notification
+        if (activeOrder.assignedToName) {
+          const assignKey = `ed_notif_assign_${activeOrder.id}_${activeOrder.assignedToName}`;
+          const alreadyAssigned = await AsyncStorage.getItem(assignKey);
+          if (!alreadyAssigned) {
+            await AsyncStorage.setItem(assignKey, 'true');
             await sendSystemNotification(
               '🚚 Bowser Captain Assigned!',
-              `Captain ${activeOrder.assignedToName} (${activeOrder.vehicleNumber || 'Bowser'}) has been assigned to your order #${activeOrder.id}. Dispatch started.`,
+              `Captain ${activeOrder.assignedToName} (${activeOrder.vehicleNumber || 'Bowser'}) has been assigned to your order #${activeOrder.id}.`,
               'driver'
             ).catch(() => {});
           }
-        } catch (e) {}
-      };
-      checkAndNotify();
-    }
-  }, [activeOrder?.assignedToName, activeOrder?.id]);
+        }
+
+        // 2. Out for Delivery Notification
+        if (activeOrder.status === 'out_for_delivery') {
+          const outKey = `ed_notif_out_${activeOrder.id}`;
+          const alreadyOut = await AsyncStorage.getItem(outKey);
+          if (!alreadyOut) {
+            await AsyncStorage.setItem(outKey, 'true');
+            await sendSystemNotification(
+              '🚀 Fuel Tanker Out for Delivery!',
+              `Bowser (${activeOrder.vehicleNumber || 'Bowser'}) is en route to your site. Expected shortly!`,
+              'driver'
+            ).catch(() => {});
+          }
+        }
+
+        // 3. Captain Arrived at Site Notification
+        if (activeOrder.status === 'arrived') {
+          const arriveKey = `ed_notif_arrive_${activeOrder.id}`;
+          const alreadyArrived = await AsyncStorage.getItem(arriveKey);
+          if (!alreadyArrived) {
+            await AsyncStorage.setItem(arriveKey, 'true');
+            await sendSystemNotification(
+              '📍 Bowser Captain Arrived at Site!',
+              `Captain ${activeOrder.assignedToName || 'Bowser'} has reached your delivery destination and is preparing smart meter dispensing.`,
+              'driver'
+            ).catch(() => {});
+          }
+        }
+
+        // 4. Delivered Notification
+        if (activeOrder.status === 'delivered') {
+          const deliverKey = `ed_notif_delivered_${activeOrder.id}`;
+          const alreadyDelivered = await AsyncStorage.getItem(deliverKey);
+          if (!alreadyDelivered) {
+            await AsyncStorage.setItem(deliverKey, 'true');
+            await sendSystemNotification(
+              '✅ Fuel Dispensed & Delivered!',
+              `Successfully dispensed ${activeOrder.liters} Liters of BS-VI Diesel for Order #${activeOrder.id}. Your digital tax invoice is ready.`,
+              'order'
+            ).catch(() => {});
+          }
+        }
+      } catch (e) {}
+    };
+
+    checkAndNotify();
+  }, [activeOrder?.status, activeOrder?.assignedToName, activeOrder?.id]);
 
   const driverName = activeOrder?.assignedToName || 'Assigned Delivery Captain';
   const bowserNo = activeOrder?.vehicleNumber || 'Bowser TS 09 UB 4521';
@@ -143,148 +191,22 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
     switch (status) {
       case 'delivered':
         return { label: 'SUCCESSFULLY DELIVERED', color: '#059669', bg: '#ECFDF5' };
+      case 'arrived':
+        return { label: 'CAPTAIN ARRIVED AT SITE', color: '#D97706', bg: '#FEF3C7' };
       case 'out_for_delivery':
         return { label: 'OUT FOR DELIVERY • EN ROUTE', color: COLORS.primary, bg: '#FEF2F2' };
       case 'assigned':
-        return { label: 'BOWSER ASSIGNED • LOADING FUEL', color: '#D97706', bg: '#FEF3C7' };
+        return { label: 'BOWSER ASSIGNED • LOADING FUEL', color: '#2563EB', bg: '#EFF6FF' };
       default:
         return { label: 'ORDER CONFIRMED • DISPATCHING', color: '#2563EB', bg: '#EFF6FF' };
     }
-  };
-
-  // Generate interactive Leaflet Map HTML with Live Moving Fuel Tanker Bowser
-  const getInteractiveMapHtml = () => {
-    // Dynamic Destination Coordinates from active order
-    let destLat = 17.313112;
-    let destLon = 78.545285;
-    if (activeOrder?.mapsLink) {
-      const qMatch = activeOrder.mapsLink.match(/(?:q|destination|query)=(-?\d+\.\d+),(-?\d+\.\d+)/);
-      if (qMatch) {
-        destLat = parseFloat(qMatch[1]);
-        destLon = parseFloat(qMatch[2]);
-      }
-    } else if (activeOrder?.address) {
-      const cMatch = activeOrder.address.match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
-      if (cMatch) {
-        destLat = parseFloat(cMatch[1]);
-        destLon = parseFloat(cMatch[2]);
-      }
-    }
-
-    const depotLat = 17.3550;
-    const depotLon = 78.5150;
-    const midLat = (depotLat + destLat) / 2;
-    const midLon = (depotLon + destLon) / 2;
-
-    const shortSiteTitle = activeOrder?.address
-      ? activeOrder.address.split(',')[0].trim()
-      : 'Site Destination';
-
-    return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <style>
-    body, html, #map { margin: 0; padding: 0; width: 100%; height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8fafc; }
-    .tanker-wrap {
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      transition: all 1.2s ease-in-out;
-    }
-    .tanker-pill {
-      background: #DC2626; color: #FFFFFF; font-weight: 800; font-size: 11px;
-      padding: 3px 8px; border-radius: 12px; border: 2px solid #FFFFFF;
-      box-shadow: 0 4px 10px rgba(220, 38, 38, 0.45); white-space: nowrap; text-align: center;
-      margin-top: 2px;
-    }
-    .pulse-ring {
-      width: 44px; height: 44px; border-radius: 50%; background: rgba(220, 38, 38, 0.3);
-      position: absolute; top: -7px; left: 5px; animation: pulse 1.8s infinite; pointer-events: none;
-    }
-    @keyframes pulse { 0% { transform: scale(0.8); opacity: 1; } 100% { transform: scale(2.4); opacity: 0; } }
-    .site-pill {
-      background: #0F172A; color: #FFFFFF; font-weight: 800; font-size: 10.5px;
-      padding: 3px 8px; border-radius: 10px; border: 2px solid #FFFFFF;
-      box-shadow: 0 3px 8px rgba(0,0,0,0.3); white-space: nowrap; text-align: center;
-    }
-    .depot-pill {
-      background: #059669; color: #FFFFFF; font-weight: 800; font-size: 10px;
-      padding: 2px 7px; border-radius: 8px; border: 1.5px solid #FFFFFF;
-      white-space: nowrap; text-align: center;
-    }
-  </style>
-</head>
-<body>
-  <div id="map"></div>
-  <script>
-    var depot = [${depotLat}, ${depotLon}];
-    var site = [${destLat}, ${destLon}];
-    
-    // Intermediate waypoints for real road curve navigation
-    var waypoints = [
-      depot,
-      [${(depotLat * 0.75 + destLat * 0.25).toFixed(6)}, ${(depotLon * 0.75 + destLon * 0.25 + 0.003).toFixed(6)}],
-      [${midLat.toFixed(6)}, ${midLon.toFixed(6)}],
-      [${(depotLat * 0.25 + destLat * 0.75).toFixed(6)}, ${(depotLon * 0.25 + destLon * 0.75 - 0.002).toFixed(6)}],
-      site
-    ];
-
-    var map = L.map('map', { zoomControl: true, attributionControl: false }).setView([${midLat}, ${midLon}], 13);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-
-    // High-visibility Road Route Line
-    var routeLine = L.polyline(waypoints, { color: '#DC2626', weight: 5, opacity: 0.85, dashArray: '8, 8' }).addTo(map);
-
-    // 1. Site Destination Marker
-    var siteIcon = L.divIcon({
-      className: 'site-marker',
-      html: '<div style="display:flex; flex-direction:column; align-items:center;"><div style="font-size:26px;">📍</div><div class="site-pill">${shortSiteTitle}</div></div>',
-      iconSize: [120, 54],
-      iconAnchor: [60, 48]
-    });
-    L.marker(site, { icon: siteIcon }).addTo(map);
-
-    // 2. Fuel Depot Marker
-    var depotIcon = L.divIcon({
-      className: 'depot-marker',
-      html: '<div style="display:flex; flex-direction:column; align-items:center;"><div style="font-size:22px;">⛽</div><div class="depot-pill">Terminal Depot</div></div>',
-      iconSize: [100, 46],
-      iconAnchor: [50, 40]
-    });
-    L.marker(depot, { icon: depotIcon }).addTo(map);
-
-    // 3. Live Moving Bowser Fuel Tanker Marker (🚚⛽ Extra Diesel Captain)
-    var bowserIcon = L.divIcon({
-      className: 'bowser-marker',
-      html: '<div class="tanker-wrap" style="position:relative;"><div class="pulse-ring"></div><div style="font-size:32px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));">🚛⛽</div><div class="tanker-pill">${bowserNo}</div></div>',
-      iconSize: [120, 64],
-      iconAnchor: [60, 36]
-    });
-
-    var currentStep = 1;
-    var bowserMarker = L.marker(waypoints[currentStep], { icon: bowserIcon }).addTo(map);
-
-    // Live Simulated Movement towards Destination Site (Rapido / Swiggy Captain movement)
-    setInterval(function() {
-      currentStep = (currentStep + 1) % waypoints.length;
-      if (currentStep === 0) currentStep = 1; // Keep moving between depot and site
-      var nextPos = waypoints[currentStep];
-      bowserMarker.setLatLng(nextPos);
-    }, 3500);
-
-    map.fitBounds(L.latLngBounds([depot, site]), { padding: [40, 40] });
-  </script>
-</body>
-</html>`;
   };
 
   if (loading) {
     return (
       <View style={styles.centerBox}>
         <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={styles.loadingText}>Connecting to Live GPS Bowser Tracker...</Text>
+        <Text style={styles.loadingText}>Loading Live Delivery Status...</Text>
       </View>
     );
   }
@@ -316,8 +238,9 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
 
   const badge = getStatusBadge(activeOrder.status);
   const isDelivered = activeOrder.status === 'delivered';
-  const isOutForDelivery = activeOrder.status === 'out_for_delivery';
-  const isAssigned = activeOrder.status === 'assigned' || isOutForDelivery || isDelivered;
+  const isArrived = activeOrder.status === 'arrived' || isDelivered;
+  const isOutForDelivery = activeOrder.status === 'out_for_delivery' || isArrived;
+  const isAssigned = !!activeOrder.assignedToName || activeOrder.status === 'assigned' || isOutForDelivery;
 
   return (
     <ScrollView
@@ -335,10 +258,14 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
         <Text style={styles.orderIdText}>Order #{activeOrder.id}</Text>
         <Text style={styles.etaText}>
           {isDelivered
-            ? 'Delivered to Site • Meter Dispensed'
-            : isOutForDelivery
-            ? `En Route • Bowser Dispatch in Progress`
-            : `Scheduled Delivery Slot: ${activeOrder.slot || '08:00 AM - 12:00 PM'}`}
+            ? 'Fuel Dispensed & Delivered • Tax Invoice Ready'
+            : activeOrder.status === 'arrived'
+            ? 'Bowser Captain Arrived at Site • Ready to Dispense'
+            : activeOrder.status === 'out_for_delivery'
+            ? 'Fuel Tanker Dispatched • Bowser En Route'
+            : isAssigned
+            ? `Captain Assigned • Tanker Loading at Depot`
+            : `Order Confirmed • Scheduled Slot: ${activeOrder.slot || '08:00 AM - 12:00 PM'}`}
         </Text>
       </View>
 
@@ -355,55 +282,6 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
           <Text style={styles.siteMetaPill}>Date: {activeOrder.date}</Text>
         </View>
       </View>
-
-      {/* Interactive Live Map (Real Leaflet/OpenStreetMap with moving Fuel Bowser Tanker like Rapido/Swiggy) */}
-      {isAssigned ? (
-        <View style={styles.mapCard}>
-          {Platform.OS === 'web' ? (
-            <iframe
-              srcDoc={getInteractiveMapHtml()}
-              title="Live Bowser Tracking Map"
-              style={{
-                width: '100%',
-                height: 340,
-                border: 'none',
-                borderRadius: 14,
-              } as any}
-            />
-          ) : (
-            <WebView
-              originWhitelist={['*']}
-              source={{ html: getInteractiveMapHtml() }}
-              style={{
-                width: '100%',
-                height: 340,
-                borderRadius: 14,
-                backgroundColor: '#E2E8F0',
-              }}
-              javaScriptEnabled={true}
-              domStorageEnabled={true}
-              scrollEnabled={false}
-            />
-          )}
-
-          {/* Live Overlay Stats Pill */}
-          <View style={styles.mapOverlayPill}>
-            <Ionicons name="speedometer" size={16} color={COLORS.primary} />
-            <Text style={styles.mapOverlayText}>
-              {isDelivered
-                ? 'Arrived at Site • Dispenser Engaged'
-                : isOutForDelivery
-                ? `Bowser ${bowserNo} en route • ETA: ~${etaMins}m`
-                : `Bowser Assigned • Preparing at depot`}
-            </Text>
-          </View>
-
-          <View style={styles.livePulsePill}>
-            <View style={styles.liveDot} />
-            <Text style={styles.liveDotText}>LIVE GPS</Text>
-          </View>
-        </View>
-      ) : null}
 
       {/* Driver & Bowser Card */}
       {!activeOrder.assignedToName ? (
@@ -450,82 +328,122 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
         </View>
       )}
 
-      {/* Dynamic Delivery Milestone Timeline */}
+      {/* Flipkart / Amazon Style Delivery Milestone Timeline */}
       <View style={styles.timelineCard}>
-        <Text style={styles.timelineTitle}>Delivery Milestones</Text>
+        <View style={styles.timelineHeader}>
+          <Ionicons name="git-commit-outline" size={20} color={COLORS.primary} />
+          <Text style={styles.timelineTitle}>Delivery Milestones</Text>
+        </View>
 
-        {/* Milestone 1 */}
+        {/* Milestone 1: Order Confirmed */}
         <View style={styles.timelineItem}>
           <View style={styles.timelineDotActive}>
-            <Ionicons name="checkmark" size={12} color={COLORS.white} />
+            <Ionicons name="checkmark" size={14} color={COLORS.white} />
           </View>
           <View style={styles.timelineTextContainer}>
             <Text style={styles.timelineItemTitle}>Order Confirmed</Text>
-            <Text style={styles.timelineItemTime}>Automated Smart Meter Configured & Verified</Text>
+            <Text style={styles.timelineItemTime}>
+              Smart automated dispenser verified • {activeOrder.date || 'Today'}
+            </Text>
           </View>
         </View>
 
         <View style={[styles.timelineLine, isAssigned ? styles.lineActive : styles.linePending]} />
 
-        {/* Milestone 2 */}
+        {/* Milestone 2: Bowser Captain Assigned & Tanker Loaded */}
         <View style={styles.timelineItem}>
           <View style={isAssigned ? styles.timelineDotActive : styles.timelineDotPending}>
-            {isAssigned && <Ionicons name="checkmark" size={12} color={COLORS.white} />}
+            {isAssigned && <Ionicons name="checkmark" size={14} color={COLORS.white} />}
           </View>
           <View style={styles.timelineTextContainer}>
             <Text style={isAssigned ? styles.timelineItemTitle : styles.timelineItemPending}>
-              Tanker Loaded at Depot
+              Captain Assigned & Fuel Tanker Dispatched
             </Text>
-            <Text style={styles.timelineItemTime}>Quality Density Certified (832 kg/m³ BS-VI)</Text>
+            <Text style={styles.timelineItemTime}>
+              {isAssigned
+                ? `Captain ${driverName} assigned • Tanker loaded with certified BS-VI diesel (832 kg/m³)`
+                : 'Awaiting bowser captain allocation from nearest hub depot'}
+            </Text>
           </View>
         </View>
 
-        <View style={[styles.timelineLine, isOutForDelivery || isDelivered ? styles.lineActive : styles.linePending]} />
+        <View style={[styles.timelineLine, isOutForDelivery ? styles.lineActive : styles.linePending]} />
 
-        {/* Milestone 3 */}
+        {/* Milestone 3: Out for Delivery (Bowser En Route) */}
         <View style={styles.timelineItem}>
           <View
             style={
-              isOutForDelivery || isDelivered
+              isOutForDelivery
                 ? [styles.timelineDotActive, { backgroundColor: COLORS.primary }]
                 : styles.timelineDotPending
             }
           >
-            {(isOutForDelivery || isDelivered) && <Ionicons name="navigate" size={12} color={COLORS.white} />}
+            {isOutForDelivery && <Ionicons name="car" size={14} color={COLORS.white} />}
           </View>
           <View style={styles.timelineTextContainer}>
             <Text
               style={
-                isOutForDelivery || isDelivered
+                isOutForDelivery
                   ? [styles.timelineItemTitle, { color: COLORS.primary }]
                   : styles.timelineItemPending
               }
             >
-              Out for Delivery
+              Out for Delivery (Bowser En Route)
             </Text>
             <Text style={styles.timelineItemTime}>
-              {isOutForDelivery ? 'En route to site • Bowser moving to destination' : 'Dispatched from terminal'}
+              {isOutForDelivery
+                ? `Bowser ${bowserNo} dispatched • Moving towards your delivery destination`
+                : 'Bowser will depart from depot terminal during your scheduled slot'}
+            </Text>
+          </View>
+        </View>
+
+        <View style={[styles.timelineLine, isArrived ? styles.lineActive : styles.linePending]} />
+
+        {/* Milestone 4: Captain Arrived at Site */}
+        <View style={styles.timelineItem}>
+          <View
+            style={
+              isArrived
+                ? [styles.timelineDotActive, { backgroundColor: '#D97706' }]
+                : styles.timelineDotPending
+            }
+          >
+            {isArrived && <Ionicons name="location" size={14} color={COLORS.white} />}
+          </View>
+          <View style={styles.timelineTextContainer}>
+            <Text
+              style={
+                isArrived
+                  ? [styles.timelineItemTitle, { color: '#D97706' }]
+                  : styles.timelineItemPending
+              }
+            >
+              Captain Arrived at Site
+            </Text>
+            <Text style={styles.timelineItemTime}>
+              {isArrived
+                ? 'Bowser has reached your site location • Ready for fueling & smart dispenser connection'
+                : 'Captain notification will trigger upon arriving at your destination site'}
             </Text>
           </View>
         </View>
 
         <View style={[styles.timelineLine, isDelivered ? styles.lineActive : styles.linePending]} />
 
-        {/* Milestone 4 */}
+        {/* Milestone 5: Diesel Dispensed & Delivered */}
         <View style={styles.timelineItem}>
           <View style={isDelivered ? styles.timelineDotActive : styles.timelineDotPending}>
-            {isDelivered && <Ionicons name="checkmark-done" size={12} color={COLORS.white} />}
+            {isDelivered && <Ionicons name="checkmark-done" size={14} color={COLORS.white} />}
           </View>
           <View style={styles.timelineTextContainer}>
             <Text style={isDelivered ? styles.timelineItemTitle : styles.timelineItemPending}>
-              Arrived at Site & Dispensing
+              Diesel Dispensed & Delivered
             </Text>
             <Text style={styles.timelineItemTime}>
               {isDelivered
-                ? 'Dispensed with automated digital printout'
-                : isOutForDelivery
-                ? `Bowser en route • Expected within slot (${activeOrder.slot || '08:00 AM - 12:00 PM'})`
-                : `Scheduled Slot: ${activeOrder.slot || '08:00 AM - 12:00 PM'}`}
+                ? `Dispensed ${activeOrder.liters}L BS-VI Diesel with automated digital meter receipt`
+                : 'Final status once fuel dumping & digital metering is completed by captain'}
             </Text>
           </View>
         </View>
@@ -803,11 +721,19 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
     marginBottom: 20,
   },
+  timelineHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 16,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
   timelineTitle: {
     fontSize: 16,
     fontWeight: '800',
     color: '#0F172A',
-    marginBottom: 16,
   },
   timelineItem: {
     flexDirection: 'row',

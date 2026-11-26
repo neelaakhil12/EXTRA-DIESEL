@@ -1607,6 +1607,7 @@ app.patch('/api/orders/:id/status', (req, res) => {
       pending: 'Order Placed - Pending Confirmation',
       assigned: 'Assigned to Delivery Partner',
       out_for_delivery: 'Out for Delivery (Bowser En Route)',
+      arrived: 'Captain Arrived at Site (Ready to Dispense)',
       delivered: 'Delivered',
       cancelled: 'Cancelled',
     };
@@ -1614,7 +1615,11 @@ app.patch('/api/orders/:id/status', (req, res) => {
     allOrders[orderIndex].status = status;
     allOrders[orderIndex].statusText = statusText || readableStatusMap[status] || status;
 
-    if (status === 'delivered') {
+    if (status === 'out_for_delivery') {
+      allOrders[orderIndex].dispatchedAt = new Date().toISOString();
+    } else if (status === 'arrived') {
+      allOrders[orderIndex].arrivedAt = new Date().toISOString();
+    } else if (status === 'delivered') {
       allOrders[orderIndex].deliveredAt = new Date().toISOString();
     }
 

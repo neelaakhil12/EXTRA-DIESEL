@@ -37,7 +37,7 @@ interface DeliveryOrder {
   fuelRate: number;
   deliveryFee: number;
   total: number;
-  status: 'pending' | 'assigned' | 'out_for_delivery' | 'delivered' | 'cancelled';
+  status: 'pending' | 'assigned' | 'out_for_delivery' | 'arrived' | 'delivered' | 'cancelled';
   statusText?: string;
   address: string;
   mapsLink?: string | null;
@@ -46,6 +46,8 @@ interface DeliveryOrder {
   assignedTo?: string | null;
   assignedToName?: string | null;
   vehicleNumber?: string | null;
+  dispatchedAt?: string;
+  arrivedAt?: string;
   deliveredAt?: string;
 }
 
@@ -85,27 +87,36 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
     loadDriverOrders();
   }, [driverEmail]);
 
-  // Handle Status Update (Out for Delivery or Delivered)
-  const handleUpdateStatus = async (orderId: string, newStatus: 'out_for_delivery' | 'delivered') => {
+  // Handle Status Update (Out for Delivery, Arrived at Site, or Delivered)
+  const handleUpdateStatus = async (
+    orderId: string,
+    newStatus: 'out_for_delivery' | 'arrived' | 'delivered'
+  ) => {
     setUpdatingOrderId(orderId);
     try {
+      const statusTextMap = {
+        out_for_delivery: 'Out for Delivery (Bowser En Route)',
+        arrived: 'Captain Arrived at Site (Ready to Dispense)',
+        delivered: 'Delivered',
+      };
+
       const res = await fetch(`${baseUrl}/api/orders/${orderId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           status: newStatus,
-          statusText: newStatus === 'delivered' ? 'Delivered' : 'Out for Delivery (Bowser En Route)',
+          statusText: statusTextMap[newStatus],
         }),
       });
 
       const data = await res.json();
       if (data.success) {
-        Alert.alert(
-          'Status Updated',
-          newStatus === 'delivered'
-            ? `Order #${orderId} marked as Delivered successfully!`
-            : `Order #${orderId} is now marked Out for Delivery.`
-        );
+        const msgMap = {
+          out_for_delivery: `Order #${orderId} marked Out for Delivery. Bowser en route.`,
+          arrived: `Order #${orderId} marked Arrived at Site. Customer notified!`,
+          delivered: `Order #${orderId} marked as Fuel Delivered successfully!`,
+        };
+        Alert.alert('Status Updated', msgMap[newStatus]);
         loadDriverOrders();
       } else {
         Alert.alert('Error', data.error || 'Failed to update order status');
@@ -232,6 +243,7 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
           ) : (
             assignedOrders.map((order) => {
               const isOutForDelivery = order.status === 'out_for_delivery';
+              const isArrived = order.status === 'arrived';
               return (
                 <View key={order.id} style={styles.deliveryCard}>
                   {/* Order Top Bar */}
@@ -243,16 +255,33 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
                     <View
                       style={[
                         styles.statusTag,
-                        { backgroundColor: isOutForDelivery ? '#EFF6FF' : '#FEF3C7', alignSelf: 'flex-start' },
+                        {
+                          backgroundColor: isArrived
+                            ? '#FEF3C7'
+                            : isOutForDelivery
+                            ? '#EFF6FF'
+                            : '#F1F5F9',
+                          alignSelf: 'flex-start',
+                        },
                       ]}
                     >
                       <Text
                         style={[
                           styles.statusTagText,
-                          { color: isOutForDelivery ? '#2563EB' : '#D97706' },
+                          {
+                            color: isArrived
+                              ? '#D97706'
+                              : isOutForDelivery
+                              ? '#2563EB'
+                              : '#475569',
+                          },
                         ]}
                       >
-                        {isOutForDelivery ? '🚚 En Route' : '📋 Assigned'}
+                        {isArrived
+                          ? '📍 At Site'
+                          : isOutForDelivery
+                          ? '🚚 En Route'
+                          : '📋 Assigned'}
                       </Text>
                     </View>
                   </View>
@@ -310,7 +339,8 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
 
                   {/* Driver Delivery Actions */}
                   <View style={styles.deliveryActionButtons}>
-                    {!isOutForDelivery && (
+                    {/* Stage 1: When Assigned -> Start Delivery */}
+                    {!isOutForDelivery && !isArrived && (
                       <TouchableOpacity
                         style={styles.enRouteBtn}
                         onPress={() => handleUpdateStatus(order.id, 'out_for_delivery')}
@@ -322,27 +352,49 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
                         ) : (
                           <>
                             <Ionicons name="car" size={18} color={COLORS.white} />
-                            <Text style={styles.enRouteBtnText}>Start Delivery (En Route)</Text>
+                            <Text style={styles.enRouteBtnText}>Start Delivery (Out for Delivery)</Text>
                           </>
                         )}
                       </TouchableOpacity>
                     )}
 
-                    <TouchableOpacity
-                      style={styles.deliveredBtn}
-                      onPress={() => handleUpdateStatus(order.id, 'delivered')}
-                      disabled={updatingOrderId === order.id}
-                      activeOpacity={0.85}
-                    >
-                      {updatingOrderId === order.id ? (
-                        <ActivityIndicator size="small" color={COLORS.white} />
-                      ) : (
-                        <>
-                          <Ionicons name="checkmark-done" size={18} color={COLORS.white} />
-                          <Text style={styles.deliveredBtnText}>Mark Fuel Delivered</Text>
-                        </>
-                      )}
-                    </TouchableOpacity>
+                    {/* Stage 2: When En Route -> Mark Arrived at Site */}
+                    {isOutForDelivery && (
+                      <TouchableOpacity
+                        style={styles.arrivedBtn}
+                        onPress={() => handleUpdateStatus(order.id, 'arrived')}
+                        disabled={updatingOrderId === order.id}
+                        activeOpacity={0.85}
+                      >
+                        {updatingOrderId === order.id ? (
+                          <ActivityIndicator size="small" color={COLORS.white} />
+                        ) : (
+                          <>
+                            <Ionicons name="location" size={18} color={COLORS.white} />
+                            <Text style={styles.arrivedBtnText}>Arrived at Site (Notify Customer)</Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    )}
+
+                    {/* Stage 3: When at site (or en route) -> Mark Fuel Delivered */}
+                    {(isArrived || isOutForDelivery) && (
+                      <TouchableOpacity
+                        style={styles.deliveredBtn}
+                        onPress={() => handleUpdateStatus(order.id, 'delivered')}
+                        disabled={updatingOrderId === order.id}
+                        activeOpacity={0.85}
+                      >
+                        {updatingOrderId === order.id ? (
+                          <ActivityIndicator size="small" color={COLORS.white} />
+                        ) : (
+                          <>
+                            <Ionicons name="checkmark-done" size={18} color={COLORS.white} />
+                            <Text style={styles.deliveredBtnText}>Mark Fuel Delivered</Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </View>
               );
@@ -674,6 +726,20 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   enRouteBtnText: {
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  arrivedBtn: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#D97706',
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  arrivedBtnText: {
     color: COLORS.white,
     fontSize: 14,
     fontWeight: '800',
