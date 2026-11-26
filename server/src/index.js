@@ -109,7 +109,7 @@ function saveSettings(settings) {
 
 let currentSettings = loadSettings();
 
-// Default admin accounts (credentials for admin login)
+// Default admin & pre-configured accounts
 const DEFAULT_ACCOUNTS = [
   {
     name: 'Aadhya Fuels Admin',
@@ -117,6 +117,32 @@ const DEFAULT_ACCOUNTS = [
     phone: '+91 9876543210',
     password: 'admin123',
     role: 'admin',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    name: 'Akhil Harish Neela',
+    email: 'neelaakhilharish@gmail.com',
+    phone: '+91 8143372205',
+    password: 'admin123',
+    role: 'customer',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    name: 'AMMA (Bowser Captain)',
+    email: '22wj8a05aq@gniindia.org',
+    phone: '+91 9989551305',
+    password: 'admin123',
+    role: 'delivery',
+    vehicleNumber: 'TS 09 UB 4521',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    name: 'Ramesh Kumar (Captain)',
+    email: 'delivery@extradiesel.in',
+    phone: '+91 9876543211',
+    password: 'admin123',
+    role: 'delivery',
+    vehicleNumber: 'TS 07 TG 9988',
     createdAt: new Date().toISOString(),
   },
 ];
@@ -1224,7 +1250,7 @@ app.post('/api/admin/reset-password', (req, res) => {
   }
 });
 
-// Auth 5: Native Google Auth (Permits login ONLY if account already registered; does NOT auto-create)
+// Auth 5: Native Google Auth (Auto-creates customer account seamlessly on first sign-in)
 app.post('/api/auth/google-auth', (req, res) => {
   try {
     const { email, name } = req.body;
@@ -1237,25 +1263,21 @@ app.post('/api/auth/google-auth', (req, res) => {
     const adminEmails = ['aadhyafuels9@gmail.com'];
     const isAdmin = adminEmails.includes(key);
 
-    if (!existingUser && !isAdmin) {
-      return res.status(404).json({
-        success: false,
-        accountNotFound: true,
-        error: 'Account not found. No account is registered with this Google ID. Please click Sign Up to create your Extra Diesel account.',
-      });
-    }
-
-    if (!existingUser && isAdmin) {
+    if (!existingUser) {
+      // First-time Google user -> Seamlessly create account!
       existingUser = {
-        name: (name && name.trim()) || 'Extra Diesel Admin',
+        name: (name && name.trim()) || key.split('@')[0],
         email: key,
-        phone: '+91 9876543210',
-        role: 'admin',
+        phone: '',
+        role: isAdmin ? 'admin' : 'customer',
         authProvider: 'google',
         createdAt: new Date().toISOString(),
       };
       registeredUsers.set(key, existingUser);
       saveUsers(registeredUsers);
+      console.log(`[Google Auth] Created and persisted new user: ${existingUser.name} (${existingUser.email}) - Role: ${existingUser.role}`);
+    } else {
+      console.log(`[Google Auth] Authenticated user: ${existingUser.name} (${existingUser.email}) - Role: ${existingUser.role}`);
     }
 
     return res.json({
