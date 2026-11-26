@@ -316,10 +316,15 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({
       const res = await fetch(`${baseUrl}/api/location/resolve-link?url=${encodeURIComponent(rawUrl)}`);
       const data = await res.json();
 
-      if (data.success && data.fullAddress) {
-        setDeliveryAddress(data.fullAddress);
-        setGoogleMapsLink(data.mapsLink || rawUrl);
-        setLocateStatus(`📍 Pinned: ${data.shortAddress || data.fullAddress}`);
+      const loc = data.location || data;
+      if (data.success && loc && (loc.fullAddress || loc.shortAddress || (loc.lat && loc.lon))) {
+        const fullAddr = loc.fullAddress || loc.shortAddress || `Site Coordinates (${loc.lat}, ${loc.lon})`;
+        const shortAddr = loc.shortAddress || loc.colony || loc.area || '';
+        const link = loc.mapsLink || rawUrl;
+
+        setDeliveryAddress(fullAddr);
+        setGoogleMapsLink(link);
+        setLocateStatus(`📍 Pinned: ${shortAddr || fullAddr}`);
         setPastedMapsLink('');
         setTimeout(() => setLocateStatus(''), 4500);
       } else {

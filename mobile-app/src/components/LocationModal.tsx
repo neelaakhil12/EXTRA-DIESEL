@@ -81,14 +81,19 @@ export const LocationModal: React.FC<LocationModalProps> = ({
       const res = await fetch(`${baseUrl}/api/location/resolve-link?url=${encodeURIComponent(rawUrl)}`);
       const data = await res.json();
 
-      if (data.success && data.fullAddress) {
-        setAddress(data.fullAddress);
-        setShortAddress(data.shortAddress || '');
-        setLocationLink(data.mapsLink || rawUrl);
-        if (data.lat && data.lon) {
-          setCoords({ lat: data.lat, lon: data.lon });
+      const loc = data.location || data;
+      if (data.success && loc && (loc.fullAddress || loc.shortAddress || (loc.lat && loc.lon))) {
+        const fullAddr = loc.fullAddress || loc.shortAddress || `Site Coordinates (${loc.lat}, ${loc.lon})`;
+        const shortAddr = loc.shortAddress || loc.colony || loc.area || '';
+        const link = loc.mapsLink || rawUrl;
+
+        setAddress(fullAddr);
+        setShortAddress(shortAddr);
+        setLocationLink(link);
+        if (loc.lat && loc.lon) {
+          setCoords({ lat: loc.lat, lon: loc.lon });
         }
-        setStatusMessage(`📍 Pinned from Maps: ${data.shortAddress || data.fullAddress}`);
+        setStatusMessage(`📍 Pinned from Maps: ${shortAddr || fullAddr}`);
         setPastedMapsUrl('');
         setTimeout(() => setStatusMessage(''), 4500);
       } else {

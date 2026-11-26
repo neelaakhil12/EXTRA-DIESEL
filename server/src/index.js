@@ -415,27 +415,38 @@ app.get('/api/location/resolve-link', async (req, res) => {
     const geoRes = await fetch(geoUrl);
     const geoData = await geoRes.json();
 
-    if (geoData.success && geoData.location) {
-      return res.json({
-        success: true,
-        resolvedUrl: targetUrl,
-        location: {
-          ...geoData.location,
-          mapsLink: `https://maps.google.com/?q=${lat.toFixed(6)},${lon.toFixed(6)}`,
-        },
-      });
-    }
+    let fullAddress = '';
+    let shortAddress = '';
+    let locationObj = null;
 
-    return res.json({
-      success: true,
-      resolvedUrl: targetUrl,
-      location: {
+    if (geoData.success && geoData.location) {
+      locationObj = {
+        ...geoData.location,
+        mapsLink: `https://maps.google.com/?q=${lat.toFixed(6)},${lon.toFixed(6)}`,
+      };
+      fullAddress = geoData.location.fullAddress;
+      shortAddress = geoData.location.shortAddress;
+    } else {
+      locationObj = {
         lat,
         lon,
         fullAddress: `Site Coordinates (${lat.toFixed(6)}, ${lon.toFixed(6)})`,
         shortAddress: `Site Pin (${lat.toFixed(4)}, ${lon.toFixed(4)})`,
         mapsLink: `https://maps.google.com/?q=${lat.toFixed(6)},${lon.toFixed(6)}`,
-      },
+      };
+      fullAddress = locationObj.fullAddress;
+      shortAddress = locationObj.shortAddress;
+    }
+
+    return res.json({
+      success: true,
+      resolvedUrl: targetUrl,
+      lat,
+      lon,
+      fullAddress,
+      shortAddress,
+      mapsLink: `https://maps.google.com/?q=${lat.toFixed(6)},${lon.toFixed(6)}`,
+      location: locationObj,
     });
   } catch (err) {
     console.error('[Resolve Link Error]:', err);

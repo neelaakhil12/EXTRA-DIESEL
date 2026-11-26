@@ -324,6 +324,7 @@ function MainApp() {
           // Customer role -> Home screen & prompt delivery location
           setScreenStack(['home']);
           setTimeout(() => setShowLocationModal(true), 600);
+          setTimeout(() => setShowLocationModal(true), 600);
           return;
         }
       }
