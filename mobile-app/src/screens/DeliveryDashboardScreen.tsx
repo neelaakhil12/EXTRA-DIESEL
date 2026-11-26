@@ -186,7 +186,7 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
     setIsGpsActive(false);
   };
 
-  // Live GPS Location Watcher & Transmitter (every 3 seconds when out for delivery, 8s otherwise)
+  // Live GPS Location Watcher & Transmitter (every 12-15 seconds for optimal battery & AWS server efficiency)
   useEffect(() => {
     if (!isGpsActive) {
       if (gpsIntervalRef.current) clearInterval(gpsIntervalRef.current);
@@ -198,7 +198,7 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
     }
 
     const hasOutForDelivery = orders.some((o) => o.status === 'out_for_delivery');
-    const intervalMs = hasOutForDelivery ? 3000 : 8000;
+    const intervalMs = hasOutForDelivery ? 12000 : 15000; // 12s en route, 15s otherwise
 
     // Web geolocation watcher or timer
     if (Platform.OS === 'web') {
@@ -211,7 +211,7 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
             broadcastLocation(c.lat, c.lon, pos.coords.heading ?? undefined, pos.coords.speed ?? undefined);
           },
           () => {},
-          { enableHighAccuracy: true, maximumAge: 2000, timeout: 5000 }
+          { enableHighAccuracy: true, maximumAge: 10000, timeout: 10000 }
         );
       }
 
@@ -232,15 +232,15 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
         if (gpsIntervalRef.current) clearInterval(gpsIntervalRef.current);
       };
     } else {
-      // Native Expo Location Watcher
+      // Native Expo Location Watcher (12s interval, min 10 meters distance change)
       let isMounted = true;
       (async () => {
         try {
           const sub = await Location.watchPositionAsync(
             {
-              accuracy: Location.Accuracy.High,
+              accuracy: Location.Accuracy.Balanced,
               timeInterval: intervalMs,
-              distanceInterval: 3,
+              distanceInterval: 10,
             },
             (loc) => {
               if (!isMounted) return;

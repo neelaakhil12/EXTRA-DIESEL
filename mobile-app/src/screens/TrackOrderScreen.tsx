@@ -179,7 +179,7 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
     };
   }, [activeOrder?.id, baseUrl]);
 
-  // Periodic 8-second polling fallback to keep order state in sync
+  // Periodic 15-second polling fallback to keep order state in sync with minimal server load
   useEffect(() => {
     if (!activeOrder?.id || activeOrder.status === 'delivered') return;
 
@@ -197,7 +197,7 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
           }
         }
       } catch (e) {}
-    }, 8000);
+    }, 15000);
 
     return () => clearInterval(pollTimer);
   }, [activeOrder?.id, activeOrder?.status]);
