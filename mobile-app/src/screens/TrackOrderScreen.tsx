@@ -267,7 +267,8 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
   const badge = getStatusBadge(activeOrder.status);
   const isDelivered = activeOrder.status === 'delivered';
   const isArrived = activeOrder.status === 'arrived' || isDelivered;
-  const isOutForDelivery = activeOrder.status === 'out_for_delivery' || isArrived;
+  const isTripActive = activeOrder.status === 'out_for_delivery';
+  const isOutForDelivery = isTripActive || isArrived;
   const isAssigned = !!activeOrder.assignedToName || activeOrder.status === 'assigned' || isOutForDelivery;
 
   const getInteractiveMapHtml = () => {
@@ -293,12 +294,16 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
     const midLat = (depotLat + destLat) / 2;
     const midLon = (depotLon + destLon) / 2;
 
-    const currentLat = activeOrder?.captainLat || (isOutForDelivery ? midLat : depotLat);
-    const currentLon = activeOrder?.captainLon || (isOutForDelivery ? midLon : depotLon);
+    const currentLat = activeOrder?.captainLat || (activeOrder.status === 'out_for_delivery' ? midLat : (isArrived || isDelivered ? destLat : depotLat));
+    const currentLon = activeOrder?.captainLon || (activeOrder.status === 'out_for_delivery' ? midLon : (isArrived || isDelivered ? destLon : depotLon));
 
     const shortSiteTitle = activeOrder?.address
       ? activeOrder.address.split(',')[0].trim()
       : 'Delivery Site';
+
+    const isTripActive = activeOrder.status === 'out_for_delivery';
+    const isStationaryAtDepot = !isTripActive && !isArrived && !isDelivered;
+    const isStationaryAtSite = isArrived || isDelivered;
 
     return `<!DOCTYPE html>
 <html>
@@ -363,7 +368,11 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
   <script>
     var depot = [${depotLat}, ${depotLon}];
     var site = [${destLat}, ${destLon}];
-    var livePos = [${currentLat}, ${currentLon}];
+    var isTripActive = ${isTripActive ? 'true' : 'false'};
+    var isStationaryAtDepot = ${isStationaryAtDepot ? 'true' : 'false'};
+    var isStationaryAtSite = ${isStationaryAtSite ? 'true' : 'false'};
+
+    var livePos = isStationaryAtDepot ? depot : (isStationaryAtSite ? site : [${currentLat}, ${currentLon}]);
     
     // Road polyline waypoints
     var waypoints = [
@@ -428,9 +437,13 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
     L.marker(depot, { icon: depotIcon }).addTo(map);
 
     // 4. Custom 2D/3D Top-Down Fuel Tanker Icon Marker
+    var tankerStatusLabel = isTripActive
+      ? '${bowserNo}'
+      : (isStationaryAtDepot ? 'Parked at Depot' : 'Arrived at Site');
+
     var tankerIcon = L.divIcon({
       className: 'custom-tanker-marker',
-      html: '<div class="tanker-marker-wrap" style="position:relative;"><div class="pulse-glow"></div><div class="tanker-rotator" id="tankerRotator"><img src="${TANKER_MARKER_BASE64}" class="tanker-img" alt="Tanker" /></div><div class="tanker-pill">${bowserNo}</div></div>',
+      html: '<div class="tanker-marker-wrap" style="position:relative;"><div class="pulse-glow" style="display:' + (isTripActive ? 'block' : 'none') + '"></div><div class="tanker-rotator" id="tankerRotator"><img src="${TANKER_MARKER_BASE64}" class="tanker-img" alt="Tanker" /></div><div class="tanker-pill">' + tankerStatusLabel + '</div></div>',
       iconSize: [68, 68],
       iconAnchor: [34, 34]
     });
@@ -483,14 +496,16 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
       targetAngle = bearing;
     }
 
-    // Step progression along route
-    var routeIdx = 1;
-    setInterval(function() {
-      routeIdx = (routeIdx + 1) % waypoints.length;
-      if (routeIdx === 0) routeIdx = 1;
-      var nextPt = waypoints[routeIdx];
-      updateTankerPos(nextPt[0], nextPt[1]);
-    }, 3500);
+    // Step progression along route - ONLY active if Bowser Captain clicked Start Delivery (out_for_delivery)
+    if (isTripActive) {
+      var routeIdx = 1;
+      setInterval(function() {
+        routeIdx = (routeIdx + 1) % waypoints.length;
+        if (routeIdx === 0) routeIdx = 1;
+        var nextPt = waypoints[routeIdx];
+        updateTankerPos(nextPt[0], nextPt[1]);
+      }, 3500);
+    }
 
     map.fitBounds(L.latLngBounds([depot, site]), { padding: [40, 40] });
   </script>
@@ -579,9 +594,25 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
         )}
 
         {/* Live GPS Badge */}
-        <View style={styles.livePulsePill}>
-          <View style={styles.liveDot} />
-          <Text style={styles.liveDotText}>LIVE GPS</Text>
+        <View style={[
+          styles.livePulsePill,
+          !isTripActive && !isDelivered && { backgroundColor: 'rgba(15, 23, 42, 0.82)' },
+          isDelivered && { backgroundColor: 'rgba(5, 150, 105, 0.9)' }
+        ]}>
+          <View style={[
+            styles.liveDot,
+            !isTripActive && !isDelivered && { backgroundColor: '#F59E0B' },
+            isDelivered && { backgroundColor: '#10B981' }
+          ]} />
+          <Text style={styles.liveDotText}>
+            {isTripActive
+              ? 'LIVE GPS TRACKING'
+              : isDelivered
+              ? 'DELIVERY COMPLETE'
+              : isAssigned
+              ? 'PREPARING AT DEPOT'
+              : 'AWAITING DISPATCH'}
+          </Text>
         </View>
       </View>
 
