@@ -501,7 +501,7 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
 
     // 1. Highlighted Blue Polyline Route (Google Maps / Swiggy / Rapido style)
     // Darker blue outer border casing
-    L.polyline(waypoints, {
+    var routeOuter = L.polyline(waypoints, {
       color: '#1E40AF',
       weight: 8,
       opacity: 0.85,
@@ -510,13 +510,32 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
     }).addTo(map);
 
     // Bright cyan/blue inner route
-    L.polyline(waypoints, {
+    var routeInner = L.polyline(waypoints, {
       color: '#3B82F6',
       weight: 5,
       opacity: 1,
       lineCap: 'round',
       lineJoin: 'round'
     }).addTo(map);
+
+    // Fetch real-world road navigation route from OpenStreetMap OSRM driving engine
+    var routeOrigin = livePos;
+    var osrmUrl = 'https://router.project-osrm.org/route/v1/driving/' + routeOrigin[1] + ',' + routeOrigin[0] + ';' + site[1] + ',' + site[0] + '?overview=full&geometries=geojson';
+    fetch(osrmUrl)
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        if (data && data.routes && data.routes[0] && data.routes[0].geometry) {
+          var roadCoords = data.routes[0].geometry.coordinates.map(function(pt) {
+            return [pt[1], pt[0]];
+          });
+          if (roadCoords && roadCoords.length > 1) {
+            routeOuter.setLatLngs(roadCoords);
+            routeInner.setLatLngs(roadCoords);
+            map.fitBounds(L.latLngBounds(roadCoords), { padding: [40, 40] });
+          }
+        }
+      })
+      .catch(function(err) {});
 
     // 2. Site Destination Marker (Red Location Pin)
     var siteIcon = L.divIcon({
