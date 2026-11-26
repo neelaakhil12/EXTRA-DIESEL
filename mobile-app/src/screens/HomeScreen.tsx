@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Platform, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Platform, useWindowDimensions, Modal } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 import { ScreenName } from '../types';
 import { APP_CONFIG } from '../constants/config';
+import { TERMS_AND_CONDITIONS_20, PRIVACY_POLICY_20, LegalClause } from '../constants/legalData';
 
 interface HomeScreenProps {
   onNavigate: (screen: ScreenName) => void;
@@ -22,6 +23,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
   const [rateCity, setRateCity] = useState<string>('Hyderabad');
   const [vehicleImages, setVehicleImages] = useState<any[]>(DEFAULT_VEHICLE_IMAGES);
   const [vehicleImgIdx, setVehicleImgIdx] = useState<number>(0);
+
+  // Legal Modal State (Terms & Conditions / Privacy Policy)
+  const [activeLegalModal, setActiveLegalModal] = useState<'terms' | 'privacy' | null>(null);
 
   // Immediately load cached banners from persistent storage (0ms latency, zero fallback flash)
   useEffect(() => {
@@ -267,6 +271,120 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
           Every delivery is calibrated and measured using government-stamped Legal Metrology flow meters for accurate, tamper-proof dispensing.
         </Text>
       </View>
+
+      {/* Official App Footer with Terms & Conditions and Privacy Policy */}
+      <View style={styles.footerContainer}>
+        <View style={styles.footerBrandRow}>
+          <Text style={styles.footerBrandLogo}>
+            EXTRA <Text style={{ color: '#FFB300' }}>DIESEL</Text>
+          </Text>
+          <Text style={styles.footerTagline}>Doorstep Diesel Fueling Platform</Text>
+        </View>
+
+        <Text style={styles.footerSubText}>
+          Government-Calibrated • Legal Metrology Certified • BS-VI High Speed Diesel
+        </Text>
+
+        <View style={styles.footerLinksRow}>
+          <TouchableOpacity
+            style={styles.footerLinkBtn}
+            onPress={() => setActiveLegalModal('terms')}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="document-text-outline" size={15} color="#DC2626" />
+            <Text style={styles.footerLinkText}>Terms & Conditions (20)</Text>
+          </TouchableOpacity>
+
+          <View style={styles.footerLinkDivider} />
+
+          <TouchableOpacity
+            style={styles.footerLinkBtn}
+            onPress={() => setActiveLegalModal('privacy')}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="shield-checkmark-outline" size={15} color="#DC2626" />
+            <Text style={styles.footerLinkText}>Privacy Policy (20)</Text>
+          </TouchableOpacity>
+        </View>
+
+        <Text style={styles.footerCopyright}>
+          © {new Date().getFullYear()} Extra Diesel Inc. All rights reserved. Hyderabad, Telangana.
+        </Text>
+      </View>
+
+      {/* Full-Page Modal for Terms & Conditions and Privacy Policy (20 Points Each) */}
+      <Modal
+        visible={activeLegalModal !== null}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setActiveLegalModal(null)}
+      >
+        <View style={styles.legalModalOverlay}>
+          <View style={[styles.legalModalCard, isDesktop && styles.desktopLegalModalCard]}>
+            {/* Modal Header */}
+            <View style={styles.legalModalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.legalModalTitle}>
+                  {activeLegalModal === 'terms' ? 'Terms & Conditions' : 'Privacy Policy'}
+                </Text>
+                <Text style={styles.legalModalSub}>
+                  {activeLegalModal === 'terms'
+                    ? '20 Official Service, Safety & Legal Metrology Clauses'
+                    : '20 Clauses on User Data Security & Privacy Protection'}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.legalModalCloseBtn}
+                onPress={() => setActiveLegalModal(null)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close" size={22} color="#0F172A" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Modal Scroll Content */}
+            <ScrollView style={styles.legalModalBody} showsVerticalScrollIndicator={false}>
+              <View style={styles.legalHeroBanner}>
+                <Ionicons
+                  name={activeLegalModal === 'terms' ? 'document-text' : 'shield-checkmark'}
+                  size={26}
+                  color={COLORS.primary}
+                />
+                <Text style={styles.legalHeroText}>
+                  {activeLegalModal === 'terms'
+                    ? 'Binding Fuel Delivery Service Agreement & Compliance Standards'
+                    : 'Certified High-Level Data Protection & Privacy Architecture'}
+                </Text>
+              </View>
+
+              {(activeLegalModal === 'terms' ? TERMS_AND_CONDITIONS_20 : PRIVACY_POLICY_20).map(
+                (clause: LegalClause) => (
+                  <View key={clause.id} style={styles.clauseItemCard}>
+                    <View style={styles.clauseBadge}>
+                      <Text style={styles.clauseBadgeText}>{clause.id}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.clauseTitle}>{clause.title}</Text>
+                      <Text style={styles.clauseDesc}>{clause.desc}</Text>
+                    </View>
+                  </View>
+                )
+              )}
+            </ScrollView>
+
+            {/* Modal Footer */}
+            <View style={styles.legalModalFooter}>
+              <TouchableOpacity
+                style={styles.legalCloseActionBtn}
+                onPress={() => setActiveLegalModal(null)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.legalCloseActionText}>Close & Return to App</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 };
@@ -640,5 +758,189 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#047857',
     lineHeight: 18,
+  },
+  footerContainer: {
+    marginTop: 24,
+    paddingTop: 20,
+    paddingBottom: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    alignItems: 'center',
+  },
+  footerBrandRow: {
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  footerBrandLogo: {
+    fontSize: 17,
+    fontWeight: '900',
+    color: '#DC2626',
+    letterSpacing: 1,
+  },
+  footerTagline: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  footerSubText: {
+    fontSize: 10.5,
+    color: '#94A3B8',
+    textAlign: 'center',
+    marginBottom: 14,
+  },
+  footerLinksRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    marginBottom: 14,
+    gap: 8,
+  },
+  footerLinkBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  footerLinkText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  footerLinkDivider: {
+    width: 1,
+    height: 14,
+    backgroundColor: '#CBD5E1',
+  },
+  footerCopyright: {
+    fontSize: 10,
+    color: '#94A3B8',
+    textAlign: 'center',
+  },
+  legalModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  legalModalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    width: '100%',
+    maxHeight: '88%',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  desktopLegalModalCard: {
+    maxWidth: 680,
+  },
+  legalModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  legalModalTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  legalModalSub: {
+    fontSize: 11.5,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  legalModalCloseBtn: {
+    padding: 6,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+  },
+  legalModalBody: {
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+  },
+  legalHeroBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
+  legalHeroText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#B91C1C',
+    lineHeight: 17,
+  },
+  clauseItemCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  clauseBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  clauseBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  clauseTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 4,
+  },
+  clauseDesc: {
+    fontSize: 12,
+    color: '#475569',
+    lineHeight: 18,
+  },
+  legalModalFooter: {
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  legalCloseActionBtn: {
+    backgroundColor: '#DC2626',
+    paddingVertical: 13,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  legalCloseActionText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
   },
 });

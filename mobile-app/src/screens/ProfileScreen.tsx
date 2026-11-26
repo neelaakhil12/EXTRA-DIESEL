@@ -21,6 +21,8 @@ import { COLORS } from '../constants/theme';
 import { ScreenName } from '../types';
 import { APP_CONFIG } from '../constants/config';
 
+import { TERMS_AND_CONDITIONS_20, PRIVACY_POLICY_20 } from '../constants/legalData';
+
 interface DeliverySite {
   id: string;
   name: string;
@@ -82,7 +84,7 @@ interface ProfileScreenProps {
   }) => void;
 }
 
-type SubScreen = 'sites' | 'terms' | 'support' | 'editProfile' | 'avatarPresets' | null;
+type SubScreen = 'sites' | 'terms' | 'privacy' | 'support' | 'editProfile' | 'avatarPresets' | null;
 
 const AVATAR_PRESETS = [
   { id: '1', label: 'Executive', uri: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80' },
@@ -754,6 +756,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onLogout, on
   // SUB-SCREEN 3: TERMS AND CONDITIONS FULL PAGE (20 CLAUSES SYNCED WITH ADMIN)
   // =========================================================================
   if (activeSubScreen === 'terms') {
+    const listToRender = termsList && termsList.length > 0 ? termsList : TERMS_AND_CONDITIONS_20;
     return (
       <ScrollView
         style={styles.container}
@@ -772,9 +775,48 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onLogout, on
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.formSectionHeading}>Standard Operating Policies & Safety Clauses ({termsList.length} Points)</Text>
-          {termsList.map((item, idx) => (
-            <View key={item.id || idx} style={[styles.termItemBox, idx < termsList.length - 1 && styles.termItemBorder]}>
+          <Text style={styles.formSectionHeading}>Standard Operating Policies & Safety Clauses ({listToRender.length} Points)</Text>
+          {listToRender.map((item, idx) => (
+            <View key={item.id || idx} style={[styles.termItemBox, idx < listToRender.length - 1 && styles.termItemBorder]}>
+              <View style={styles.termIndexCircle}>
+                <Text style={styles.termIndexText}>{idx + 1}</Text>
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={styles.termTitleText}>{item.title}</Text>
+                <Text style={styles.termDescText}>{item.desc}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      </ScrollView>
+    );
+  }
+
+  // =========================================================================
+  // SUB-SCREEN 4: PRIVACY POLICY FULL PAGE (20 CLAUSES)
+  // =========================================================================
+  if (activeSubScreen === 'privacy') {
+    return (
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={[styles.content, isDesktop && styles.desktopContent]}
+      >
+        {renderSubHeader('Privacy Policy', 'Comprehensive user data protection and privacy policies')}
+
+        <View style={styles.termsHeroBadge}>
+          <Ionicons name="shield-checkmark" size={32} color={COLORS.primary} />
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text style={styles.termsHeroTitle}>Extra Diesel Data Privacy Policy</Text>
+            <Text style={styles.termsHeroSub}>
+              Encrypted Data Handling, Zero-Spam & PCI-DSS Compliant Infrastructure
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.formSectionHeading}>Data Security, Storage & Usage Standards ({PRIVACY_POLICY_20.length} Points)</Text>
+          {PRIVACY_POLICY_20.map((item, idx) => (
+            <View key={item.id || idx} style={[styles.termItemBox, idx < PRIVACY_POLICY_20.length - 1 && styles.termItemBorder]}>
               <View style={styles.termIndexCircle}>
                 <Text style={styles.termIndexText}>{idx + 1}</Text>
               </View>
@@ -884,6 +926,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onLogout, on
       icon: 'document-text-outline',
       label: 'Terms and Conditions',
       action: () => setActiveSubScreen('terms'),
+    },
+    {
+      icon: 'shield-checkmark-outline',
+      label: 'Privacy Policy',
+      action: () => setActiveSubScreen('privacy'),
     },
     {
       icon: 'help-circle-outline',
