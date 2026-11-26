@@ -1233,7 +1233,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
         animationType="slide"
         onRequestClose={() => setShowForgotModal(false)}
       >
-        <View style={styles.forgotModalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.forgotModalOverlay}
+        >
           <View style={[styles.forgotModalCard, isDesktop && { maxWidth: 440 }]}>
             <View style={styles.forgotModalHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -1245,109 +1248,117 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.forgotModalSub}>
-              Enter your registered Extra Diesel email address to receive a 6-digit password reset verification code.
-            </Text>
+            <ScrollView
+              style={styles.forgotModalScrollView}
+              contentContainerStyle={styles.forgotModalScrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              bounces={true}
+            >
+              <Text style={styles.forgotModalSub}>
+                Enter your registered Extra Diesel email address to receive a 6-digit password reset verification code.
+              </Text>
 
-            {/* Email Field with Send OTP Button */}
-            <Text style={styles.inputLabel}>Registered Email</Text>
-            <View style={[styles.inputWrap, { marginBottom: 12 }]}>
-              <Ionicons name="mail-outline" size={18} color={COLORS.muted} style={styles.inputIcon} />
-              <TextInput
-                style={[styles.textInput, { flex: 1 }]}
-                placeholder="registered@email.com"
-                placeholderTextColor="#94A3B8"
-                autoCapitalize="none"
-                keyboardType="email-address"
-                autoCorrect={false}
-                value={forgotEmail}
-                onChangeText={setForgotEmail}
-              />
-              <TouchableOpacity
-                style={styles.forgotSendOtpBtn}
-                onPress={handleSendForgotOtp}
-                disabled={isSendingForgotOtp}
-              >
-                {isSendingForgotOtp ? (
-                  <ActivityIndicator size="small" color="#FFF" />
-                ) : (
-                  <Text style={styles.forgotSendOtpText}>{forgotOtpSent ? 'Resend' : 'Send OTP'}</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-
-            {forgotOtpSent && (
-              <>
-                {/* 6-Digit OTP Input */}
-                <Text style={styles.inputLabel}>6-Digit Verification Code</Text>
-                <View style={[styles.inputWrap, { marginBottom: 12 }]}>
-                  <Ionicons name="shield-checkmark-outline" size={18} color={COLORS.muted} style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="Enter 6-digit OTP from email"
-                    placeholderTextColor="#94A3B8"
-                    keyboardType="number-pad"
-                    maxLength={6}
-                    value={forgotOtp}
-                    onChangeText={setForgotOtp}
-                  />
-                </View>
-
-                {/* New Password */}
-                <Text style={styles.inputLabel}>New Password</Text>
-                <View style={[styles.inputWrap, { marginBottom: 12 }]}>
-                  <Ionicons name="lock-closed-outline" size={18} color={COLORS.muted} style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="At least 6 characters"
-                    placeholderTextColor="#94A3B8"
-                    secureTextEntry={!showForgotNewPassword}
-                    value={forgotNewPassword}
-                    onChangeText={setForgotNewPassword}
-                  />
-                  <TouchableOpacity
-                    onPress={() => setShowForgotNewPassword(!showForgotNewPassword)}
-                    style={styles.eyeBtn}
-                  >
-                    <Ionicons
-                      name={showForgotNewPassword ? 'eye-off-outline' : 'eye-outline'}
-                      size={18}
-                      color={COLORS.muted}
-                    />
-                  </TouchableOpacity>
-                </View>
-
-                {/* Confirm New Password */}
-                <Text style={styles.inputLabel}>Confirm New Password</Text>
-                <View style={[styles.inputWrap, { marginBottom: 16 }]}>
-                  <Ionicons name="lock-closed-outline" size={18} color={COLORS.muted} style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="Re-enter new password"
-                    placeholderTextColor="#94A3B8"
-                    secureTextEntry={!showForgotNewPassword}
-                    value={forgotConfirmPassword}
-                    onChangeText={setForgotConfirmPassword}
-                  />
-                </View>
-
-                {/* Submit Reset Button */}
+              {/* Email Field with Send OTP Button */}
+              <Text style={styles.inputLabel}>Registered Email</Text>
+              <View style={[styles.inputWrap, { marginBottom: 12 }]}>
+                <Ionicons name="mail-outline" size={18} color={COLORS.muted} style={styles.inputIcon} />
+                <TextInput
+                  style={[styles.textInput, { flex: 1 }]}
+                  placeholder="registered@email.com"
+                  placeholderTextColor="#94A3B8"
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  autoCorrect={false}
+                  value={forgotEmail}
+                  onChangeText={setForgotEmail}
+                />
                 <TouchableOpacity
-                  style={styles.primaryButton}
-                  onPress={handleResetPasswordSubmit}
-                  disabled={isResettingPassword}
-                  activeOpacity={0.85}
+                  style={styles.forgotSendOtpBtn}
+                  onPress={handleSendForgotOtp}
+                  disabled={isSendingForgotOtp}
                 >
-                  {isResettingPassword ? (
+                  {isSendingForgotOtp ? (
                     <ActivityIndicator size="small" color="#FFF" />
                   ) : (
-                    <Text style={styles.primaryButtonText}>Update Password & Sign In</Text>
+                    <Text style={styles.forgotSendOtpText}>{forgotOtpSent ? 'Resend' : 'Send OTP'}</Text>
                   )}
                 </TouchableOpacity>
-              </>
-            )}
+              </View>
+
+              {forgotOtpSent && (
+                <>
+                  {/* 6-Digit OTP Input */}
+                  <Text style={styles.inputLabel}>6-Digit Verification Code</Text>
+                  <View style={[styles.inputWrap, { marginBottom: 12 }]}>
+                    <Ionicons name="shield-checkmark-outline" size={18} color={COLORS.muted} style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="Enter 6-digit OTP from email"
+                      placeholderTextColor="#94A3B8"
+                      keyboardType="number-pad"
+                      maxLength={6}
+                      value={forgotOtp}
+                      onChangeText={setForgotOtp}
+                    />
+                  </View>
+
+                  {/* New Password */}
+                  <Text style={styles.inputLabel}>New Password</Text>
+                  <View style={[styles.inputWrap, { marginBottom: 12 }]}>
+                    <Ionicons name="lock-closed-outline" size={18} color={COLORS.muted} style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="At least 6 characters"
+                      placeholderTextColor="#94A3B8"
+                      secureTextEntry={!showForgotNewPassword}
+                      value={forgotNewPassword}
+                      onChangeText={setForgotNewPassword}
+                    />
+                    <TouchableOpacity
+                      onPress={() => setShowForgotNewPassword(!showForgotNewPassword)}
+                      style={styles.eyeBtn}
+                    >
+                      <Ionicons
+                        name={showForgotNewPassword ? 'eye-off-outline' : 'eye-outline'}
+                        size={18}
+                        color={COLORS.muted}
+                      />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Confirm New Password */}
+                  <Text style={styles.inputLabel}>Confirm New Password</Text>
+                  <View style={[styles.inputWrap, { marginBottom: 16 }]}>
+                    <Ionicons name="lock-closed-outline" size={18} color={COLORS.muted} style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="Re-enter new password"
+                      placeholderTextColor="#94A3B8"
+                      secureTextEntry={!showForgotNewPassword}
+                      value={forgotConfirmPassword}
+                      onChangeText={setForgotConfirmPassword}
+                    />
+                  </View>
+
+                  {/* Submit Reset Button */}
+                  <TouchableOpacity
+                    style={styles.primaryButton}
+                    onPress={handleResetPasswordSubmit}
+                    disabled={isResettingPassword}
+                    activeOpacity={0.85}
+                  >
+                    {isResettingPassword ? (
+                      <ActivityIndicator size="small" color="#FFF" />
+                    ) : (
+                      <Text style={styles.primaryButtonText}>Update Password & Sign In</Text>
+                    )}
+                  </TouchableOpacity>
+                </>
+              )}
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Premium In-App Alert Modal (Replaces browser / native OS black box alert) */}
@@ -1537,18 +1548,27 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: 16,
   },
   forgotModalCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
-    padding: 22,
+    paddingTop: 20,
+    paddingHorizontal: 22,
+    paddingBottom: 16,
     width: '100%',
+    maxHeight: '88%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 10,
     elevation: 6,
+  },
+  forgotModalScrollView: {
+    width: '100%',
+  },
+  forgotModalScrollContent: {
+    paddingBottom: 14,
   },
   forgotModalHeader: {
     flexDirection: 'row',
