@@ -375,6 +375,15 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
       setShowGoogleModal(false);
 
       if (data?.success && data?.user) {
+        if (userRoleTab === 'delivery') {
+          if (data.user.role !== 'delivery') {
+            Alert.alert(
+              'Access Denied',
+              'This Google account is not registered as an authorized Delivery Partner. Please contact Extra Diesel admin for driver credentials.'
+            );
+            return;
+          }
+        }
         if (data.user.phone) {
           AsyncStorage.setItem('ed_user_phone', data.user.phone).catch(() => {});
         }
@@ -592,13 +601,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
              ========================================================================= */
           <View style={styles.card}>
             <View style={styles.deliveryCardHeaderRow}>
-              <View>
+              <View style={{ flex: 1, marginRight: 8 }}>
                 <Text style={styles.cardHeading}>Delivery Partner Sign In</Text>
-                <Text style={styles.cardSub}>Authorized Bowser Drivers • Enter admin credentials</Text>
+                <Text style={styles.cardSub} numberOfLines={2}>Authorized Bowser Drivers • Enter admin credentials</Text>
               </View>
-              <View style={styles.captainBadgePill}>
+              <View style={[styles.captainBadgePill, { flexShrink: 0 }]}>
                 <Ionicons name="shield-checkmark" size={13} color="#D97706" />
-                <Text style={styles.captainBadgePillText}>Captain Portal</Text>
+                <Text style={styles.captainBadgePillText}>Captain</Text>
               </View>
             </View>
 
@@ -691,6 +700,30 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
                 <>
                   <Ionicons name="car" size={18} color={COLORS.white} />
                   <Text style={styles.primaryButtonText}>Sign In as Delivery Partner</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            {/* Divider */}
+            <View style={styles.dividerRow}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>OR</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            {/* Google Sign In for Delivery Partner */}
+            <TouchableOpacity
+              style={styles.googleButton}
+              onPress={handleGoogleSignIn}
+              disabled={isCheckingGoogleAuth}
+              activeOpacity={0.85}
+            >
+              {isCheckingGoogleAuth ? (
+                <ActivityIndicator size="small" color="#EA4335" />
+              ) : (
+                <>
+                  <Ionicons name="logo-google" size={18} color="#EA4335" />
+                  <Text style={styles.googleButtonText}>Sign in with Google</Text>
                 </>
               )}
             </TouchableOpacity>

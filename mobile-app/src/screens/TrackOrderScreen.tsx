@@ -17,6 +17,7 @@ import { COLORS } from '../constants/theme';
 import { ScreenName } from '../types';
 import { APP_CONFIG } from '../constants/config';
 import { sendSystemNotification } from '../services/notificationService';
+import { TANKER_MARKER_BASE64 } from '../constants/tankerMarkerBase64';
 
 interface TrackOrderScreenProps {
   orderId?: string;
@@ -43,6 +44,7 @@ interface TrackedOrder {
   captainLat?: number | null;
   captainLon?: number | null;
   captainHeading?: number | null;
+  captainSpeed?: number | null;
   lastLocationUpdate?: string | null;
   createdAt?: string;
   dispatchedAt?: string;
@@ -63,6 +65,7 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
   const [recentOrders, setRecentOrders] = useState<TrackedOrder[]>([]);
   const [etaMins, setEtaMins] = useState(18);
   const [distanceKm, setDistanceKm] = useState(2.8);
+  const [parentScrollEnabled, setParentScrollEnabled] = useState(true);
 
   const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'https://extradiesel.in';
 
@@ -301,35 +304,57 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
 <html>
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=20.0, user-scalable=yes" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
-    body, html, #map { margin: 0; padding: 0; width: 100%; height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8fafc; }
-    .tanker-wrap {
+    * { box-sizing: border-box; }
+    body, html, #map {
+      margin: 0; padding: 0; width: 100%; height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f1f5f9;
+      touch-action: pan-x pan-y pinch-zoom;
+    }
+    .tanker-marker-wrap {
       display: flex; flex-direction: column; align-items: center; justify-content: center;
-      transition: all 1.2s ease-in-out;
+      width: 68px; height: 68px;
+    }
+    .tanker-rotator {
+      width: 54px; height: 54px;
+      display: flex; align-items: center; justify-content: center;
+      transform-origin: center center;
+      transition: transform 0.25s linear;
+    }
+    .tanker-img {
+      width: 52px; height: 52px; object-fit: contain;
+      filter: drop-shadow(0 4px 10px rgba(0,0,0,0.45));
+    }
+    .pulse-glow {
+      position: absolute; width: 50px; height: 50px; border-radius: 50%;
+      background: rgba(37, 99, 235, 0.25);
+      animation: pulseAnim 2s infinite ease-out; pointer-events: none;
+    }
+    @keyframes pulseAnim {
+      0% { transform: scale(0.6); opacity: 1; }
+      100% { transform: scale(2.2); opacity: 0; }
     }
     .tanker-pill {
-      background: #DC2626; color: #FFFFFF; font-weight: 800; font-size: 11px;
-      padding: 3px 8px; border-radius: 12px; border: 2px solid #FFFFFF;
-      box-shadow: 0 4px 10px rgba(220, 38, 38, 0.45); white-space: nowrap; text-align: center;
-      margin-top: 2px;
+      background: #2563EB; color: #FFFFFF; font-weight: 800; font-size: 10px;
+      padding: 2px 8px; border-radius: 12px; border: 1.5px solid #FFFFFF;
+      box-shadow: 0 3px 8px rgba(37, 99, 235, 0.4); white-space: nowrap; text-align: center;
+      margin-top: -3px;
     }
-    .pulse-ring {
-      width: 44px; height: 44px; border-radius: 50%; background: rgba(220, 38, 38, 0.3);
-      position: absolute; top: -7px; left: 5px; animation: pulse 1.8s infinite; pointer-events: none;
-    }
-    @keyframes pulse { 0% { transform: scale(0.8); opacity: 1; } 100% { transform: scale(2.4); opacity: 0; } }
     .site-pill {
       background: #0F172A; color: #FFFFFF; font-weight: 800; font-size: 10.5px;
-      padding: 3px 8px; border-radius: 10px; border: 2px solid #FFFFFF;
+      padding: 3px 8px; border-radius: 8px; border: 2px solid #FFFFFF;
       box-shadow: 0 3px 8px rgba(0,0,0,0.3); white-space: nowrap; text-align: center;
+      margin-top: -2px;
     }
     .depot-pill {
       background: #059669; color: #FFFFFF; font-weight: 800; font-size: 10px;
       padding: 2px 7px; border-radius: 8px; border: 1.5px solid #FFFFFF;
-      white-space: nowrap; text-align: center;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.25); white-space: nowrap; text-align: center;
+      margin-top: -2px;
     }
   </style>
 </head>
@@ -340,58 +365,132 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
     var site = [${destLat}, ${destLon}];
     var livePos = [${currentLat}, ${currentLon}];
     
+    // Road polyline waypoints
     var waypoints = [
       depot,
-      [${(depotLat * 0.7 + destLat * 0.3).toFixed(6)}, ${(depotLon * 0.7 + destLon * 0.3).toFixed(6)}],
-      livePos,
-      [${(depotLat * 0.3 + destLat * 0.7).toFixed(6)}, ${(depotLon * 0.3 + destLon * 0.7).toFixed(6)}],
+      [${(depotLat * 0.75 + destLat * 0.25).toFixed(6)}, ${(depotLon * 0.75 + destLon * 0.25).toFixed(6)}],
+      [${(depotLat * 0.50 + destLat * 0.50).toFixed(6)}, ${(depotLon * 0.50 + destLon * 0.50).toFixed(6)}],
+      [${(depotLat * 0.25 + destLat * 0.75).toFixed(6)}, ${(depotLon * 0.25 + destLon * 0.75).toFixed(6)}],
       site
     ];
 
-    var map = L.map('map', { zoomControl: false, attributionControl: false }).setView(livePos, 13);
-    L.control.zoom({ position: 'topleft' }).addTo(map);
+    var map = L.map('map', {
+      zoomControl: true,
+      attributionControl: false,
+      dragging: true,
+      touchZoom: true,
+      scrollWheelZoom: true,
+      doubleClickZoom: true,
+      boxZoom: true,
+      tap: true,
+      bounceAtZoomLimits: true
+    }).setView(livePos, 14);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19
     }).addTo(map);
 
-    // Route Polyline
-    L.polyline(waypoints, { color: '#DC2626', weight: 5, opacity: 0.85, dashArray: '8, 8' }).addTo(map);
+    // 1. Highlighted Blue Polyline Route (Google Maps / Swiggy / Rapido style)
+    // Darker blue outer border casing
+    L.polyline(waypoints, {
+      color: '#1E40AF',
+      weight: 8,
+      opacity: 0.85,
+      lineCap: 'round',
+      lineJoin: 'round'
+    }).addTo(map);
 
-    // 1. Site Destination Marker
+    // Bright cyan/blue inner route
+    L.polyline(waypoints, {
+      color: '#3B82F6',
+      weight: 5,
+      opacity: 1,
+      lineCap: 'round',
+      lineJoin: 'round'
+    }).addTo(map);
+
+    // 2. Site Destination Marker (Red Location Pin)
     var siteIcon = L.divIcon({
-      className: 'site-marker',
-      html: '<div style="display:flex; flex-direction:column; align-items:center;"><div style="font-size:26px;">📍</div><div class="site-pill">${shortSiteTitle}</div></div>',
-      iconSize: [120, 54],
-      iconAnchor: [60, 48]
+      className: 'site-marker-box',
+      html: '<div style="display:flex; flex-direction:column; align-items:center;"><div style="font-size:28px;">📍</div><div class="site-pill">${shortSiteTitle}</div></div>',
+      iconSize: [120, 56],
+      iconAnchor: [60, 50]
     });
     L.marker(site, { icon: siteIcon }).addTo(map);
 
-    // 2. Fuel Depot Marker
+    // 3. Fuel Depot Marker
     var depotIcon = L.divIcon({
-      className: 'depot-marker',
-      html: '<div style="display:flex; flex-direction:column; align-items:center;"><div style="font-size:22px;">⛽</div><div class="depot-pill">Terminal Depot</div></div>',
-      iconSize: [100, 46],
-      iconAnchor: [50, 40]
+      className: 'depot-marker-box',
+      html: '<div style="display:flex; flex-direction:column; align-items:center;"><div style="font-size:24px;">⛽</div><div class="depot-pill">Terminal Depot</div></div>',
+      iconSize: [100, 48],
+      iconAnchor: [50, 42]
     });
     L.marker(depot, { icon: depotIcon }).addTo(map);
 
-    // 3. Live Moving Bowser Fuel Tanker Marker (🚚⛽ Extra Diesel Captain)
-    var bowserIcon = L.divIcon({
-      className: 'bowser-marker',
-      html: '<div class="tanker-wrap" style="position:relative;"><div class="pulse-ring"></div><div style="font-size:32px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));">🚛⛽</div><div class="tanker-pill">${bowserNo}</div></div>',
-      iconSize: [120, 64],
-      iconAnchor: [60, 36]
+    // 4. Custom 2D/3D Top-Down Fuel Tanker Icon Marker
+    var tankerIcon = L.divIcon({
+      className: 'custom-tanker-marker',
+      html: '<div class="tanker-marker-wrap" style="position:relative;"><div class="pulse-glow"></div><div class="tanker-rotator" id="tankerRotator"><img src="${TANKER_MARKER_BASE64}" class="tanker-img" alt="Tanker" /></div><div class="tanker-pill">${bowserNo}</div></div>',
+      iconSize: [68, 68],
+      iconAnchor: [34, 34]
     });
+    var bowserMarker = L.marker(livePos, { icon: tankerIcon }).addTo(map);
 
-    var bowserMarker = L.marker(livePos, { icon: bowserIcon }).addTo(map);
+    // Smooth Linear Interpolation (lerp) & Bearing Rotation
+    function lerp(a, b, t) {
+      return a + (b - a) * t;
+    }
 
-    var currentStep = 1;
+    function calculateBearing(lat1, lon1, lat2, lon2) {
+      var dLon = (lon2 - lon1) * Math.PI / 180;
+      var y = Math.sin(dLon) * Math.cos(lat2 * Math.PI / 180);
+      var x = Math.cos(lat1 * Math.PI / 180) * Math.sin(lat2 * Math.PI / 180) -
+              Math.sin(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.cos(dLon);
+      var brng = Math.atan2(y, x) * 180 / Math.PI;
+      return (brng + 360) % 360;
+    }
+
+    var curLat = livePos[0];
+    var curLon = livePos[1];
+    var targetLat = livePos[0];
+    var targetLon = livePos[1];
+    var curAngle = 0;
+    var targetAngle = 0;
+
+    // 60fps continuous smooth motion loop
+    function animateFrame() {
+      curLat = lerp(curLat, targetLat, 0.08);
+      curLon = lerp(curLon, targetLon, 0.08);
+
+      var diff = (targetAngle - curAngle + 180) % 360 - 180;
+      curAngle = (curAngle + diff * 0.12 + 360) % 360;
+
+      bowserMarker.setLatLng([curLat, curLon]);
+      var rot = document.getElementById('tankerRotator');
+      if (rot) {
+        rot.style.transform = 'rotate(' + curAngle.toFixed(1) + 'deg)';
+      }
+      requestAnimationFrame(animateFrame);
+    }
+    requestAnimationFrame(animateFrame);
+
+    function updateTankerPos(newLat, newLon, explicitAngle) {
+      var bearing = explicitAngle !== undefined && explicitAngle !== null
+        ? explicitAngle
+        : calculateBearing(curLat, curLon, newLat, newLon);
+      targetLat = newLat;
+      targetLon = newLon;
+      targetAngle = bearing;
+    }
+
+    // Step progression along route
+    var routeIdx = 1;
     setInterval(function() {
-      currentStep = (currentStep + 1) % waypoints.length;
-      if (currentStep === 0) currentStep = 1;
-      bowserMarker.setLatLng(waypoints[currentStep]);
-    }, 3800);
+      routeIdx = (routeIdx + 1) % waypoints.length;
+      if (routeIdx === 0) routeIdx = 1;
+      var nextPt = waypoints[routeIdx];
+      updateTankerPos(nextPt[0], nextPt[1]);
+    }, 3500);
 
     map.fitBounds(L.latLngBounds([depot, site]), { padding: [40, 40] });
   </script>
@@ -402,6 +501,7 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
   return (
     <ScrollView
       style={styles.container}
+      scrollEnabled={parentScrollEnabled}
       contentContainerStyle={[
         styles.content,
         isDesktop && { maxWidth: 860, width: '100%', alignSelf: 'center', paddingVertical: 24 },
@@ -441,14 +541,19 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
       </View>
 
       {/* Interactive Live Map (Real Leaflet/OpenStreetMap with moving Fuel Bowser Tanker like Rapido/Swiggy) */}
-      <View style={styles.mapCard}>
+      <View
+        style={styles.mapCard}
+        onTouchStart={() => setParentScrollEnabled(false)}
+        onTouchEnd={() => setParentScrollEnabled(true)}
+        onTouchCancel={() => setParentScrollEnabled(true)}
+      >
         {Platform.OS === 'web' ? (
           <iframe
             srcDoc={getInteractiveMapHtml()}
             title="Live Bowser Tracking Map"
             style={{
               width: '100%',
-              height: 340,
+              height: 360,
               border: 'none',
               borderRadius: 14,
             } as any}
@@ -459,35 +564,70 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
             source={{ html: getInteractiveMapHtml() }}
             style={{
               width: '100%',
-              height: 340,
+              height: 360,
               borderRadius: 14,
               backgroundColor: '#E2E8F0',
             }}
             javaScriptEnabled={true}
             domStorageEnabled={true}
-            scrollEnabled={false}
+            scrollEnabled={true}
+            nestedScrollEnabled={true}
+            setBuiltInZoomControls={false}
+            setDisplayZoomControls={false}
+            overScrollMode="never"
           />
         )}
 
-        {/* Live Overlay Stats Pill */}
-        <View style={styles.mapOverlayPill}>
-          <Ionicons name="speedometer" size={16} color={COLORS.primary} />
-          <Text style={styles.mapOverlayText}>
-            {isDelivered
-              ? 'Fuel Dispensed & Delivered • Tax Invoice Ready'
-              : activeOrder.status === 'arrived'
-              ? 'Captain Arrived at Site • Dispenser Connected'
-              : isOutForDelivery
-              ? `Bowser ${bowserNo} en route • ETA: ~${etaMins}m`
-              : isAssigned
-              ? `Bowser Assigned • Preparing at depot`
-              : `Order Confirmed • Dispatch desk active`}
-          </Text>
-        </View>
-
+        {/* Live GPS Badge */}
         <View style={styles.livePulsePill}>
           <View style={styles.liveDot} />
           <Text style={styles.liveDotText}>LIVE GPS</Text>
+        </View>
+      </View>
+
+      {/* Swiggy / Rapido Style Live ETA & Status Bottom Card */}
+      <View style={styles.swiggyBottomCard}>
+        <View style={styles.bottomCardHandle} />
+
+        <View style={styles.etaHeaderRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.etaTitleText}>
+              {isDelivered
+                ? 'Delivered at Site'
+                : activeOrder.status === 'arrived'
+                ? 'Captain Arrived at Site'
+                : `Arriving in ~${etaMins} mins`}
+            </Text>
+            <Text style={styles.etaDistanceText}>
+              {isDelivered
+                ? '100% BS-VI Pure Dispensed'
+                : `${distanceKm} km away • Bowser moving at ${activeOrder.captainSpeed || 36} km/h`}
+            </Text>
+          </View>
+          <View style={styles.etaPillBadge}>
+            <Ionicons name="speedometer" size={15} color="#2563EB" />
+            <Text style={styles.etaPillBadgeText}>~{etaMins}m</Text>
+          </View>
+        </View>
+
+        {/* Dynamic Progress Bar */}
+        <View style={styles.etaProgressBarTrack}>
+          <View
+            style={[
+              styles.etaProgressBarFill,
+              {
+                width: isDelivered
+                  ? '100%'
+                  : activeOrder.status === 'arrived'
+                  ? '85%'
+                  : isOutForDelivery
+                  ? '60%'
+                  : isAssigned
+                  ? '30%'
+                  : '15%',
+              },
+            ]}
+          />
         </View>
       </View>
 
@@ -750,29 +890,70 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 4,
   },
-  mapOverlayPill: {
-    position: 'absolute',
-    bottom: 12,
-    left: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
+  swiggyBottomCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
     elevation: 3,
   },
-  mapOverlayText: {
-    fontSize: 12,
-    fontWeight: '800',
+  bottomCardHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#CBD5E1',
+    alignSelf: 'center',
+    marginBottom: 12,
+  },
+  etaHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  etaTitleText: {
+    fontSize: 18,
+    fontWeight: '900',
     color: '#0F172A',
+  },
+  etaDistanceText: {
+    fontSize: 12.5,
+    color: '#64748B',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  etaPillBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+  },
+  etaPillBadgeText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#2563EB',
+  },
+  etaProgressBarTrack: {
+    height: 6,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  etaProgressBarFill: {
+    height: '100%',
+    backgroundColor: '#2563EB',
+    borderRadius: 3,
   },
   livePulsePill: {
     position: 'absolute',
