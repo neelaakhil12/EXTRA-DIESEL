@@ -10,6 +10,7 @@ import {
   Platform,
   ActivityIndicator,
   Modal,
+  Image,
   useWindowDimensions,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -61,7 +62,8 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({
 
   // Fuel & Order details
   const [litersInput, setLitersInput] = useState<string>('200');
-  const [vehicleType, setVehicleType] = useState<string>('DG Set');
+  const [vehicleType, setVehicleType] = useState<string>('');
+  const [paymentMode, setPaymentMode] = useState<'online' | 'cod'>('online');
   const [selectedSlot, setSelectedSlot] = useState<string>('08:00 AM - 12:00 PM');
   const [slotOptions, setSlotOptions] = useState<string[]>([
     '08:00 AM - 12:00 PM',
@@ -394,7 +396,13 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({
       const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'https://extradiesel.in';
       const orderId = `ED${new Date().getFullYear()}${Math.floor(100000 + Math.random() * 900000)}`;
 
-      // 1. Create Razorpay Order on Backend
+      // 1. Cash on Delivery (COD) Flow: Directly create order without opening Razorpay
+      if (paymentMode === 'cod') {
+        await saveFinalOrder(orderId, 'COD_PENDING', 'pending', 'Cash on Delivery');
+        return;
+      }
+
+      // 2. Online Payment Flow (Razorpay)
       const rzpRes = await fetch(`${baseUrl}/api/payment/create-order`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -409,11 +417,11 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({
       const razorpayKeyId = rzpData.keyId || 'rzp_test_U0oP5sFk81MJMT';
       const razorpayOrderId = rzpData.order?.id;
 
-      // 2. Open Razorpay Checkout on Web
+      // Open Razorpay Checkout on Web
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
         const loaded = await loadRazorpayScript();
         if (!loaded) {
-          throw new Error('Failed to load Razorpay payment gateway');
+          throw new Error('Failed to load payment gateway');
         }
 
         const options = {
@@ -425,7 +433,12 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({
           image: 'https://extradiesel.in/assets/images/logo.png',
           order_id: razorpayOrderId,
           handler: async (response: any) => {
-            await saveFinalOrder(orderId, response.razorpay_payment_id || 'pay_test_completed', 'paid');
+            await saveFinalOrder(
+              orderId,
+              response.razorpay_payment_id || 'pay_test_completed',
+              'paid',
+              'Online (Instant UPI / Cards)'
+            );
           },
           prefill: {
             name: customerName,
@@ -436,7 +449,7 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({
             address: deliveryAddress,
             mapsLink: googleMapsLink,
             liters: liters.toString(),
-            equipment: vehicleType,
+            equipment: vehicleType || 'Not Specified',
             deliveryDate: selectedDate,
             deliverySlot: selectedSlot,
           },
@@ -455,16 +468,26 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({
         return;
       }
 
-      // 3. For Mobile App: Record Payment & Order
-      await saveFinalOrder(orderId, `pay_test_${Math.floor(100000 + Math.random() * 900000)}`, 'paid');
+      // For Mobile App: Record Payment & Order
+      await saveFinalOrder(
+        orderId,
+        `pay_test_${Math.floor(100000 + Math.random() * 900000)}`,
+        'paid',
+        'Online (Instant UPI / Cards)'
+      );
     } catch (err: any) {
-      Alert.alert('Payment Failed', err.message || 'Unable to initialize Razorpay payment. Please try again.');
+      Alert.alert('Payment Failed', err.message || 'Unable to process payment. Please try again.');
       setIsProcessingPayment(false);
     }
   };
 
   // Save Final Confirmed Order to Backend
-  const saveFinalOrder = async (orderId: string, paymentId: string, paymentStatus: string) => {
+  const saveFinalOrder = async (
+    orderId: string,
+    paymentId: string,
+    paymentStatus: string,
+    paymentMethod: string = 'Online (Instant UPI / Cards)'
+  ) => {
     try {
       const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'https://extradiesel.in';
       const orderPayload = {
@@ -479,15 +502,18 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({
         deliveryFee,
         tax,
         total: totalAmount,
-        equipment: vehicleType,
+        equipment: vehicleType || 'Not Specified',
         deliverySlot: selectedSlot,
         deliveryDate: selectedDate,
         date: `${selectedDate} • ${selectedSlot}`,
         paymentId,
         paymentStatus,
-        paymentMethod: 'Razorpay UPI / Cards / NetBanking',
+        paymentMethod,
         status: 'pending',
-        statusText: 'Order Placed - Awaiting Bowser Dispatch',
+        statusText:
+          paymentMethod === 'Cash on Delivery'
+            ? 'Order Placed (Cash on Delivery) - Awaiting Bowser Dispatch'
+            : 'Order Placed (Paid Online) - Awaiting Bowser Dispatch',
       };
 
       await fetch(`${baseUrl}/api/orders`, {
@@ -504,7 +530,9 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({
       // Trigger System Status Bar Push Notification
       try {
         await sendSystemNotification(
-          '🎉 Diesel Order Confirmed!',
+          paymentMethod === 'Cash on Delivery'
+            ? '💵 Diesel Order Placed (Cash on Delivery)!'
+            : '🎉 Diesel Order Confirmed (Paid Online)!',
           `Your refuel order #${orderId} (${liters}L BS-VI) has been placed successfully. Awaiting bowser dispatch.`,
           'order'
         );
@@ -533,17 +561,23 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({
       {/* ========================================================================= */}
       {orderStep === 'config' ? (
         <View>
-          {/* Rate & Compliance Strip */}
-          <View style={styles.rateCard}>
-            <View style={styles.rateCardLeft}>
-              <Ionicons name="flame" size={22} color="#DC2626" />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.rateCardTitle}>Today's Diesel Rate</Text>
-                <Text style={styles.rateCardSub}>Hyderabad • BS-VI Pure Fuel</Text>
-              </View>
+          {/* 3D Bowser Tanker Rate Card (Screenshot 2 Match) */}
+          <View style={styles.dieselRateCardModern}>
+            <View style={styles.dieselThumbBox}>
+              <Image
+                source={require('../../assets/images/diesel-tanker-card-icon.png')}
+                style={styles.dieselThumbImg}
+                resizeMode="contain"
+              />
             </View>
-            <View style={styles.rateBadge}>
-              <Text style={styles.rateBadgeText}>₹{ratePerLiter.toFixed(2)} / L</Text>
+            <View style={styles.dieselInfoCol}>
+              <Text style={styles.dieselCardTitle}>Diesel</Text>
+              <Text style={styles.dieselCardPrice}>
+                Price - {ratePerLiter.toFixed(2)} / 1 Liter
+              </Text>
+            </View>
+            <View style={styles.dieselQtyBox}>
+              <Text style={styles.dieselQtyText}>1 L</Text>
             </View>
           </View>
 
@@ -617,23 +651,28 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({
             </Text>
           </View>
 
-          {/* 2. Equipment / Vehicle Type */}
+          {/* 2. Equipment / Vehicle Type (Optional) */}
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <Ionicons name="construct" size={20} color={COLORS.primary} />
-              <Text style={styles.cardTitle}>Equipment / Vehicle Type</Text>
+              <Text style={styles.cardTitle}>Equipment / Vehicle Type (Optional)</Text>
             </View>
             <View style={styles.pillRow}>
-              {vehicleOptions.map((v) => (
-                <TouchableOpacity
-                  key={v}
-                  style={[styles.pill, vehicleType === v && styles.pillActive]}
-                  onPress={() => setVehicleType(v)}
-                  activeOpacity={0.75}
-                >
-                  <Text style={[styles.pillText, vehicleType === v && styles.pillTextActive]}>{v}</Text>
-                </TouchableOpacity>
-              ))}
+              {vehicleOptions.map((v) => {
+                const isSelected = vehicleType === v;
+                return (
+                  <TouchableOpacity
+                    key={v}
+                    style={[styles.pill, isSelected && styles.pillActive]}
+                    onPress={() => setVehicleType((prev) => (prev === v ? '' : v))}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={[styles.pillText, isSelected && styles.pillTextActive]}>
+                      {isSelected ? '✓ ' : ''}{v}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
 
             {/* 3. Preferred Delivery Date */}
@@ -923,7 +962,73 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({
             </View>
           </View>
 
-          {/* 4. Pay Now via Razorpay Button */}
+          {/* 4. Payment Method Selection (Pay Online vs Cash on Delivery) */}
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <Ionicons name="wallet-outline" size={20} color={COLORS.primary} />
+              <Text style={styles.cardTitle}>Choose Payment Method</Text>
+            </View>
+
+            {/* Pay Online Option */}
+            <TouchableOpacity
+              style={[
+                styles.paymentOptionCard,
+                paymentMode === 'online' && styles.paymentOptionCardActive,
+              ]}
+              onPress={() => setPaymentMode('online')}
+              activeOpacity={0.8}
+            >
+              <View style={styles.paymentRadioRow}>
+                <Ionicons
+                  name={paymentMode === 'online' ? 'radio-button-on' : 'radio-button-off'}
+                  size={20}
+                  color={paymentMode === 'online' ? COLORS.primary : COLORS.muted}
+                />
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={styles.paymentOptionTitle}>Pay Online</Text>
+                    <View style={styles.onlineBadge}>
+                      <Text style={styles.onlineBadgeText}>Instant</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.paymentOptionSub}>
+                    UPI (Google Pay, PhonePe, Paytm), Cards & NetBanking
+                  </Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+
+            {/* Cash on Delivery Option */}
+            <TouchableOpacity
+              style={[
+                styles.paymentOptionCard,
+                paymentMode === 'cod' && styles.paymentOptionCardActive,
+              ]}
+              onPress={() => setPaymentMode('cod')}
+              activeOpacity={0.8}
+            >
+              <View style={styles.paymentRadioRow}>
+                <Ionicons
+                  name={paymentMode === 'cod' ? 'radio-button-on' : 'radio-button-off'}
+                  size={20}
+                  color={paymentMode === 'cod' ? COLORS.primary : COLORS.muted}
+                />
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={styles.paymentOptionTitle}>Cash on Delivery</Text>
+                    <View style={styles.codBadge}>
+                      <Text style={styles.codBadgeText}>Pay at Site</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.paymentOptionSub}>
+                    Pay cash directly to bowser captain after fueling completed
+                  </Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          </View>
+
+          {/* 5. Action Button (Pay Now or Place Order COD) */}
           <TouchableOpacity
             style={[styles.orderButton, isProcessingPayment && { opacity: 0.7 }]}
             onPress={handleConfirmOrderAndPay}
@@ -936,7 +1041,11 @@ export const OrderDieselScreen: React.FC<OrderDieselScreenProps> = ({
               <>
                 <View>
                   <Text style={styles.orderButtonSub}>Total: ₹{totalAmount.toFixed(2)} (Incl. Taxes)</Text>
-                  <Text style={styles.orderButtonMain}>Pay Now via Razorpay</Text>
+                  <Text style={styles.orderButtonMain}>
+                    {paymentMode === 'cod'
+                      ? `Place Order (Cash on Delivery)`
+                      : `Pay Now • ₹${totalAmount.toFixed(2)}`}
+                  </Text>
                 </View>
                 <Ionicons name="arrow-forward" size={22} color={COLORS.white} />
               </>
@@ -1038,6 +1147,117 @@ const styles = StyleSheet.create({
   content: {
     padding: 16,
     paddingBottom: Platform.OS === 'android' ? 100 : 85,
+  },
+  // Modern Diesel Card matching Screenshot 2
+  dieselRateCardModern: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  dieselThumbBox: {
+    width: 52,
+    height: 52,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+    overflow: 'hidden',
+  },
+  dieselThumbImg: {
+    width: 48,
+    height: 48,
+  },
+  dieselInfoCol: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  dieselCardTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 3,
+  },
+  dieselCardPrice: {
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  dieselQtyBox: {
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dieselQtyText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  // Payment Method Selection Styles
+  paymentOptionCard: {
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+    backgroundColor: '#FAFAFA',
+  },
+  paymentOptionCardActive: {
+    borderColor: COLORS.primary,
+    backgroundColor: '#FEF2F2',
+  },
+  paymentRadioRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  paymentOptionTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  paymentOptionSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 3,
+    lineHeight: 16,
+  },
+  onlineBadge: {
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  onlineBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#059669',
+  },
+  codBadge: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  codBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#B45309',
   },
   rateCard: {
     flexDirection: 'row',

@@ -95,63 +95,34 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
     >
       {/* Top Banner Row: Side by Side Boxes on Desktop, Stacked on Mobile */}
       <View style={[styles.topRow, isDesktop && styles.desktopTopRow]}>
-        {/* 1. Live Diesel Rate Box */}
-        <View style={[styles.rateCard, isDesktop && styles.desktopRateCard]}>
-          {isDesktop ? (
-            /* Desktop Layout for Rate Box */
-            <View style={styles.desktopRateCardContent}>
-              <View style={styles.desktopRateTop}>
-                <View style={styles.fuelIcon}>
-                  <Ionicons name="flame" size={24} color={COLORS.secondary} />
-                </View>
-                <View style={{ flex: 1, marginLeft: 10 }}>
-                  <Text style={styles.rateSubtitle}>TODAY'S LIVE RATE ({rateCity.toUpperCase()})</Text>
-                  <View style={styles.qualityBadge}>
-                    <Ionicons name="shield-checkmark" size={11} color="#10B981" />
-                    <Text style={styles.qualityBadgeText}>Quality Assured</Text>
-                  </View>
-                </View>
-              </View>
+        {/* 1. Live Diesel Rate Card (Styled exactly as requested in Screenshot 2) */}
+        <TouchableOpacity
+          style={[styles.dieselRateCardModern, isDesktop && styles.desktopRateCardModern]}
+          onPress={() => onNavigate('order')}
+          activeOpacity={0.88}
+        >
+          {/* Left: 3D Fuel Bowser Truck Icon in rounded gray box */}
+          <View style={styles.dieselThumbBox}>
+            <Image
+              source={require('../../assets/images/diesel-tanker-card-icon.png')}
+              style={styles.dieselThumbImg}
+              resizeMode="contain"
+            />
+          </View>
 
-              <View style={styles.desktopRateMiddle}>
-                <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
-                  <Text style={styles.desktopRateValue}>₹{fuelRate.toFixed(2)}</Text>
-                  <Text style={styles.desktopRateUnit}>/ Liter</Text>
-                </View>
-                <Text style={styles.desktopRateFuelType}>BS-VI High Speed Doorstep Diesel</Text>
-              </View>
+          {/* Middle: Title & Price */}
+          <View style={styles.dieselInfoCol}>
+            <Text style={styles.dieselCardTitle}>Diesel</Text>
+            <Text style={styles.dieselCardPrice}>
+              Price - {fuelRate.toFixed(2)} / 1 Liter
+            </Text>
+          </View>
 
-              <TouchableOpacity
-                style={styles.desktopRateOrderBtn}
-                onPress={() => onNavigate('order')}
-                activeOpacity={0.88}
-              >
-                <Text style={styles.desktopRateOrderBtnText}>Order Diesel at ₹{fuelRate.toFixed(2)}</Text>
-                <Ionicons name="arrow-forward" size={15} color={COLORS.primary} />
-              </TouchableOpacity>
-            </View>
-          ) : (
-            /* Mobile Layout for Rate Box (Compact Horizontal) */
-            <>
-              <View style={styles.rateLeft}>
-                <View style={styles.fuelIcon}>
-                  <Ionicons name="flame" size={22} color={COLORS.secondary} />
-                </View>
-                <View style={styles.rateLeftTextWrap}>
-                  <Text style={styles.rateSubtitle}>Today's Live Rate ({rateCity})</Text>
-                  <Text style={styles.rateTitle} numberOfLines={1}>
-                    BS-VI High Speed Diesel
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.rateRight}>
-                <Text style={styles.rateValue}>₹{fuelRate.toFixed(2)}</Text>
-                <Text style={styles.rateUnit}>per Liter</Text>
-              </View>
-            </>
-          )}
-        </View>
+          {/* Right: Outlined 1 L Box */}
+          <View style={styles.dieselQtyBox}>
+            <Text style={styles.dieselQtyText}>1 L</Text>
+          </View>
+        </TouchableOpacity>
 
         {/* 2. Slide Images Box (Our Vehicles Showcase) */}
         <View style={[styles.heroVehicleCard, isDesktop && styles.desktopHeroVehicleCard]}>
@@ -458,6 +429,72 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.85)',
     fontSize: 10.5,
     fontWeight: '700',
+  },
+  // Modern Diesel Card matching Screenshot 2
+  dieselRateCardModern: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  desktopRateCardModern: {
+    flex: 1,
+    marginBottom: 0,
+    paddingVertical: 16,
+  },
+  dieselThumbBox: {
+    width: 52,
+    height: 52,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+    overflow: 'hidden',
+  },
+  dieselThumbImg: {
+    width: 48,
+    height: 48,
+  },
+  dieselInfoCol: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  dieselCardTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 3,
+  },
+  dieselCardPrice: {
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  dieselQtyBox: {
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dieselQtyText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
   },
   heroVehicleCard: {
     width: '100%',

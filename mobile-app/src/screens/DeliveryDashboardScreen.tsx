@@ -41,6 +41,8 @@ interface DeliveryOrder {
   total: number;
   status: 'pending' | 'assigned' | 'out_for_delivery' | 'arrived' | 'delivered' | 'cancelled';
   statusText?: string;
+  paymentMethod?: string;
+  paymentStatus?: string;
   address: string;
   mapsLink?: string | null;
   vehicleType?: string;
@@ -72,6 +74,9 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
   const [captainCoords, setCaptainCoords] = useState<{ lat: number; lon: number } | null>(null);
   const [lastGpsSyncTime, setLastGpsSyncTime] = useState<string | null>(null);
   const gpsIntervalRef = useRef<any>(null);
+
+  // Cash on Delivery Collection Modal State
+  const [cashCollectOrder, setCashCollectOrder] = useState<DeliveryOrder | null>(null);
 
   const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'https://extradiesel.in';
   const driverEmail = currentUser?.email || 'delivery@extradiesel.in';
@@ -199,7 +204,8 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
   // Handle Status Update (Out for Delivery, Arrived at Site, or Delivered)
   const handleUpdateStatus = async (
     orderId: string,
-    newStatus: 'out_for_delivery' | 'arrived' | 'delivered'
+    newStatus: 'out_for_delivery' | 'arrived' | 'delivered',
+    extraPayload?: { paymentStatus?: string; paymentMethod?: string }
   ) => {
     setUpdatingOrderId(orderId);
     try {
@@ -215,6 +221,7 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
         body: JSON.stringify({
           status: newStatus,
           statusText: statusTextMap[newStatus],
+          ...(extraPayload || {}),
         }),
       });
 
@@ -234,6 +241,21 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
       Alert.alert('Error', e.message || 'Connection error');
     } finally {
       setUpdatingOrderId(null);
+    }
+  };
+
+  // Handle Mark Delivered click with COD check
+  const handleDeliveredClick = (order: DeliveryOrder) => {
+    const isCod =
+      order.paymentMethod?.toLowerCase().includes('cash') ||
+      order.paymentStatus === 'pending' ||
+      order.paymentStatus === 'COD_PENDING';
+
+    if (isCod) {
+      // Prompt modal to collect cash before completing delivery
+      setCashCollectOrder(order);
+    } else {
+      handleUpdateStatus(order.id, 'delivered');
     }
   };
 
@@ -472,11 +494,38 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
 
                   <View style={styles.divider} />
 
-                  {/* Payment Info */}
-                  <View style={styles.paymentRow}>
-                    <Text style={styles.paymentLabel}>Total Collectable</Text>
-                    <Text style={styles.paymentAmount}>₹{Number(order.total).toLocaleString('en-IN')}</Text>
-                  </View>
+                  {/* Payment Info & Status */}
+                  {order.paymentMethod?.toLowerCase().includes('cash') ||
+                  order.paymentStatus === 'pending' ||
+                  order.paymentStatus === 'COD_PENDING' ? (
+                    <View style={styles.codPaymentBox}>
+                      <View style={{ flex: 1, marginRight: 8 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Ionicons name="cash" size={16} color="#B45309" />
+                          <Text style={styles.codPaymentTitle}>Cash on Delivery (Pay at Site)</Text>
+                        </View>
+                        <Text style={styles.codPaymentSub}>Collect cash from customer before delivery</Text>
+                      </View>
+                      <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
+                        <Text style={styles.codPaymentLabel}>To Collect</Text>
+                        <Text style={styles.codPaymentAmount}>₹{Number(order.total).toLocaleString('en-IN')}</Text>
+                      </View>
+                    </View>
+                  ) : (
+                    <View style={styles.onlinePaymentBox}>
+                      <View style={{ flex: 1, marginRight: 8 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Ionicons name="checkmark-circle" size={16} color="#059669" />
+                          <Text style={styles.onlinePaymentTitle}>Prepaid Online</Text>
+                        </View>
+                        <Text style={styles.onlinePaymentSub}>Payment completed via UPI/Cards</Text>
+                      </View>
+                      <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
+                        <Text style={styles.onlinePaymentLabel}>Amount Paid</Text>
+                        <Text style={styles.onlinePaymentAmount}>₹{Number(order.total).toLocaleString('en-IN')}</Text>
+                      </View>
+                    </View>
+                  )}
 
                   {/* Driver Delivery Actions */}
                   <View style={styles.deliveryActionButtons}>
@@ -522,7 +571,7 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
                     {(isArrived || isOutForDelivery) && (
                       <TouchableOpacity
                         style={styles.deliveredBtn}
-                        onPress={() => handleUpdateStatus(order.id, 'delivered')}
+                        onPress={() => handleDeliveredClick(order)}
                         disabled={updatingOrderId === order.id}
                         activeOpacity={0.85}
                       >
@@ -566,11 +615,27 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
                 <View style={styles.divider} />
 
                 <View style={styles.customerRow}>
-                  <View>
+                  <View style={{ flex: 1, marginRight: 12 }}>
                     <Text style={styles.customerName}>{order.name}</Text>
-                    <Text style={styles.customerPhone}>📍 {order.address}</Text>
+                    <Text style={styles.customerAddressText} numberOfLines={2}>
+                      📍 {order.address}
+                    </Text>
+                    {/* Payment status badge */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                      {order.paymentMethod?.toLowerCase().includes('cash') ? (
+                        <View style={styles.codDeliveredBadge}>
+                          <Ionicons name="cash" size={12} color="#B45309" />
+                          <Text style={styles.codDeliveredBadgeText}>Cash Collected</Text>
+                        </View>
+                      ) : (
+                        <View style={styles.onlineDeliveredBadge}>
+                          <Ionicons name="checkmark-circle" size={12} color="#059669" />
+                          <Text style={styles.onlineDeliveredBadgeText}>Paid Online</Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
-                  <View style={{ alignItems: 'flex-end' }}>
+                  <View style={{ alignItems: 'flex-end', flexShrink: 0, minWidth: 80 }}>
                     <Text style={styles.fuelLiters}>{order.liters} L</Text>
                     <Text style={styles.paymentAmount}>₹{Number(order.total).toLocaleString('en-IN')}</Text>
                   </View>
@@ -633,6 +698,74 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
                 activeOpacity={0.7}
               >
                 <Text style={styles.gpsDenyBtnText}>Deny / Not Now</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Cash on Delivery Collection Confirmation Modal */}
+      <Modal
+        visible={!!cashCollectOrder}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setCashCollectOrder(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.cashModalCard, isDesktop && { maxWidth: 440 }]}>
+            <View style={styles.cashIconCircle}>
+              <Ionicons name="cash" size={34} color="#B45309" />
+            </View>
+
+            <Text style={styles.cashModalTitle}>Collect Cash on Delivery</Text>
+            <Text style={styles.cashModalSub}>
+              This is a Cash on Delivery order. Please collect cash from the customer before completing fuel delivery.
+            </Text>
+
+            {cashCollectOrder && (
+              <View style={styles.cashBillBox}>
+                <View style={styles.cashBillRow}>
+                  <Text style={styles.cashBillLabel}>Customer Name:</Text>
+                  <Text style={styles.cashBillVal}>{cashCollectOrder.name}</Text>
+                </View>
+                <View style={styles.cashBillRow}>
+                  <Text style={styles.cashBillLabel}>Fuel Dispensed:</Text>
+                  <Text style={styles.cashBillVal}>{cashCollectOrder.liters} Liters (BS-VI)</Text>
+                </View>
+                <View style={styles.cashDivider} />
+                <View style={styles.cashBillRow}>
+                  <Text style={styles.cashTotalLabel}>Cash to Collect:</Text>
+                  <Text style={styles.cashTotalVal}>
+                    ₹{Number(cashCollectOrder.total).toLocaleString('en-IN')}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            <View style={styles.cashModalActions}>
+              <TouchableOpacity
+                style={styles.cashConfirmBtn}
+                onPress={() => {
+                  if (cashCollectOrder) {
+                    handleUpdateStatus(cashCollectOrder.id, 'delivered', {
+                      paymentStatus: 'paid',
+                      paymentMethod: 'Cash on Delivery (Collected)',
+                    });
+                    setCashCollectOrder(null);
+                  }
+                }}
+                activeOpacity={0.88}
+              >
+                <Ionicons name="checkmark-done" size={20} color="#FFFFFF" />
+                <Text style={styles.cashConfirmBtnText}>✅ Cash Received & Mark Delivered</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.cashCancelBtn}
+                onPress={() => setCashCollectOrder(null)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.cashCancelBtnText}>Cancel</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1147,6 +1280,214 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   gpsDenyBtnText: {
+    color: '#64748B',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  // Payment box in active deliveries
+  codPaymentBox: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 10,
+    padding: 12,
+  },
+  codPaymentTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#B45309',
+  },
+  codPaymentSub: {
+    fontSize: 11.5,
+    color: '#92400E',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  codPaymentLabel: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#B45309',
+    textTransform: 'uppercase',
+  },
+  codPaymentAmount: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#B45309',
+  },
+  onlinePaymentBox: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: 10,
+    padding: 12,
+  },
+  onlinePaymentTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#15803D',
+  },
+  onlinePaymentSub: {
+    fontSize: 11.5,
+    color: '#166534',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  onlinePaymentLabel: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#15803D',
+    textTransform: 'uppercase',
+  },
+  onlinePaymentAmount: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#15803D',
+  },
+  // Completed card elements
+  customerAddressText: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  codDeliveredBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  codDeliveredBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#B45309',
+  },
+  onlineDeliveredBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  onlineDeliveredBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  // Cash on Delivery Collection Modal Styles
+  cashModalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  cashIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#FEF3C7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  cashModalTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#0F172A',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  cashModalSub: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 19,
+    marginBottom: 18,
+  },
+  cashBillBox: {
+    width: '100%',
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+  },
+  cashBillRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  cashBillLabel: {
+    fontSize: 13,
+    color: '#78350F',
+    fontWeight: '600',
+  },
+  cashBillVal: {
+    fontSize: 13,
+    color: '#0F172A',
+    fontWeight: '700',
+  },
+  cashDivider: {
+    height: 1,
+    backgroundColor: '#FDE68A',
+    marginVertical: 8,
+  },
+  cashTotalLabel: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+  cashTotalVal: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#B45309',
+  },
+  cashModalActions: {
+    width: '100%',
+    gap: 10,
+  },
+  cashConfirmBtn: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#059669',
+    paddingVertical: 14,
+    borderRadius: 12,
+    width: '100%',
+  },
+  cashConfirmBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14.5,
+    fontWeight: '800',
+  },
+  cashCancelBtn: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+    width: '100%',
+  },
+  cashCancelBtnText: {
     color: '#64748B',
     fontSize: 14,
     fontWeight: '700',

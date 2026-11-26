@@ -1735,7 +1735,7 @@ app.post('/api/admin/orders/assign', (req, res) => {
 app.patch('/api/orders/:id/status', (req, res) => {
   try {
     const { id } = req.params;
-    const { status, statusText } = req.body;
+    const { status, statusText, paymentStatus, paymentMethod } = req.body;
 
     if (!id || !status) {
       return res.status(400).json({ success: false, error: 'Order ID and status are required' });
@@ -1760,16 +1760,26 @@ app.patch('/api/orders/:id/status', (req, res) => {
     allOrders[orderIndex].status = status;
     allOrders[orderIndex].statusText = statusText || readableStatusMap[status] || status;
 
+    if (paymentStatus) {
+      allOrders[orderIndex].paymentStatus = paymentStatus;
+    }
+    if (paymentMethod) {
+      allOrders[orderIndex].paymentMethod = paymentMethod;
+    }
+
     if (status === 'out_for_delivery') {
       allOrders[orderIndex].dispatchedAt = new Date().toISOString();
     } else if (status === 'arrived') {
       allOrders[orderIndex].arrivedAt = new Date().toISOString();
     } else if (status === 'delivered') {
       allOrders[orderIndex].deliveredAt = new Date().toISOString();
+      if (allOrders[orderIndex].paymentMethod && allOrders[orderIndex].paymentMethod.toLowerCase().includes('cash')) {
+        allOrders[orderIndex].paymentStatus = 'paid';
+      }
     }
 
     saveOrders(allOrders);
-    console.log(`[Orders] Updated order #${id} status to ${status}`);
+    console.log(`[Orders] Updated order #${id} status to ${status} (paymentStatus: ${allOrders[orderIndex].paymentStatus})`);
 
     res.json({ success: true, message: 'Order status updated successfully', order: allOrders[orderIndex] });
   } catch (error) {
@@ -1857,6 +1867,19 @@ app.get('/api/invoice/:orderId/html', (req, res) => {
     const cgst = (taxAmt / 2).toFixed(2);
     const sgst = (taxAmt / 2).toFixed(2);
     const grandTotal = Number(order.total) || (fuelTotal + delFee + taxAmt);
+
+    const isCod = order.paymentMethod && order.paymentMethod.toLowerCase().includes('cash');
+    const isPaid = order.paymentStatus === 'paid' || order.status === 'delivered';
+    const paymentBadgeHtml = isCod
+      ? (isPaid
+          ? '<div class="badge-paid" style="background: #DCFCE7; color: #15803D;">✓ CASH COLLECTED ON DELIVERY</div>'
+          : '<div class="badge-paid" style="background: #FEF3C7; color: #B45309;">💵 CASH ON DELIVERY (TO COLLECT AT SITE)</div>')
+      : '<div class="badge-paid">✓ PAID ONLINE (UPI / CARDS / NETBANKING)</div>';
+
+    const paymentModeLabel = isCod ? 'Cash on Delivery (Pay at Site)' : (order.paymentMethod || 'Online Prepaid (UPI / Cards / NetBanking)');
+    const paymentStatusLabel = isCod
+      ? (isPaid ? 'Cash Received & Fuel Delivered' : 'Pending Cash Collection on Delivery')
+      : 'Completed & Reconciled (Prepaid)';
 
     // Read high-res EXTRA DIESEL logo from disk and embed as Base64 for 100% offline & PDF reliability
     let logoBase64 = '';
@@ -1969,7 +1992,7 @@ app.get('/api/invoice/:orderId/html', (req, res) => {
         <div class="invoice-title">TAX INVOICE</div>
         <div class="invoice-num">#INV-${order.id}</div>
         <div class="invoice-date">Date: ${order.date || new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' })}</div>
-        <div class="badge-paid">✓ PAID VIA RAZORPAY</div>
+        ${paymentBadgeHtml}
       </div>
     </div>
 
@@ -2057,8 +2080,8 @@ app.get('/api/invoice/:orderId/html', (req, res) => {
 
     <div class="signatures">
       <div class="sig-block">
-        <div><strong>Payment Mode:</strong> Razorpay Online Prepaid (UPI / Cards / NetBanking)</div>
-        <div><strong>Transaction Status:</strong> Completed & Reconciled</div>
+        <div><strong>Payment Mode:</strong> ${paymentModeLabel}</div>
+        <div><strong>Transaction Status:</strong> ${paymentStatusLabel}</div>
         <div style="margin-top: 6px; font-size: 11px; color: #94A3B8;">This is a computer-generated tax invoice and requires no physical signature.</div>
       </div>
       <div style="text-align: right;">
