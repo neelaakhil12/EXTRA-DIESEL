@@ -49,6 +49,19 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
 
   // Screen state: 'login' or 'signup'
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
+  // Role tab state: 'customer' | 'delivery'
+  const [userRoleTab, setUserRoleTab] = useState<'customer' | 'delivery'>('customer');
+
+  // Forgot Password Modal State
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotOtpSent, setForgotOtpSent] = useState(false);
+  const [forgotOtp, setForgotOtp] = useState('');
+  const [forgotNewPassword, setForgotNewPassword] = useState('');
+  const [forgotConfirmPassword, setForgotConfirmPassword] = useState('');
+  const [showForgotNewPassword, setShowForgotNewPassword] = useState(false);
+  const [isSendingForgotOtp, setIsSendingForgotOtp] = useState(false);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
 
   // Login inputs (Empty by default)
   const [loginEmail, setLoginEmail] = useState('');
@@ -147,7 +160,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
 
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  // 1. Handle Email/Password Login (Authenticates Admin, Delivery Boys, and Customers)
+  // 1. Handle Email/Password Login (Differentiates Delivery Partner and Customer)
   const handleLogin = async () => {
     if (!loginEmail.trim() || !loginEmail.includes('@')) {
       Alert.alert('Invalid Email', 'Please enter a valid email address.');
@@ -166,6 +179,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
         body: JSON.stringify({
           email: loginEmail.trim(),
           password: loginPassword,
+          loginRole: userRoleTab,
         }),
       });
 
@@ -175,19 +189,86 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
       if (data.success && data.user) {
         onLoginSuccess(data.user);
       } else {
-        Alert.alert('Login Failed', data.error || 'Invalid credentials. Please check your email and password.');
+        Alert.alert(
+          data.error?.toLowerCase().includes('account not found') ? 'Account Not Found' : 'Login Failed',
+          data.error || 'Invalid credentials. Please check your email and password.'
+        );
       }
     } catch (err: any) {
       setIsLoggingIn(false);
-      const emailLower = loginEmail.trim().toLowerCase();
-      const isAdmin = ['aadhyafuels9@gmail.com'].includes(emailLower);
-      const isDelivery = emailLower.includes('delivery') || emailLower.includes('driver');
-      onLoginSuccess({
-        name: loginEmail.split('@')[0].toUpperCase(),
-        email: loginEmail.trim(),
-        phone: '',
-        role: isAdmin ? 'admin' : isDelivery ? 'delivery' : 'customer',
+      Alert.alert('Connection Error', 'Unable to reach the authentication server. Please check your internet connection.');
+    }
+  };
+
+  // Forgot Password: Send OTP to user's registered email
+  const handleSendForgotOtp = async () => {
+    if (!forgotEmail.trim() || !forgotEmail.includes('@')) {
+      Alert.alert('Invalid Email', 'Please enter your registered email address.');
+      return;
+    }
+    try {
+      setIsSendingForgotOtp(true);
+      const res = await fetch(`${API_BASE}/api/auth/forgot-password/send-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotEmail.trim() }),
       });
+      const data = await res.json();
+      setIsSendingForgotOtp(false);
+      if (data.success) {
+        setForgotOtpSent(true);
+        Alert.alert('Code Sent', `A 6-digit password reset code has been sent to ${forgotEmail.trim()}.`);
+      } else {
+        Alert.alert('Reset Failed', data.error || 'No account registered with this email.');
+      }
+    } catch (e) {
+      setIsSendingForgotOtp(false);
+      Alert.alert('Connection Error', 'Unable to reach the server. Please check your internet connection.');
+    }
+  };
+
+  // Forgot Password: Submit OTP and update new password
+  const handleResetPasswordSubmit = async () => {
+    if (!forgotOtp || forgotOtp.trim().length !== 6) {
+      Alert.alert('Enter OTP', 'Please enter the 6-digit code sent to your email.');
+      return;
+    }
+    if (!forgotNewPassword || forgotNewPassword.length < 6) {
+      Alert.alert('Password Length', 'New password must be at least 6 characters.');
+      return;
+    }
+    if (forgotNewPassword !== forgotConfirmPassword) {
+      Alert.alert('Password Mismatch', 'Passwords do not match. Please re-enter.');
+      return;
+    }
+
+    try {
+      setIsResettingPassword(true);
+      const res = await fetch(`${API_BASE}/api/auth/forgot-password/reset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: forgotEmail.trim(),
+          otp: forgotOtp.trim(),
+          newPassword: forgotNewPassword,
+        }),
+      });
+      const data = await res.json();
+      setIsResettingPassword(false);
+      if (data.success) {
+        Alert.alert('Success', 'Password reset successfully! You can now log in with your new password.');
+        setLoginEmail(forgotEmail.trim());
+        setShowForgotModal(false);
+        setForgotOtpSent(false);
+        setForgotOtp('');
+        setForgotNewPassword('');
+        setForgotConfirmPassword('');
+      } else {
+        Alert.alert('Verification Failed', data.error || 'Invalid or expired OTP.');
+      }
+    } catch (e) {
+      setIsResettingPassword(false);
+      Alert.alert('Connection Error', 'Unable to reach the server. Please check your internet connection.');
     }
   };
 
@@ -277,51 +358,38 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
     }
   };
 
-  // 3. Handle Google Account Selection - Instant 0-second Login & Background Sync
+  // 3. Handle Google Account Selection - Only permits login if account exists on backend
   const handleSelectGoogleAccount = async (account: { name: string; email: string }) => {
     const cleanEmail = account.email.toLowerCase().trim();
     const cleanName = (account.name && account.name.trim()) || cleanEmail.split('@')[0];
-    const isAdmin = cleanEmail === 'aadhyafuels9@gmail.com';
-    let savedPhone = '';
+
     try {
-      const sp = await AsyncStorage.getItem('ed_user_phone');
-      if (sp) savedPhone = sp;
-    } catch (e) {}
-
-    const instantUser: UserData = {
-      name: cleanName,
-      email: cleanEmail,
-      phone: savedPhone,
-      role: isAdmin ? 'admin' : 'customer',
-      authProvider: 'google',
-    };
-
-    // INSTANT: Enter the app immediately without 5-second network delay
-    setIsCheckingGoogleAuth(false);
-    setShowGoogleModal(false);
-    onLoginSuccess(instantUser);
-
-    // Sync registration record in backend asynchronously in background
-    fetch(`${API_BASE}/api/auth/google-auth`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: cleanEmail, name: cleanName }),
-    })
-      .then((r) => r.json())
-      .then((data) => {
-        if (data?.success && data?.user) {
-          if (data.user.phone) {
-            AsyncStorage.setItem('ed_user_phone', data.user.phone).catch(() => {});
-          }
-          onLoginSuccess({
-            ...data.user,
-            phone: data.user.phone || savedPhone,
-          });
-        }
-      })
-      .catch((err) => {
-        console.warn('Background Google Auth sync error:', err);
+      setIsCheckingGoogleAuth(true);
+      const res = await fetch(`${API_BASE}/api/auth/google-auth`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail, name: cleanName }),
       });
+      const data = await res.json();
+      setIsCheckingGoogleAuth(false);
+      setShowGoogleModal(false);
+
+      if (data?.success && data?.user) {
+        if (data.user.phone) {
+          AsyncStorage.setItem('ed_user_phone', data.user.phone).catch(() => {});
+        }
+        onLoginSuccess(data.user);
+      } else {
+        Alert.alert(
+          'Account Not Found',
+          data?.error || 'No Extra Diesel account found with this Google ID. Please click Sign Up to register.'
+        );
+      }
+    } catch (err) {
+      setIsCheckingGoogleAuth(false);
+      setShowGoogleModal(false);
+      Alert.alert('Sign-In Error', 'Unable to verify account with server. Please check your internet connection.');
+    }
   };
 
   // 3. Handle Send OTP to Email via SMTP Backend
@@ -479,9 +547,157 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
           />
         </View>
 
-        {authMode === 'login' ? (
+        {/* Top Segmented Role Tabs: Customer Login vs Delivery Partner Login */}
+        <View style={styles.roleTabsContainer}>
+          <TouchableOpacity
+            style={[styles.roleTab, userRoleTab === 'customer' && styles.roleTabActive]}
+            onPress={() => {
+              setUserRoleTab('customer');
+              setAuthMode('login');
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name="person"
+              size={15}
+              color={userRoleTab === 'customer' ? COLORS.white : '#64748B'}
+            />
+            <Text style={[styles.roleTabText, userRoleTab === 'customer' && styles.roleTabTextActive]}>
+              Customer Login
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.roleTab, userRoleTab === 'delivery' && styles.roleTabActive]}
+            onPress={() => {
+              setUserRoleTab('delivery');
+              setAuthMode('login');
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name="car"
+              size={15}
+              color={userRoleTab === 'delivery' ? COLORS.white : '#64748B'}
+            />
+            <Text style={[styles.roleTabText, userRoleTab === 'delivery' && styles.roleTabTextActive]}>
+              Delivery Partner
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {userRoleTab === 'delivery' ? (
           /* =========================================================================
-             SIGN IN PAGE (Email + Password -> Login Button -> Google -> Sign Up)
+             DELIVERY PARTNER LOGIN (Bowser Captains - Registered by Admin Only)
+             ========================================================================= */
+          <View style={styles.card}>
+            <View style={styles.deliveryCardHeaderRow}>
+              <View>
+                <Text style={styles.cardHeading}>Delivery Partner Sign In</Text>
+                <Text style={styles.cardSub}>Authorized Bowser Drivers • Enter admin credentials</Text>
+              </View>
+              <View style={styles.captainBadgePill}>
+                <Ionicons name="shield-checkmark" size={13} color="#D97706" />
+                <Text style={styles.captainBadgePillText}>Captain Portal</Text>
+              </View>
+            </View>
+
+            {/* Admin Registered Notice Banner */}
+            <View style={styles.deliveryShieldBox}>
+              <Ionicons name="information-circle" size={18} color="#B45309" />
+              <Text style={styles.deliveryShieldText}>
+                Only delivery partners registered by Extra Diesel Admin can log in. If you don't have credentials, please contact the dispatch admin.
+              </Text>
+            </View>
+
+            {/* Email Input */}
+            <Text style={styles.inputLabel}>Delivery Partner Email</Text>
+            <View style={styles.inputWrap}>
+              <Ionicons name="mail-outline" size={18} color={COLORS.muted} style={styles.inputIcon} />
+              <TextInput
+                style={styles.textInput}
+                placeholder="captain@extradiesel.in"
+                placeholderTextColor="#94A3B8"
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="one-time-code"
+                textContentType="none"
+                importantForAutofill="no"
+                readOnly={!isFormReady}
+                value={loginEmail}
+                onChangeText={setLoginEmail}
+              />
+            </View>
+
+            {/* Password Input */}
+            <Text style={styles.inputLabel}>Password</Text>
+            <View style={styles.inputWrap}>
+              <Ionicons name="lock-closed-outline" size={18} color={COLORS.muted} style={styles.inputIcon} />
+              <TextInput
+                style={styles.textInput}
+                placeholder="Enter captain password"
+                placeholderTextColor="#94A3B8"
+                secureTextEntry={(loginPasswordFocused || loginPassword.length > 0) && !showLoginPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="new-password"
+                textContentType="none"
+                importantForAutofill="no"
+                readOnly={!isFormReady}
+                onFocus={() => setLoginPasswordFocused(true)}
+                value={loginPassword}
+                onChangeText={(val) => {
+                  setLoginPasswordFocused(true);
+                  setLoginPassword(val);
+                }}
+              />
+              <TouchableOpacity
+                onPress={() => setShowLoginPassword(!showLoginPassword)}
+                style={styles.eyeBtn}
+              >
+                <Ionicons
+                  name={showLoginPassword ? 'eye-off-outline' : 'eye-outline'}
+                  size={18}
+                  color={COLORS.muted}
+                />
+              </TouchableOpacity>
+            </View>
+
+            {/* Forgot Password Link */}
+            <TouchableOpacity
+              style={styles.forgotBtn}
+              onPress={() => {
+                setForgotEmail(loginEmail.trim());
+                setForgotOtpSent(false);
+                setForgotOtp('');
+                setForgotNewPassword('');
+                setForgotConfirmPassword('');
+                setShowForgotModal(true);
+              }}
+            >
+              <Text style={styles.forgotText}>Forgot Password?</Text>
+            </TouchableOpacity>
+
+            {/* Delivery Partner Sign In Button */}
+            <TouchableOpacity
+              style={[styles.primaryButton, { backgroundColor: '#1E293B', marginTop: 8 }]}
+              onPress={handleLogin}
+              disabled={isLoggingIn}
+              activeOpacity={0.85}
+            >
+              {isLoggingIn ? (
+                <ActivityIndicator size="small" color={COLORS.white} />
+              ) : (
+                <>
+                  <Ionicons name="car" size={18} color={COLORS.white} />
+                  <Text style={styles.primaryButtonText}>Sign In as Delivery Partner</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        ) : authMode === 'login' ? (
+          /* =========================================================================
+             CUSTOMER SIGN IN PAGE (Email + Password -> Login Button -> Google -> Sign Up)
              ========================================================================= */
           <View style={styles.card}>
             <Text style={styles.cardHeading}>Sign In to Your Account</Text>
@@ -543,15 +759,33 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
             {/* Forgot Password Link */}
             <TouchableOpacity
               style={styles.forgotBtn}
-              onPress={() => Alert.alert('Reset Password', `Reset instructions sent to ${loginEmail}`)}
+              onPress={() => {
+                setForgotEmail(loginEmail.trim());
+                setForgotOtpSent(false);
+                setForgotOtp('');
+                setForgotNewPassword('');
+                setForgotConfirmPassword('');
+                setShowForgotModal(true);
+              }}
             >
               <Text style={styles.forgotText}>Forgot Password?</Text>
             </TouchableOpacity>
 
             {/* 1. Login / Sign In Button */}
-            <TouchableOpacity style={styles.primaryButton} onPress={handleLogin} activeOpacity={0.85}>
-              <Text style={styles.primaryButtonText}>Sign In</Text>
-              <Ionicons name="arrow-forward" size={18} color={COLORS.white} />
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={handleLogin}
+              disabled={isLoggingIn}
+              activeOpacity={0.85}
+            >
+              {isLoggingIn ? (
+                <ActivityIndicator size="small" color={COLORS.white} />
+              ) : (
+                <>
+                  <Text style={styles.primaryButtonText}>Sign In</Text>
+                  <Ionicons name="arrow-forward" size={18} color={COLORS.white} />
+                </>
+              )}
             </TouchableOpacity>
 
             {/* Divider */}
@@ -565,10 +799,17 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
             <TouchableOpacity
               style={styles.googleButton}
               onPress={handleGoogleSignIn}
+              disabled={isCheckingGoogleAuth}
               activeOpacity={0.85}
             >
-              <Ionicons name="logo-google" size={18} color="#EA4335" />
-              <Text style={styles.googleButtonText}>Sign in with Google</Text>
+              {isCheckingGoogleAuth ? (
+                <ActivityIndicator size="small" color="#EA4335" />
+              ) : (
+                <>
+                  <Ionicons name="logo-google" size={18} color="#EA4335" />
+                  <Text style={styles.googleButtonText}>Sign in with Google</Text>
+                </>
+              )}
             </TouchableOpacity>
 
             {/* 3. Sign Up Option Under Google */}
@@ -892,6 +1133,130 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
           </View>
         </View>
       </Modal>
+
+      {/* Forgot Password Modal */}
+      <Modal
+        visible={showForgotModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowForgotModal(false)}
+      >
+        <View style={styles.forgotModalOverlay}>
+          <View style={[styles.forgotModalCard, isDesktop && { maxWidth: 440 }]}>
+            <View style={styles.forgotModalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="key-outline" size={22} color={COLORS.primary} />
+                <Text style={styles.forgotModalTitle}>Reset Password</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowForgotModal(false)} style={styles.closeBtn}>
+                <Ionicons name="close" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.forgotModalSub}>
+              Enter your registered Extra Diesel email address to receive a 6-digit password reset verification code.
+            </Text>
+
+            {/* Email Field with Send OTP Button */}
+            <Text style={styles.inputLabel}>Registered Email</Text>
+            <View style={[styles.inputWrap, { marginBottom: 12 }]}>
+              <Ionicons name="mail-outline" size={18} color={COLORS.muted} style={styles.inputIcon} />
+              <TextInput
+                style={[styles.textInput, { flex: 1 }]}
+                placeholder="registered@email.com"
+                placeholderTextColor="#94A3B8"
+                autoCapitalize="none"
+                keyboardType="email-address"
+                autoCorrect={false}
+                value={forgotEmail}
+                onChangeText={setForgotEmail}
+              />
+              <TouchableOpacity
+                style={styles.forgotSendOtpBtn}
+                onPress={handleSendForgotOtp}
+                disabled={isSendingForgotOtp}
+              >
+                {isSendingForgotOtp ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <Text style={styles.forgotSendOtpText}>{forgotOtpSent ? 'Resend' : 'Send OTP'}</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            {forgotOtpSent && (
+              <>
+                {/* 6-Digit OTP Input */}
+                <Text style={styles.inputLabel}>6-Digit Verification Code</Text>
+                <View style={[styles.inputWrap, { marginBottom: 12 }]}>
+                  <Ionicons name="shield-checkmark-outline" size={18} color={COLORS.muted} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="Enter 6-digit OTP from email"
+                    placeholderTextColor="#94A3B8"
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    value={forgotOtp}
+                    onChangeText={setForgotOtp}
+                  />
+                </View>
+
+                {/* New Password */}
+                <Text style={styles.inputLabel}>New Password</Text>
+                <View style={[styles.inputWrap, { marginBottom: 12 }]}>
+                  <Ionicons name="lock-closed-outline" size={18} color={COLORS.muted} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="At least 6 characters"
+                    placeholderTextColor="#94A3B8"
+                    secureTextEntry={!showForgotNewPassword}
+                    value={forgotNewPassword}
+                    onChangeText={setForgotNewPassword}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowForgotNewPassword(!showForgotNewPassword)}
+                    style={styles.eyeBtn}
+                  >
+                    <Ionicons
+                      name={showForgotNewPassword ? 'eye-off-outline' : 'eye-outline'}
+                      size={18}
+                      color={COLORS.muted}
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Confirm New Password */}
+                <Text style={styles.inputLabel}>Confirm New Password</Text>
+                <View style={[styles.inputWrap, { marginBottom: 16 }]}>
+                  <Ionicons name="lock-closed-outline" size={18} color={COLORS.muted} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="Re-enter new password"
+                    placeholderTextColor="#94A3B8"
+                    secureTextEntry={!showForgotNewPassword}
+                    value={forgotConfirmPassword}
+                    onChangeText={setForgotConfirmPassword}
+                  />
+                </View>
+
+                {/* Submit Reset Button */}
+                <TouchableOpacity
+                  style={styles.primaryButton}
+                  onPress={handleResetPasswordSubmit}
+                  disabled={isResettingPassword}
+                  activeOpacity={0.85}
+                >
+                  {isResettingPassword ? (
+                    <ActivityIndicator size="small" color="#FFF" />
+                  ) : (
+                    <Text style={styles.primaryButtonText}>Update Password & Sign In</Text>
+                  )}
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 };
@@ -918,6 +1283,132 @@ const styles = StyleSheet.create({
   headerLogo: {
     width: 220,
     height: 75,
+  },
+  // Segmented Role Tabs
+  roleTabsContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 16,
+    gap: 4,
+  },
+  roleTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 9,
+  },
+  roleTabActive: {
+    backgroundColor: COLORS.primary,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.12,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  roleTabText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  roleTabTextActive: {
+    color: COLORS.white,
+  },
+  deliveryCardHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 4,
+  },
+  captainBadgePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  captainBadgePillText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#B45309',
+  },
+  deliveryShieldBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FFFBEB',
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    marginBottom: 14,
+  },
+  deliveryShieldText: {
+    flex: 1,
+    fontSize: 11.5,
+    color: '#92400E',
+    lineHeight: 16,
+  },
+  // Forgot Password Modal
+  forgotModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  forgotModalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 22,
+    width: '100%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  forgotModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  closeBtn: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+  },
+  forgotModalTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  forgotModalSub: {
+    fontSize: 12.5,
+    color: '#64748B',
+    marginBottom: 16,
+    lineHeight: 18,
+  },
+  forgotSendOtpBtn: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginRight: 4,
+  },
+  forgotSendOtpText: {
+    color: '#FFFFFF',
+    fontSize: 11.5,
+    fontWeight: '800',
   },
   // Card
   card: {

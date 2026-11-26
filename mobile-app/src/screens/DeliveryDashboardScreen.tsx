@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,8 +9,10 @@ import {
   ActivityIndicator,
   Platform,
   Linking,
+  Modal,
   useWindowDimensions,
 } from 'react-native';
+import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 import { ScreenName } from '../types';
@@ -64,8 +66,115 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
   const [loading, setLoading] = useState<boolean>(true);
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
 
+  // GPS Tracking States
+  const [showGpsModal, setShowGpsModal] = useState<boolean>(true);
+  const [isGpsActive, setIsGpsActive] = useState<boolean>(false);
+  const [captainCoords, setCaptainCoords] = useState<{ lat: number; lon: number } | null>(null);
+  const [lastGpsSyncTime, setLastGpsSyncTime] = useState<string | null>(null);
+  const gpsIntervalRef = useRef<any>(null);
+
   const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'https://extradiesel.in';
   const driverEmail = currentUser?.email || 'delivery@extradiesel.in';
+
+  // Broadcast current GPS location to backend for all active assigned orders
+  const broadcastLocation = async (lat: number, lon: number) => {
+    try {
+      const activeList = orders.filter((o) => o.status === 'out_for_delivery' || o.status === 'arrived' || o.status === 'assigned');
+      for (const order of activeList) {
+        await fetch(`${baseUrl}/api/orders/${order.id}/location`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            lat,
+            lon,
+            driverEmail,
+          }),
+        }).catch(() => {});
+      }
+      setLastGpsSyncTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    } catch (e) {}
+  };
+
+  // Turn ON GPS and request permission
+  const handleAllowGps = async () => {
+    setShowGpsModal(false);
+    try {
+      if (Platform.OS === 'web') {
+        if (typeof navigator !== 'undefined' && navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              const coords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+              setCaptainCoords(coords);
+              setIsGpsActive(true);
+              broadcastLocation(coords.lat, coords.lon);
+            },
+            () => {
+              // Fallback to default depot location coordinates
+              const fallback = { lat: 17.3850, lon: 78.4867 };
+              setCaptainCoords(fallback);
+              setIsGpsActive(true);
+              broadcastLocation(fallback.lat, fallback.lon);
+            },
+            { enableHighAccuracy: true }
+          );
+        }
+        return;
+      }
+
+      // Native Device GPS Permission
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'GPS location access is required to track bowser route and broadcast to customers.');
+        setIsGpsActive(false);
+        return;
+      }
+
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      const coords = { lat: loc.coords.latitude, lon: loc.coords.longitude };
+      setCaptainCoords(coords);
+      setIsGpsActive(true);
+      broadcastLocation(coords.lat, coords.lon);
+    } catch (e: any) {
+      console.warn('GPS location request error:', e);
+      setIsGpsActive(false);
+    }
+  };
+
+  // Deny GPS
+  const handleDenyGps = () => {
+    setShowGpsModal(false);
+    setIsGpsActive(false);
+  };
+
+  // Periodic GPS Location Transmitter (every 10 seconds while GPS is active)
+  useEffect(() => {
+    if (isGpsActive) {
+      gpsIntervalRef.current = setInterval(async () => {
+        try {
+          if (Platform.OS === 'web') {
+            if (typeof navigator !== 'undefined' && navigator.geolocation) {
+              navigator.geolocation.getCurrentPosition((pos) => {
+                const c = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+                setCaptainCoords(c);
+                broadcastLocation(c.lat, c.lon);
+              });
+            }
+          } else {
+            const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+            const c = { lat: loc.coords.latitude, lon: loc.coords.longitude };
+            setCaptainCoords(c);
+            broadcastLocation(c.lat, c.lon);
+          }
+        } catch (e) {}
+      }, 10000);
+    } else {
+      if (gpsIntervalRef.current) clearInterval(gpsIntervalRef.current);
+    }
+
+    return () => {
+      if (gpsIntervalRef.current) clearInterval(gpsIntervalRef.current);
+    };
+  }, [isGpsActive, orders]);
 
   // Load driver's assigned orders
   const loadDriverOrders = async () => {
@@ -189,6 +298,38 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Live GPS Broadcast Status Banner */}
+      <TouchableOpacity
+        style={[styles.gpsBanner, isGpsActive ? styles.gpsBannerActive : styles.gpsBannerInactive]}
+        onPress={() => {
+          if (!isGpsActive) {
+            setShowGpsModal(true);
+          } else {
+            setIsGpsActive(false);
+          }
+        }}
+        activeOpacity={0.85}
+      >
+        <View style={styles.gpsBannerLeft}>
+          <View style={[styles.gpsDot, isGpsActive ? styles.gpsDotActive : styles.gpsDotInactive]} />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.gpsBannerTitle, isGpsActive ? styles.gpsTextActive : styles.gpsTextInactive]}>
+              {isGpsActive ? 'Live GPS Active • Broadcasting' : 'GPS Location is OFF'}
+            </Text>
+            <Text style={styles.gpsBannerSub}>
+              {isGpsActive
+                ? `Syncing every 10s • Lat: ${captainCoords?.lat.toFixed(4) || '17.3850'}, Lon: ${captainCoords?.lon.toFixed(4) || '78.4867'}${lastGpsSyncTime ? ` • ${lastGpsSyncTime}` : ''}`
+                : 'Tap to turn ON GPS for live route navigation & customer tracking'}
+            </Text>
+          </View>
+        </View>
+        <View style={[styles.gpsTogglePill, isGpsActive ? styles.gpsPillActive : styles.gpsPillInactive]}>
+          <Text style={[styles.gpsPillText, isGpsActive ? styles.gpsPillTextActive : styles.gpsPillTextInactive]}>
+            {isGpsActive ? 'ON' : 'ENABLE'}
+          </Text>
+        </View>
+      </TouchableOpacity>
 
       {/* Tabs */}
       <View style={styles.tabsRow}>
@@ -439,6 +580,64 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
           )
         )}
       </ScrollView>
+
+      {/* Turn On GPS Location Modal (Allow / Deny) */}
+      <Modal
+        visible={showGpsModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleDenyGps}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.gpsModalCard, isDesktop && { maxWidth: 440 }]}>
+            {/* Header Icon */}
+            <View style={styles.gpsIconCircle}>
+              <Ionicons name="navigate" size={32} color={COLORS.primary} />
+            </View>
+
+            <Text style={styles.gpsModalTitle}>Turn On GPS Location</Text>
+            <Text style={styles.gpsModalSub}>
+              Extra Diesel Delivery Captain portal requires your active GPS location to navigate bowser routes and broadcast live tracking to customers.
+            </Text>
+
+            {/* Feature Perks */}
+            <View style={styles.gpsPerksList}>
+              <View style={styles.gpsPerkItem}>
+                <Ionicons name="car" size={18} color="#059669" />
+                <Text style={styles.gpsPerkText}>Live Bowser Tracking for Customer App</Text>
+              </View>
+              <View style={styles.gpsPerkItem}>
+                <Ionicons name="compass" size={18} color="#2563EB" />
+                <Text style={styles.gpsPerkText}>Turn-by-turn Navigation to Fueling Sites</Text>
+              </View>
+              <View style={styles.gpsPerkItem}>
+                <Ionicons name="notifications" size={18} color="#D97706" />
+                <Text style={styles.gpsPerkText}>Automated Arrival Alerts on Site Reach</Text>
+              </View>
+            </View>
+
+            {/* Actions: Allow & Deny */}
+            <View style={styles.gpsModalActions}>
+              <TouchableOpacity
+                style={styles.gpsAllowBtn}
+                onPress={handleAllowGps}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="checkmark-circle" size={18} color={COLORS.white} />
+                <Text style={styles.gpsAllowBtnText}>Allow / Turn On GPS</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.gpsDenyBtn}
+                onPress={handleDenyGps}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.gpsDenyBtnText}>Deny / Not Now</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -787,5 +986,169 @@ const styles = StyleSheet.create({
     marginTop: 6,
     textAlign: 'center',
     lineHeight: 18,
+  },
+  // GPS Status Banner Styles
+  gpsBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+  },
+  gpsBannerActive: {
+    backgroundColor: '#ECFDF5',
+    borderBottomColor: '#A7F3D0',
+  },
+  gpsBannerInactive: {
+    backgroundColor: '#FFFBEB',
+    borderBottomColor: '#FDE68A',
+  },
+  gpsBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 10,
+    gap: 10,
+  },
+  gpsDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  gpsDotActive: {
+    backgroundColor: '#10B981',
+  },
+  gpsDotInactive: {
+    backgroundColor: '#F59E0B',
+  },
+  gpsBannerTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  gpsTextActive: {
+    color: '#065F46',
+  },
+  gpsTextInactive: {
+    color: '#92400E',
+  },
+  gpsBannerSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  gpsTogglePill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  gpsPillActive: {
+    backgroundColor: '#059669',
+  },
+  gpsPillInactive: {
+    backgroundColor: '#D97706',
+  },
+  gpsPillText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  gpsPillTextActive: {
+    color: '#FFFFFF',
+  },
+  gpsPillTextInactive: {
+    color: '#FFFFFF',
+  },
+  // GPS Permission Modal
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  gpsModalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  gpsIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#FEE2E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  gpsModalTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#0F172A',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  gpsModalSub: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 19,
+    marginBottom: 18,
+  },
+  gpsPerksList: {
+    width: '100%',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 14,
+    gap: 10,
+    marginBottom: 20,
+  },
+  gpsPerkItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  gpsPerkText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  gpsModalActions: {
+    width: '100%',
+    gap: 10,
+  },
+  gpsAllowBtn: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#059669',
+    paddingVertical: 14,
+    borderRadius: 12,
+    width: '100%',
+  },
+  gpsAllowBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  gpsDenyBtn: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+    width: '100%',
+  },
+  gpsDenyBtnText: {
+    color: '#64748B',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

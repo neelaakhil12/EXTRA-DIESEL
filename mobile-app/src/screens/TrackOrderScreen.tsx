@@ -10,6 +10,7 @@ import {
   useWindowDimensions,
   ActivityIndicator,
 } from 'react-native';
+import { WebView } from 'react-native-webview';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
@@ -39,6 +40,10 @@ interface TrackedOrder {
   assignedTo?: string | null;
   assignedToName?: string | null;
   vehicleNumber?: string | null;
+  captainLat?: number | null;
+  captainLon?: number | null;
+  captainHeading?: number | null;
+  lastLocationUpdate?: string | null;
   createdAt?: string;
   dispatchedAt?: string;
   arrivedAt?: string;
@@ -80,7 +85,7 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
           }
           if (!found) {
             found = data.orders.find(
-              (o: TrackedOrder) => o.status === 'out_for_delivery' || o.status === 'assigned' || o.status === 'pending'
+              (o: TrackedOrder) => o.status === 'out_for_delivery' || o.status === 'arrived' || o.status === 'assigned' || o.status === 'pending'
             ) || data.orders[0] || null;
           }
 
@@ -95,6 +100,26 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
 
     fetchOrderData();
   }, [orderId, currentUser?.email]);
+
+  // Periodic 8-second polling to update Captain's live GPS movement from backend
+  useEffect(() => {
+    if (!activeOrder?.id || activeOrder.status === 'delivered') return;
+
+    const pollTimer = setInterval(async () => {
+      try {
+        const res = await fetch(`${baseUrl}/api/orders/${activeOrder.id}`);
+        const data = await res.json();
+        if (data.success && data.order) {
+          setActiveOrder((prev) => ({
+            ...prev,
+            ...data.order,
+          }));
+        }
+      } catch (e) {}
+    }, 8000);
+
+    return () => clearInterval(pollTimer);
+  }, [activeOrder?.id, activeOrder?.status]);
 
   // Live ETA simulation countdown
   useEffect(() => {
@@ -242,6 +267,138 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
   const isOutForDelivery = activeOrder.status === 'out_for_delivery' || isArrived;
   const isAssigned = !!activeOrder.assignedToName || activeOrder.status === 'assigned' || isOutForDelivery;
 
+  const getInteractiveMapHtml = () => {
+    // Dynamic Destination Coordinates from active order
+    let destLat = 17.313112;
+    let destLon = 78.545285;
+    if (activeOrder?.mapsLink) {
+      const qMatch = activeOrder.mapsLink.match(/(?:q|destination|query)=(-?\d+\.\d+),(-?\d+\.\d+)/);
+      if (qMatch) {
+        destLat = parseFloat(qMatch[1]);
+        destLon = parseFloat(qMatch[2]);
+      }
+    } else if (activeOrder?.address) {
+      const cMatch = activeOrder.address.match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
+      if (cMatch) {
+        destLat = parseFloat(cMatch[1]);
+        destLon = parseFloat(cMatch[2]);
+      }
+    }
+
+    const depotLat = 17.3550;
+    const depotLon = 78.5150;
+    const midLat = (depotLat + destLat) / 2;
+    const midLon = (depotLon + destLon) / 2;
+
+    const currentLat = activeOrder?.captainLat || (isOutForDelivery ? midLat : depotLat);
+    const currentLon = activeOrder?.captainLon || (isOutForDelivery ? midLon : depotLon);
+
+    const shortSiteTitle = activeOrder?.address
+      ? activeOrder.address.split(',')[0].trim()
+      : 'Delivery Site';
+
+    return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    body, html, #map { margin: 0; padding: 0; width: 100%; height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8fafc; }
+    .tanker-wrap {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      transition: all 1.2s ease-in-out;
+    }
+    .tanker-pill {
+      background: #DC2626; color: #FFFFFF; font-weight: 800; font-size: 11px;
+      padding: 3px 8px; border-radius: 12px; border: 2px solid #FFFFFF;
+      box-shadow: 0 4px 10px rgba(220, 38, 38, 0.45); white-space: nowrap; text-align: center;
+      margin-top: 2px;
+    }
+    .pulse-ring {
+      width: 44px; height: 44px; border-radius: 50%; background: rgba(220, 38, 38, 0.3);
+      position: absolute; top: -7px; left: 5px; animation: pulse 1.8s infinite; pointer-events: none;
+    }
+    @keyframes pulse { 0% { transform: scale(0.8); opacity: 1; } 100% { transform: scale(2.4); opacity: 0; } }
+    .site-pill {
+      background: #0F172A; color: #FFFFFF; font-weight: 800; font-size: 10.5px;
+      padding: 3px 8px; border-radius: 10px; border: 2px solid #FFFFFF;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.3); white-space: nowrap; text-align: center;
+    }
+    .depot-pill {
+      background: #059669; color: #FFFFFF; font-weight: 800; font-size: 10px;
+      padding: 2px 7px; border-radius: 8px; border: 1.5px solid #FFFFFF;
+      white-space: nowrap; text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script>
+    var depot = [${depotLat}, ${depotLon}];
+    var site = [${destLat}, ${destLon}];
+    var livePos = [${currentLat}, ${currentLon}];
+    
+    var waypoints = [
+      depot,
+      [${(depotLat * 0.7 + destLat * 0.3).toFixed(6)}, ${(depotLon * 0.7 + destLon * 0.3).toFixed(6)}],
+      livePos,
+      [${(depotLat * 0.3 + destLat * 0.7).toFixed(6)}, ${(depotLon * 0.3 + destLon * 0.7).toFixed(6)}],
+      site
+    ];
+
+    var map = L.map('map', { zoomControl: false, attributionControl: false }).setView(livePos, 13);
+    L.control.zoom({ position: 'topleft' }).addTo(map);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19
+    }).addTo(map);
+
+    // Route Polyline
+    L.polyline(waypoints, { color: '#DC2626', weight: 5, opacity: 0.85, dashArray: '8, 8' }).addTo(map);
+
+    // 1. Site Destination Marker
+    var siteIcon = L.divIcon({
+      className: 'site-marker',
+      html: '<div style="display:flex; flex-direction:column; align-items:center;"><div style="font-size:26px;">📍</div><div class="site-pill">${shortSiteTitle}</div></div>',
+      iconSize: [120, 54],
+      iconAnchor: [60, 48]
+    });
+    L.marker(site, { icon: siteIcon }).addTo(map);
+
+    // 2. Fuel Depot Marker
+    var depotIcon = L.divIcon({
+      className: 'depot-marker',
+      html: '<div style="display:flex; flex-direction:column; align-items:center;"><div style="font-size:22px;">⛽</div><div class="depot-pill">Terminal Depot</div></div>',
+      iconSize: [100, 46],
+      iconAnchor: [50, 40]
+    });
+    L.marker(depot, { icon: depotIcon }).addTo(map);
+
+    // 3. Live Moving Bowser Fuel Tanker Marker (🚚⛽ Extra Diesel Captain)
+    var bowserIcon = L.divIcon({
+      className: 'bowser-marker',
+      html: '<div class="tanker-wrap" style="position:relative;"><div class="pulse-ring"></div><div style="font-size:32px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));">🚛⛽</div><div class="tanker-pill">${bowserNo}</div></div>',
+      iconSize: [120, 64],
+      iconAnchor: [60, 36]
+    });
+
+    var bowserMarker = L.marker(livePos, { icon: bowserIcon }).addTo(map);
+
+    var currentStep = 1;
+    setInterval(function() {
+      currentStep = (currentStep + 1) % waypoints.length;
+      if (currentStep === 0) currentStep = 1;
+      bowserMarker.setLatLng(waypoints[currentStep]);
+    }, 3800);
+
+    map.fitBounds(L.latLngBounds([depot, site]), { padding: [40, 40] });
+  </script>
+</body>
+</html>`;
+  };
+
   return (
     <ScrollView
       style={styles.container}
@@ -280,6 +437,57 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
           <Text style={styles.siteMetaPill}>Fuel: {activeOrder.liters} Liters</Text>
           <Text style={styles.siteMetaPill}>Total: ₹{Number(activeOrder.total).toLocaleString('en-IN')}</Text>
           <Text style={styles.siteMetaPill}>Date: {activeOrder.date}</Text>
+        </View>
+      </View>
+
+      {/* Interactive Live Map (Real Leaflet/OpenStreetMap with moving Fuel Bowser Tanker like Rapido/Swiggy) */}
+      <View style={styles.mapCard}>
+        {Platform.OS === 'web' ? (
+          <iframe
+            srcDoc={getInteractiveMapHtml()}
+            title="Live Bowser Tracking Map"
+            style={{
+              width: '100%',
+              height: 340,
+              border: 'none',
+              borderRadius: 14,
+            } as any}
+          />
+        ) : (
+          <WebView
+            originWhitelist={['*']}
+            source={{ html: getInteractiveMapHtml() }}
+            style={{
+              width: '100%',
+              height: 340,
+              borderRadius: 14,
+              backgroundColor: '#E2E8F0',
+            }}
+            javaScriptEnabled={true}
+            domStorageEnabled={true}
+            scrollEnabled={false}
+          />
+        )}
+
+        {/* Live Overlay Stats Pill */}
+        <View style={styles.mapOverlayPill}>
+          <Ionicons name="speedometer" size={16} color={COLORS.primary} />
+          <Text style={styles.mapOverlayText}>
+            {isDelivered
+              ? 'Fuel Dispensed & Delivered • Tax Invoice Ready'
+              : activeOrder.status === 'arrived'
+              ? 'Captain Arrived at Site • Dispenser Connected'
+              : isOutForDelivery
+              ? `Bowser ${bowserNo} en route • ETA: ~${etaMins}m`
+              : isAssigned
+              ? `Bowser Assigned • Preparing at depot`
+              : `Order Confirmed • Dispatch desk active`}
+          </Text>
+        </View>
+
+        <View style={styles.livePulsePill}>
+          <View style={styles.liveDot} />
+          <Text style={styles.liveDotText}>LIVE GPS</Text>
         </View>
       </View>
 

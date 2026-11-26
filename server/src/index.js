@@ -869,16 +869,45 @@ app.post('/api/auth/register', (req, res) => {
 // Auth 4: Unified Email & Password Login (Supports Admin, Delivery Boy, and Customer)
 app.post('/api/auth/login', (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, loginRole } = req.body;
     if (!email || !password) {
       return res.status(400).json({ success: false, error: 'Email and password are required' });
     }
 
     const key = email.toLowerCase().trim();
     let user = registeredUsers.get(key);
-
     const adminEmails = ['aadhyafuels9@gmail.com'];
 
+    // 1. DELIVERY PARTNER LOGIN MODE
+    if (loginRole === 'delivery') {
+      if (!user || user.role !== 'delivery') {
+        return res.status(404).json({
+          success: false,
+          error: 'Account not found. Please contact Extra Diesel admin for delivery partner credentials.',
+        });
+      }
+      if (user.password && user.password !== password) {
+        return res.status(400).json({
+          success: false,
+          error: 'Incorrect password. Please verify credentials with admin.',
+        });
+      }
+      console.log(`[Delivery Login] Captain ${user.name} (${user.email}) logged in.`);
+      return res.json({
+        success: true,
+        message: 'Delivery Captain logged in successfully',
+        user: {
+          name: user.name,
+          email: user.email,
+          phone: user.phone || '',
+          role: 'delivery',
+          vehicleNumber: user.vehicleNumber || 'Bowser TS 09 UB 4521',
+          profileImage: user.profileImage || null,
+        },
+      });
+    }
+
+    // 2. CUSTOMER / ADMIN LOGIN MODE
     if (!user) {
       // If logging in as admin with default admin password
       if (adminEmails.includes(key) && password === 'admin123') {
@@ -893,17 +922,11 @@ app.post('/api/auth/login', (req, res) => {
         registeredUsers.set(key, user);
         saveUsers(registeredUsers);
       } else {
-        // Auto-create standard customer
-        user = {
-          name: key.split('@')[0],
-          email: key,
-          phone: '+91 9876543210',
-          password: password,
-          role: 'customer',
-          createdAt: new Date().toISOString(),
-        };
-        registeredUsers.set(key, user);
-        saveUsers(registeredUsers);
+        // Unregistered credentials: Do NOT auto-create; return 404
+        return res.status(404).json({
+          success: false,
+          error: 'Account not found. Please click Sign Up to create your Extra Diesel account.',
+        });
       }
     } else {
       // Validate password if present
@@ -930,6 +953,127 @@ app.post('/api/auth/login', (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Login failed', details: error.message });
+  }
+});
+
+// Auth: Forgot Password - Step 1: Send Reset OTP via SMTP
+app.post('/api/auth/forgot-password/send-otp', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email || !email.includes('@')) {
+      return res.status(400).json({ success: false, error: 'Valid email address is required' });
+    }
+
+    const key = email.toLowerCase().trim();
+    const user = registeredUsers.get(key);
+    const adminEmails = ['aadhyafuels9@gmail.com'];
+    const isAdmin = adminEmails.includes(key);
+
+    if (!user && !isAdmin) {
+      return res.status(404).json({
+        success: false,
+        error: 'No account registered with this email address.',
+      });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+    otpStore.set(`reset_${key}`, { otp, expiresAt, email: key });
+
+    const mailOptions = {
+      from: process.env.SMTP_FROM || '"Extra Diesel" <Aadhyafuels9@gmail.com>',
+      to: email,
+      subject: `${otp} is your Extra Diesel Password Reset Code`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
+          <div style="text-align: center; margin-bottom: 20px;">
+            <h1 style="color: #D50000; margin: 0; font-size: 26px; font-weight: 900; letter-spacing: 1px;">EXTRA <span style="color: #FFB300;">DIESEL</span></h1>
+            <p style="color: #64748b; font-size: 13px; margin-top: 4px;">Password Reset Request</p>
+          </div>
+          <div style="background-color: #f8fafc; border-radius: 8px; padding: 20px; text-align: center; margin: 20px 0;">
+            <p style="color: #334155; font-size: 14px; margin: 0 0 10px 0;">Use the 6-digit code below to reset your Extra Diesel password:</p>
+            <div style="font-size: 36px; font-weight: 900; letter-spacing: 8px; color: #D50000; padding: 10px 0;">${otp}</div>
+            <p style="color: #94a3b8; font-size: 12px; margin: 10px 0 0 0;">Valid for 10 minutes. If you did not request this, please ignore this email.</p>
+          </div>
+          <div style="text-align: center; border-top: 1px solid #f1f5f9; padding-top: 16px; margin-top: 24px;">
+            <p style="color: #64748b; font-size: 11px; margin: 0;">Legal Metrology Certified On-Demand Doorstep Diesel Delivery</p>
+          </div>
+        </div>
+      `,
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log(`[SMTP] Password reset OTP sent to ${email}`);
+
+    res.json({
+      success: true,
+      message: `Password reset code sent to ${email}`,
+    });
+  } catch (error) {
+    console.error('[Forgot Password Error]', error);
+    res.status(500).json({ success: false, error: 'Failed to send reset code', details: error.message });
+  }
+});
+
+// Auth: Forgot Password - Step 2: Verify OTP and Set New Password
+app.post('/api/auth/forgot-password/reset', (req, res) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+    if (!email || !otp || !newPassword) {
+      return res.status(400).json({ success: false, error: 'Email, OTP, and new password are required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ success: false, error: 'Password must be at least 6 characters' });
+    }
+
+    const key = email.toLowerCase().trim();
+    const stored = otpStore.get(`reset_${key}`);
+
+    if (!stored) {
+      return res.status(400).json({ success: false, error: 'No active reset request found. Please request a new OTP.' });
+    }
+
+    if (Date.now() > stored.expiresAt) {
+      otpStore.delete(`reset_${key}`);
+      return res.status(400).json({ success: false, error: 'Reset code has expired. Please request a new one.' });
+    }
+
+    if (stored.otp !== otp.toString().trim()) {
+      return res.status(400).json({ success: false, error: 'Incorrect verification code. Please check your email.' });
+    }
+
+    let user = registeredUsers.get(key);
+    if (!user) {
+      const adminEmails = ['aadhyafuels9@gmail.com'];
+      if (adminEmails.includes(key)) {
+        user = {
+          name: 'Extra Diesel Admin',
+          email: key,
+          phone: '+91 9876543210',
+          password: newPassword,
+          role: 'admin',
+          createdAt: new Date().toISOString(),
+        };
+        registeredUsers.set(key, user);
+      } else {
+        return res.status(404).json({ success: false, error: 'User account not found' });
+      }
+    } else {
+      user.password = newPassword;
+      registeredUsers.set(key, user);
+    }
+
+    saveUsers(registeredUsers);
+    otpStore.delete(`reset_${key}`);
+    console.log(`[Auth] Password updated for ${key}`);
+
+    res.json({
+      success: true,
+      message: 'Password reset successfully. You can now sign in with your new password.',
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to reset password', details: error.message });
   }
 });
 
@@ -1080,7 +1224,7 @@ app.post('/api/admin/reset-password', (req, res) => {
   }
 });
 
-// Auth 5: Native Google Auth
+// Auth 5: Native Google Auth (Permits login ONLY if account already registered; does NOT auto-create)
 app.post('/api/auth/google-auth', (req, res) => {
   try {
     const { email, name } = req.body;
@@ -1093,24 +1237,25 @@ app.post('/api/auth/google-auth', (req, res) => {
     const adminEmails = ['aadhyafuels9@gmail.com'];
     const isAdmin = adminEmails.includes(key);
 
-    if (!existingUser) {
+    if (!existingUser && !isAdmin) {
+      return res.status(404).json({
+        success: false,
+        accountNotFound: true,
+        error: 'Account not found. No account is registered with this Google ID. Please click Sign Up to create your Extra Diesel account.',
+      });
+    }
+
+    if (!existingUser && isAdmin) {
       existingUser = {
-        name: (name && name.trim()) || key.split('@')[0],
+        name: (name && name.trim()) || 'Extra Diesel Admin',
         email: key,
-        phone: '',
-        role: isAdmin ? 'admin' : 'customer',
+        phone: '+91 9876543210',
+        role: 'admin',
         authProvider: 'google',
         createdAt: new Date().toISOString(),
       };
       registeredUsers.set(key, existingUser);
       saveUsers(registeredUsers);
-      console.log(`[Google Auth] Auto-registered new user: ${existingUser.name} (${existingUser.email}) - Role: ${existingUser.role}`);
-    } else {
-      if (!isAdmin && existingUser.role === 'admin') {
-        // Customer account was previously marked admin; revert to customer
-        existingUser.role = 'customer';
-        saveUsers(registeredUsers);
-      }
     }
 
     return res.json({
@@ -1629,6 +1774,59 @@ app.patch('/api/orders/:id/status', (req, res) => {
     res.json({ success: true, message: 'Order status updated successfully', order: allOrders[orderIndex] });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to update order status', details: error.message });
+  }
+});
+
+// Captain Live GPS Broadcast Endpoint (Rapido / Swiggy style live tanker tracking)
+app.post('/api/orders/:id/location', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { lat, lon, heading, speed, driverEmail } = req.body;
+
+    if (!id || lat === undefined || lon === undefined) {
+      return res.status(400).json({ success: false, error: 'Order ID, latitude, and longitude are required' });
+    }
+
+    const allOrders = loadOrders();
+    const orderIndex = allOrders.findIndex(o => o.id === id);
+
+    if (orderIndex === -1) {
+      return res.status(404).json({ success: false, error: 'Order not found' });
+    }
+
+    allOrders[orderIndex].captainLat = Number(lat);
+    allOrders[orderIndex].captainLon = Number(lon);
+    if (heading !== undefined) allOrders[orderIndex].captainHeading = Number(heading);
+    if (speed !== undefined) allOrders[orderIndex].captainSpeed = Number(speed);
+    allOrders[orderIndex].lastLocationUpdate = new Date().toISOString();
+
+    saveOrders(allOrders);
+
+    res.json({
+      success: true,
+      message: 'Captain location updated',
+      orderId: id,
+      captainLat: allOrders[orderIndex].captainLat,
+      captainLon: allOrders[orderIndex].captainLon,
+      lastLocationUpdate: allOrders[orderIndex].lastLocationUpdate,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to update captain location', details: error.message });
+  }
+});
+
+// Single Order fetch with live location
+app.get('/api/orders/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const allOrders = loadOrders();
+    const order = allOrders.find(o => o.id === id);
+    if (!order) {
+      return res.status(404).json({ success: false, error: 'Order not found' });
+    }
+    res.json({ success: true, order });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to fetch order', details: error.message });
   }
 });
 

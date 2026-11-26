@@ -307,6 +307,7 @@ function MainApp() {
 
           // If logged in as delivery partner, ALWAYS keep them on captain dashboard (never customer screen or location modal)
           if (user.role === 'delivery') {
+            setShowLocationModal(false);
             setScreenStack(['delivery']);
             return;
           }
@@ -360,6 +361,7 @@ function MainApp() {
     } catch (e) {}
 
     if (userData.role === 'delivery') {
+      setShowLocationModal(false);
       setScreenStack(['delivery']);
     } else if (
       Platform.OS === 'web' &&
@@ -616,9 +618,9 @@ function MainApp() {
             onNavigate={(screen) => navigateTo(screen)}
           />
         )}
-        {/* Global Delivery Location Pin Modal (Prompts only on Home screen after login, and accessible via Header pill) */}
+        {/* Global Delivery Location Pin Modal (Prompts ONLY on Customer Home screen after login, NEVER for delivery partner) */}
         <LocationModal
-          visible={showLocationModal}
+          visible={showLocationModal && currentScreen === 'home' && currentUser?.role !== 'delivery'}
           onClose={() => setShowLocationModal(false)}
           onSaveLocation={(loc) => {
             setDeliveryLocation(loc);
