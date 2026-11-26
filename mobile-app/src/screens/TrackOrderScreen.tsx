@@ -322,7 +322,7 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
       case 'arrived':
         return { label: 'CAPTAIN ARRIVED AT SITE', color: '#D97706', bg: '#FEF3C7' };
       case 'out_for_delivery':
-        return { label: 'OUT FOR DELIVERY • EN ROUTE', color: COLORS.primary, bg: '#FEF2F2' };
+        return { label: 'ON THE WAY • LIVE TRACKING', color: '#059669', bg: '#ECFDF5' };
       case 'assigned':
         return { label: 'BOWSER ASSIGNED • LOADING FUEL', color: '#2563EB', bg: '#EFF6FF' };
       default:
@@ -367,7 +367,7 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
   const badge = getStatusBadge(activeOrder.status);
   const isDelivered = activeOrder.status === 'delivered';
   const isArrived = activeOrder.status === 'arrived' || isDelivered;
-  const isTripActive = activeOrder.status === 'out_for_delivery';
+  const isTripActive = activeOrder.status === 'out_for_delivery' || (!!activeOrder.captainLat && !isArrived && !isDelivered);
   const isOutForDelivery = isTripActive || isArrived;
   const isAssigned = !!activeOrder.assignedToName || activeOrder.status === 'assigned' || isOutForDelivery;
 
@@ -401,8 +401,8 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
       ? activeOrder.address.split(',')[0].trim()
       : 'Delivery Site';
 
-    const isTripActive = activeOrder.status === 'out_for_delivery';
-    const isStationaryAtDepot = !isTripActive && !isArrived && !isDelivered;
+    const isTripActive = activeOrder.status === 'out_for_delivery' || (!!activeOrder.captainLat && !isArrived && !isDelivered);
+    const isStationaryAtDepot = !isTripActive && !isArrived && !isDelivered && activeOrder.status !== 'out_for_delivery';
     const isStationaryAtSite = isArrived || isDelivered;
 
     return `<!DOCTYPE html>
@@ -559,7 +559,7 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
 
     // 4. Custom 2D/3D Top-Down Fuel Tanker Icon Marker
     var tankerStatusLabel = isTripActive
-      ? '${bowserNo}'
+      ? '${bowserNo} • On the Way'
       : (isStationaryAtDepot ? 'Parked at Depot' : 'Arrived at Site');
 
     var tankerIcon = L.divIcon({
@@ -751,16 +751,17 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
         <View style={[
           styles.livePulsePill,
           !isTripActive && !isDelivered && { backgroundColor: 'rgba(15, 23, 42, 0.82)' },
+          isTripActive && { backgroundColor: 'rgba(5, 150, 105, 0.92)' },
           isDelivered && { backgroundColor: 'rgba(5, 150, 105, 0.9)' }
         ]}>
           <View style={[
             styles.liveDot,
             !isTripActive && !isDelivered && { backgroundColor: '#F59E0B' },
-            isDelivered && { backgroundColor: '#10B981' }
+            (isTripActive || isDelivered) && { backgroundColor: '#10B981' }
           ]} />
           <Text style={styles.liveDotText}>
             {isTripActive
-              ? 'LIVE GPS TRACKING'
+              ? 'ON THE WAY • LIVE TRACKING'
               : isDelivered
               ? 'DELIVERY COMPLETE'
               : isAssigned
@@ -782,7 +783,7 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
                 : activeOrder.status === 'arrived'
                 ? 'Captain Arrived at Site'
                 : isTripActive
-                ? (calcDistance !== null ? `Bowser En Route • ${calcDistance} km away` : 'Bowser En Route to Destination')
+                ? (calcDistance !== null ? `Bowser On the Way • ${calcDistance} km away` : 'Bowser On the Way to Destination')
                 : isAssigned
                 ? 'Bowser Captain Assigned'
                 : 'Order Confirmed'}

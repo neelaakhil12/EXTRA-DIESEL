@@ -59,10 +59,9 @@
       ],
       "expo-sharing"
     ],
-    "owner": "neelaakhil143",
     "extra": {
       "eas": {
-        "projectId": "e43a2631-6589-4d6c-a3a8-22bc4c9be370"
+        "projectId": "d7ec5007-a80e-41cb-bdc6-678da4a9814b"
       }
     }
   }

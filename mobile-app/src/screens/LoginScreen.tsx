@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   Image,
   StatusBar,
+  Keyboard,
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -62,6 +63,27 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
   const [showForgotNewPassword, setShowForgotNewPassword] = useState(false);
   const [isSendingForgotOtp, setIsSendingForgotOtp] = useState(false);
   const [isResettingPassword, setIsResettingPassword] = useState(false);
+
+  // Virtual Keyboard tracking for Android / iOS modals
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  React.useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        setKeyboardHeight(e.endCoordinates ? e.endCoordinates.height : 280);
+      }
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => {
+        setKeyboardHeight(0);
+      }
+    );
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   // Login inputs (Empty by default)
   const [loginEmail, setLoginEmail] = useState('');
@@ -1231,6 +1253,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
         visible={showForgotModal}
         transparent={true}
         animationType="fade"
+        statusBarTranslucent={true}
         onRequestClose={() => setShowForgotModal(false)}
       >
         <KeyboardAvoidingView
@@ -1238,10 +1261,17 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onSkip
           style={{ flex: 1 }}
         >
           <ScrollView
-            contentContainerStyle={styles.forgotModalScrollOverlay}
+            contentContainerStyle={[
+              styles.forgotModalScrollOverlay,
+              keyboardHeight > 0 && {
+                paddingBottom: keyboardHeight + 60,
+                justifyContent: 'flex-start',
+                paddingTop: 60,
+              }
+            ]}
             keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-            bounces={false}
+            showsVerticalScrollIndicator={true}
+            bounces={true}
           >
             <View style={[styles.forgotModalCard, isDesktop && { maxWidth: 440 }]}>
               <View style={styles.forgotModalHeader}>
