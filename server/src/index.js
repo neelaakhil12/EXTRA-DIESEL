@@ -238,6 +238,15 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Driver joins their personal driver notification channel for instant order assignment alerts
+  socket.on('join_driver_channel', (driverEmail) => {
+    if (driverEmail) {
+      const cleanEmail = driverEmail.toLowerCase().trim();
+      socket.join(`driver_${cleanEmail}`);
+      console.log(`[Socket.io] Driver ${cleanEmail} joined channel driver_${cleanEmail}`);
+    }
+  });
+
   // Captain emits live coordinates directly through WebSocket (sub-second sync)
   socket.on('captain_location_update', (data) => {
     const { orderId, driverEmail, lat, lon, heading, speed } = data || {};
@@ -1852,6 +1861,16 @@ app.post('/api/admin/orders/assign', (req, res) => {
       statusText: allOrders[orderIndex].statusText,
       order: allOrders[orderIndex],
     });
+
+    // Emit instant alert to the assigned Captain (triggers status bar and in-app sound/notification)
+    const cleanDriverEmail = deliveryBoyEmail.toLowerCase().trim();
+    io.to(`driver_${cleanDriverEmail}`).emit('order_assigned_to_captain', {
+      orderId,
+      order: allOrders[orderIndex],
+      assignedTo: cleanDriverEmail,
+      message: `New diesel trip assigned: Order #${orderId} (${allOrders[orderIndex].liters}L)`
+    });
+    io.emit('driver_orders_updated', { orderId, driverEmail: cleanDriverEmail });
 
     res.json({ success: true, message: 'Order assigned successfully', order: allOrders[orderIndex] });
   } catch (error) {

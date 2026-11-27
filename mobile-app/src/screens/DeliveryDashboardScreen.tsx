@@ -14,10 +14,13 @@ import {
 } from 'react-native';
 import * as Location from 'expo-location';
 import { io, Socket } from 'socket.io-client';
+import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 import { ScreenName } from '../types';
 import { APP_CONFIG } from '../constants/config';
+import { sendSystemNotification } from '../services/notificationService';
+import { TANKER_MARKER_BASE64 } from '../constants/tankerMarkerBase64';
 
 interface DeliveryDashboardScreenProps {
   onNavigate: (screen: ScreenName) => void;
@@ -74,10 +77,12 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
   const [isGpsActive, setIsGpsActive] = useState<boolean>(false);
   const [captainCoords, setCaptainCoords] = useState<{ lat: number; lon: number } | null>(null);
   const [lastGpsSyncTime, setLastGpsSyncTime] = useState<string | null>(null);
+  const [navigatingOrder, setNavigatingOrder] = useState<DeliveryOrder | null>(null);
   const gpsIntervalRef = useRef<any>(null);
   const locationSubRef = useRef<any>(null);
   const socketRef = useRef<Socket | null>(null);
   const ordersRef = useRef<DeliveryOrder[]>(orders);
+  const knownOrderIdsRef = useRef<Set<string>>(new Set());
 
   // Keep ordersRef in sync with latest orders state to avoid stale closure in timers
   useEffect(() => {
@@ -90,7 +95,7 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
   const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'https://extradiesel.in';
   const driverEmail = currentUser?.email || 'delivery@extradiesel.in';
 
-  // Initialize Socket.io connection for sub-second live GPS transmission
+  // Initialize Socket.io connection for sub-second live GPS transmission and instant dispatch alerts
   useEffect(() => {
     const socket = io(baseUrl, {
       transports: ['websocket', 'polling'],
@@ -101,11 +106,30 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
 
     socketRef.current = socket;
 
+    socket.on('connect', () => {
+      socket.emit('join_driver_channel', driverEmail.toLowerCase().trim());
+    });
+
+    socket.on('order_assigned_to_captain', async (data: any) => {
+      if (data && data.order) {
+        loadDriverOrders();
+        await sendSystemNotification(
+          '⛽ New Diesel Delivery Assigned!',
+          `Order #${data.order.id}: ${data.order.liters}L to ${data.order.address || 'Delivery Site'}. Tap to start delivery trip.`,
+          'driver'
+        ).catch(() => {});
+      }
+    });
+
+    socket.on('driver_orders_updated', () => {
+      loadDriverOrders();
+    });
+
     return () => {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [baseUrl]);
+  }, [baseUrl, driverEmail]);
 
   // Broadcast current GPS location to backend & socket room for all active assigned orders
   const broadcastLocation = async (lat: number, lon: number, heading?: number, speed?: number) => {
@@ -208,7 +232,7 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
     setIsGpsActive(false);
   };
 
-  // Live GPS Location Watcher & Transmitter (continuous 5 seconds interval)
+  // Live GPS Location Watcher & Transmitter (continuous 5 seconds interval + native watcher)
   useEffect(() => {
     if (!isGpsActive) {
       if (gpsIntervalRef.current) clearInterval(gpsIntervalRef.current);
@@ -248,11 +272,33 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
     // Immediate ping
     fetchAndTransmitCoords();
 
+    // Native continuous position watcher
+    if (Platform.OS !== 'web') {
+      Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.High,
+          distanceInterval: 5,
+          timeInterval: 4000,
+        },
+        (loc) => {
+          const c = { lat: loc.coords.latitude, lon: loc.coords.longitude };
+          setCaptainCoords(c);
+          broadcastLocation(c.lat, c.lon, loc.coords.heading ?? undefined, loc.coords.speed ?? undefined);
+        }
+      ).then((sub) => {
+        locationSubRef.current = sub;
+      }).catch(() => {});
+    }
+
     // Repeating timer every 5 seconds without requiring manual screen refresh
     gpsIntervalRef.current = setInterval(fetchAndTransmitCoords, intervalMs);
 
     return () => {
       if (gpsIntervalRef.current) clearInterval(gpsIntervalRef.current);
+      if (locationSubRef.current) {
+        locationSubRef.current.remove?.();
+        locationSubRef.current = null;
+      }
     };
   }, [isGpsActive]);
 
@@ -263,7 +309,20 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
       const res = await fetch(`${baseUrl}/api/orders?deliveryBoyEmail=${encodeURIComponent(driverEmail)}`);
       const data = await res.json();
       if (data.success && Array.isArray(data.orders)) {
-        setOrders(data.orders);
+        const newOrders = data.orders as DeliveryOrder[];
+        if (knownOrderIdsRef.current.size > 0) {
+          for (const o of newOrders) {
+            if (!knownOrderIdsRef.current.has(o.id) && (o.status === 'assigned' || o.status === 'out_for_delivery')) {
+              sendSystemNotification(
+                '⛽ New Diesel Delivery Assigned!',
+                `Order #${o.id}: ${o.liters}L to ${o.address || 'Delivery Site'}. Tap to start delivery trip.`,
+                'driver'
+              ).catch(() => {});
+            }
+          }
+        }
+        newOrders.forEach((o) => knownOrderIdsRef.current.add(o.id));
+        setOrders(newOrders);
       }
     } catch (e) {
       console.error('Failed to load driver orders:', e);
@@ -343,9 +402,36 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
     Linking.openURL(`tel:${phone}`);
   };
 
-  // Open Maps Navigation directly to customer's exact pinned GPS site
-  const handleOpenMaps = (order: DeliveryOrder) => {
-    // 1. If exact Google Maps GPS link exists
+  // Extract destination GPS coordinates
+  const getOrderCoords = (order: DeliveryOrder) => {
+    if (order.mapsLink) {
+      const m = order.mapsLink.match(/([-+]?\d+\.\d+)\s*,\s*([-+]?\d+\.\d+)/);
+      if (m) return { lat: parseFloat(m[1]), lon: parseFloat(m[2]) };
+    }
+    const addrMatch = order.address && order.address.match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
+    if (addrMatch) return { lat: parseFloat(addrMatch[1]), lon: parseFloat(addrMatch[2]) };
+    return { lat: 17.3850, lon: 78.4867 };
+  };
+
+  // Calculate straight-line distance in km
+  const getRemainingDistance = (order: DeliveryOrder) => {
+    if (!captainCoords) return null;
+    const dest = getOrderCoords(order);
+    const R = 6371;
+    const dLat = ((dest.lat - captainCoords.lat) * Math.PI) / 180;
+    const dLon = ((dest.lon - captainCoords.lon) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((captainCoords.lat * Math.PI) / 180) *
+        Math.cos((dest.lat * Math.PI) / 180) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return (R * c).toFixed(1);
+  };
+
+  // Open External Google Maps App if explicitly requested
+  const openExternalMapsApp = (order: DeliveryOrder) => {
     if (order.mapsLink && order.mapsLink.trim()) {
       let url = order.mapsLink.trim();
       if (!url.startsWith('http://') && !url.startsWith('https://')) {
@@ -354,17 +440,125 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
       Linking.openURL(url);
       return;
     }
-
-    // 2. If address string contains latitude, longitude coordinates
     const coordMatch = order.address && order.address.match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
     if (coordMatch) {
       Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${coordMatch[1]},${coordMatch[2]}`);
       return;
     }
-
-    // 3. Fallback to delivery address query
     const query = encodeURIComponent(order.address);
     Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${query}`);
+  };
+
+  // Open In-App Live GPS Navigation Map directly inside app (keeps app foregrounded for 100% continuous tracking)
+  const handleOpenMaps = (order: DeliveryOrder) => {
+    setNavigatingOrder(order);
+  };
+
+  // Navigation Interactive Map HTML
+  const getNavMapHtml = (order: DeliveryOrder) => {
+    const dest = getOrderCoords(order);
+    const startLat = captainCoords?.lat || 17.3850;
+    const startLon = captainCoords?.lon || 78.4867;
+
+    return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body, html, #map { width: 100%; height: 100%; background: #0f172a; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .tanker-marker-wrap { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 68px; height: 68px; }
+    .tanker-rotator { width: 54px; height: 54px; display: flex; align-items: center; justify-content: center; transform-origin: center center; }
+    .tanker-img { width: 52px; height: 52px; object-fit: contain; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.55)); }
+    .tanker-pill { background: #2563EB; color: #fff; font-weight: 800; font-size: 10px; padding: 2px 8px; border-radius: 10px; border: 1.5px solid #fff; margin-top: -3px; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
+    .site-pill { background: #DC2626; color: #fff; font-weight: 800; font-size: 10px; padding: 3px 8px; border-radius: 8px; border: 2px solid #fff; box-shadow: 0 3px 8px rgba(0,0,0,0.3); margin-top: -2px; white-space: nowrap; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script>
+    var startPos = [${startLat}, ${startLon}];
+    var sitePos = [${dest.lat}, ${dest.lon}];
+
+    var map = L.map('map', { zoomControl: true, attributionControl: false }).setView(startPos, 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+
+    var routeOuter = L.polyline([startPos, sitePos], { color: '#1E40AF', weight: 8, opacity: 0.85, lineCap: 'round', lineJoin: 'round' }).addTo(map);
+    var routeInner = L.polyline([startPos, sitePos], { color: '#3B82F6', weight: 5, opacity: 1, lineCap: 'round', lineJoin: 'round' }).addTo(map);
+
+    // Real-World Road Driving Route
+    fetch('https://router.project-osrm.org/route/v1/driving/' + startPos[1] + ',' + startPos[0] + ';' + sitePos[1] + ',' + sitePos[0] + '?overview=full&geometries=geojson')
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d && d.routes && d.routes[0] && d.routes[0].geometry) {
+          var pts = d.routes[0].geometry.coordinates.map(function(pt) { return [pt[1], pt[0]]; });
+          if (pts && pts.length > 1) {
+            routeOuter.setLatLngs(pts);
+            routeInner.setLatLngs(pts);
+            map.fitBounds(L.latLngBounds(pts), { padding: [40, 40] });
+          }
+        }
+      }).catch(function() {});
+
+    // Destination Pin
+    var siteIcon = L.divIcon({
+      className: 'custom-site-marker',
+      html: '<div style="display:flex; flex-direction:column; align-items:center;"><div style="width:36px; height:36px; border-radius:50%; background:#DC2626; display:flex; align-items:center; justify-content:center; border:2px solid #fff; box-shadow:0 3px 10px rgba(0,0,0,0.4);"><span style="font-size:18px;">📍</span></div><div class="site-pill">CUSTOMER SITE</div></div>',
+      iconSize: [80, 56],
+      iconAnchor: [40, 48]
+    });
+    L.marker(sitePos, { icon: siteIcon }).addTo(map);
+
+    // Bowser Tanker Marker
+    var tankerIcon = L.divIcon({
+      className: 'custom-tanker-marker',
+      html: '<div class="tanker-marker-wrap"><div class="tanker-rotator" id="tankerRotator"><img src="${TANKER_MARKER_BASE64}" class="tanker-img" alt="Tanker" /></div><div class="tanker-pill">YOUR BOWSER</div></div>',
+      iconSize: [68, 68],
+      iconAnchor: [34, 34]
+    });
+    var bowserMarker = L.marker(startPos, { icon: tankerIcon }).addTo(map);
+
+    function calculateBearing(lat1, lon1, lat2, lon2) {
+      var dLon = (lon2 - lon1) * Math.PI / 180;
+      var lat1Rad = lat1 * Math.PI / 180;
+      var lat2Rad = lat2 * Math.PI / 180;
+      var y = Math.sin(dLon) * Math.cos(lat2Rad);
+      var x = Math.cos(lat1Rad) * Math.sin(lat2Rad) - Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLon);
+      var brng = Math.atan2(y, x) * 180 / Math.PI;
+      return (brng + 360) % 360;
+    }
+
+    var curLat = startPos[0];
+    var curLon = startPos[1];
+    var targetLat = startPos[0];
+    var targetLon = startPos[1];
+    var prevGpsLat = startPos[0];
+    var prevGpsLon = startPos[1];
+    var curAngle = calculateBearing(startPos[0], startPos[1], sitePos[0], sitePos[1]);
+    var targetAngle = curAngle;
+
+    function lerp(a, b, t) { return a + (b - a) * t; }
+
+    function animateFrame() {
+      curLat = lerp(curLat, targetLat, 0.08);
+      curLon = lerp(curLon, targetLon, 0.08);
+      var diff = (targetAngle - curAngle + 180) % 360 - 180;
+      curAngle = (curAngle + diff * 0.15 + 360) % 360;
+      bowserMarker.setLatLng([curLat, curLon]);
+      var el = bowserMarker.getElement();
+      var rot = el ? el.querySelector('.tanker-rotator') : document.getElementById('tankerRotator');
+      if (rot) {
+        rot.style.transform = 'rotate(' + curAngle.toFixed(1) + 'deg)';
+      }
+      requestAnimationFrame(animateFrame);
+    }
+    requestAnimationFrame(animateFrame);
+  </script>
+</body>
+</html>`;
   };
 
   // Split orders into Assigned (Active) and Completed
@@ -845,6 +1039,141 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
             </View>
           </View>
         </View>
+      </Modal>
+
+      {/* Full-Screen In-App Live Route Navigation Modal (Foreground GPS) */}
+      <Modal
+        visible={!!navigatingOrder}
+        transparent={false}
+        animationType="slide"
+        onRequestClose={() => setNavigatingOrder(null)}
+      >
+        {navigatingOrder && (
+          <View style={styles.navModalContainer}>
+            {/* Top Navigation Bar */}
+            <View style={styles.navTopBar}>
+              <TouchableOpacity
+                style={styles.navBackBtn}
+                onPress={() => setNavigatingOrder(null)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
+              </TouchableOpacity>
+
+              <View style={{ flex: 1, marginHorizontal: 8 }}>
+                <Text style={styles.navBarTitle} numberOfLines={1}>
+                  Live Route Navigation
+                </Text>
+                <Text style={styles.navBarSub} numberOfLines={1}>
+                  Order #{navigatingOrder.id} • {navigatingOrder.liters}L Diesel
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.navExternalBtn}
+                onPress={() => openExternalMapsApp(navigatingOrder)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="map-outline" size={16} color="#FFFFFF" />
+                <Text style={styles.navExternalBtnText}>Google Maps</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* GPS & Distance Status Strip */}
+            <View style={styles.navStatusStrip}>
+              <View style={styles.navDistanceChip}>
+                <Ionicons name="navigate-circle" size={18} color="#2563EB" />
+                <Text style={styles.navDistanceText}>
+                  {getRemainingDistance(navigatingOrder) ? `${getRemainingDistance(navigatingOrder)} km` : 'Calculating...'}
+                </Text>
+              </View>
+
+              <View style={styles.navGpsChip}>
+                <View style={styles.gpsDotActive} />
+                <Text style={styles.navGpsText}>
+                  GPS Live Streaming {lastGpsSyncTime ? `• ${lastGpsSyncTime}` : ''}
+                </Text>
+              </View>
+            </View>
+
+            {/* Map Area */}
+            <View style={styles.navMapWrap}>
+              {Platform.OS === 'web' ? (
+                <iframe
+                  srcDoc={getNavMapHtml(navigatingOrder)}
+                  title="In-App Navigation Map"
+                  style={{ width: '100%', height: '100%', border: 'none' }}
+                />
+              ) : (
+                <WebView
+                  originWhitelist={['*']}
+                  source={{ html: getNavMapHtml(navigatingOrder) }}
+                  style={{ flex: 1 }}
+                  javaScriptEnabled={true}
+                  domStorageEnabled={true}
+                />
+              )}
+            </View>
+
+            {/* Bottom Floating Delivery Card */}
+            <View style={styles.navBottomCard}>
+              <View style={styles.navCustomerRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.navCustomerName}>{navigatingOrder.name}</Text>
+                  <Text style={styles.navAddressText} numberOfLines={2}>
+                    {navigatingOrder.address}
+                  </Text>
+                </View>
+                {navigatingOrder.phone ? (
+                  <TouchableOpacity
+                    style={styles.navCallBtn}
+                    onPress={() => handleCallCustomer(navigatingOrder.phone)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="call" size={18} color="#FFFFFF" />
+                    <Text style={styles.navCallBtnText}>Call</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+
+              <View style={styles.navActionsRow}>
+                {navigatingOrder.status === 'assigned' || navigatingOrder.status === 'out_for_delivery' ? (
+                  <TouchableOpacity
+                    style={styles.navArrivedBtn}
+                    onPress={() => {
+                      handleUpdateStatus(navigatingOrder.id, 'arrived');
+                      setNavigatingOrder((prev) => prev ? { ...prev, status: 'arrived' } : null);
+                    }}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons name="location" size={18} color="#FFFFFF" />
+                    <Text style={styles.navArrivedBtnText}>Mark Arrived at Site</Text>
+                  </TouchableOpacity>
+                ) : navigatingOrder.status === 'arrived' ? (
+                  <TouchableOpacity
+                    style={styles.navDeliveredBtn}
+                    onPress={() => {
+                      handleDeliveredClick(navigatingOrder);
+                      setNavigatingOrder(null);
+                    }}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons name="checkmark-done" size={18} color="#FFFFFF" />
+                    <Text style={styles.navDeliveredBtnText}>Complete Delivery</Text>
+                  </TouchableOpacity>
+                ) : null}
+
+                <TouchableOpacity
+                  style={styles.navCloseBtn}
+                  onPress={() => setNavigatingOrder(null)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.navCloseBtnText}>Close</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
       </Modal>
     </View>
   );
@@ -1566,5 +1895,179 @@ const styles = StyleSheet.create({
     color: '#64748B',
     fontSize: 14,
     fontWeight: '700',
+  },
+  // In-App Navigation Modal Styles
+  navModalContainer: {
+    flex: 1,
+    backgroundColor: '#0F172A',
+  },
+  navTopBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0F172A',
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'ios' ? 48 : 16,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1E293B',
+  },
+  navBackBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  navBarTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  navBarSub: {
+    fontSize: 12,
+    color: '#94A3B8',
+    marginTop: 2,
+    fontWeight: '600',
+  },
+  navExternalBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(37, 99, 235, 0.85)',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  navExternalBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+  navStatusStrip: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#1E293B',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  navDistanceChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  navDistanceText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#1E40AF',
+  },
+  navGpsChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  navGpsText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#34D399',
+  },
+  navMapWrap: {
+    flex: 1,
+  },
+  navBottomCard: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 16,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  navCustomerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 14,
+  },
+  navCustomerName: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  navAddressText: {
+    fontSize: 12.5,
+    color: '#475569',
+    marginTop: 2,
+    lineHeight: 17,
+  },
+  navCallBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#059669',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 10,
+  },
+  navCallBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 13,
+  },
+  navActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  navArrivedBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#D97706',
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  navArrivedBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 14,
+  },
+  navDeliveredBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#059669',
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  navDeliveredBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 14,
+  },
+  navCloseBtn: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  navCloseBtnText: {
+    color: '#64748B',
+    fontWeight: '700',
+    fontSize: 13.5,
   },
 });

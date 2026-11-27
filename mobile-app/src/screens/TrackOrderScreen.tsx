@@ -78,11 +78,17 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
     try {
       if (Platform.OS === 'web') {
         if (iframeRef.current && (iframeRef.current as any).contentWindow) {
-          (iframeRef.current as any).contentWindow.postMessage(payload, '*');
+          const win = (iframeRef.current as any).contentWindow;
+          win.postMessage(payload, '*');
+          if (typeof win.onIncomingGps === 'function') {
+            win.onIncomingGps({ type: 'BOWSER_GPS', lat, lon, heading: heading ?? null });
+          }
         }
       } else {
         if (webViewRef.current) {
           webViewRef.current.postMessage(payload);
+          const js = `if (window.onIncomingGps) { window.onIncomingGps(${payload}); } true;`;
+          webViewRef.current.injectJavaScript(js);
         }
       }
     } catch (e) {}
@@ -428,7 +434,6 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
       width: 54px; height: 54px;
       display: flex; align-items: center; justify-content: center;
       transform-origin: center center;
-      transition: transform 0.25s linear;
     }
     .tanker-img {
       width: 52px; height: 52px; object-fit: contain;
@@ -554,7 +559,7 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
         iconSize: [100, 48],
         iconAnchor: [50, 42]
       });
-      L.marker(depot, { icon: depotIcon }).addTo(map);
+      window.depotMarkerObj = L.marker(depot, { icon: depotIcon }).addTo(map);
     }
 
     // 4. Custom 2D/3D Top-Down Fuel Tanker Icon Marker
@@ -589,8 +594,13 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
     var curLon = livePos[1];
     var targetLat = livePos[0];
     var targetLon = livePos[1];
-    var curAngle = 0;
-    var targetAngle = 0;
+    var prevGpsLat = livePos[0];
+    var prevGpsLon = livePos[1];
+
+    // Initialize tanker pointing forward towards destination site
+    var initialBearing = calculateBearing(livePos[0], livePos[1], site[0], site[1]);
+    var curAngle = initialBearing;
+    var targetAngle = initialBearing;
 
     // 60fps continuous smooth motion loop
     function animateFrame() {
@@ -598,10 +608,11 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
       curLon = lerp(curLon, targetLon, 0.08);
 
       var diff = (targetAngle - curAngle + 180) % 360 - 180;
-      curAngle = (curAngle + diff * 0.12 + 360) % 360;
+      curAngle = (curAngle + diff * 0.15 + 360) % 360;
 
       bowserMarker.setLatLng([curLat, curLon]);
-      var rot = document.getElementById('tankerRotator');
+      var el = bowserMarker.getElement();
+      var rot = el ? el.querySelector('.tanker-rotator') : document.getElementById('tankerRotator');
       if (rot) {
         rot.style.transform = 'rotate(' + curAngle.toFixed(1) + 'deg)';
       }
@@ -612,20 +623,26 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
     function updateTankerPos(newLat, newLon, explicitAngle) {
       if (typeof newLat !== 'number' || typeof newLon !== 'number' || isNaN(newLat) || isNaN(newLon)) return;
 
-      // Calculate forward driving angle whenever truck moves > 3-4 meters
-      var dLat = newLat - curLat;
-      var dLon = newLon - curLon;
-      var hasMoved = (Math.abs(dLat) > 0.00003 || Math.abs(dLon) > 0.00003);
+      // Calculate forward driving angle whenever truck moves > 2 meters
+      var dLat = newLat - prevGpsLat;
+      var dLon = newLon - prevGpsLon;
+      var distSq = dLat * dLat + dLon * dLon;
 
-      if (hasMoved) {
-        var bearing = (typeof explicitAngle === 'number' && explicitAngle > 0 && explicitAngle <= 360)
+      if (distSq > 0.00000005) {
+        var bearing = (typeof explicitAngle === 'number' && !isNaN(explicitAngle) && explicitAngle > 0 && explicitAngle <= 360)
           ? explicitAngle
-          : calculateBearing(curLat, curLon, newLat, newLon);
+          : calculateBearing(prevGpsLat, prevGpsLon, newLat, newLon);
         targetAngle = bearing;
+        prevGpsLat = newLat;
+        prevGpsLon = newLon;
       }
 
       targetLat = newLat;
       targetLon = newLon;
+
+      if (window.depotMarkerObj && map.hasLayer(window.depotMarkerObj)) {
+        map.removeLayer(window.depotMarkerObj);
+      }
     }
 
     // Real-Time GPS updates via Web & Mobile WebView messages (Sub-second sync)
@@ -637,6 +654,7 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
         updateTankerPos(nLat, nLon, data.heading);
       }
     }
+    window.onIncomingGps = onIncomingGps;
 
     window.addEventListener('message', function(event) {
       try {
@@ -664,6 +682,11 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
 </body>
 </html>`;
   };
+
+  // Persistent Map HTML: Only re-initialize if order changes, preventing reload resets!
+  const mapHtml = useMemo(() => {
+    return getInteractiveMapHtml();
+  }, [activeOrder?.id]);
 
   return (
     <ScrollView
@@ -717,7 +740,7 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
         {Platform.OS === 'web' ? (
           <iframe
             ref={iframeRef}
-            srcDoc={getInteractiveMapHtml()}
+            srcDoc={mapHtml}
             title="Live Bowser Tracking Map"
             style={{
               width: '100%',
@@ -730,7 +753,7 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
           <WebView
             ref={webViewRef}
             originWhitelist={['*']}
-            source={{ html: getInteractiveMapHtml() }}
+            source={{ html: mapHtml }}
             style={{
               width: '100%',
               height: 360,
