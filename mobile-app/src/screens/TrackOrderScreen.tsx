@@ -53,365 +53,44 @@ interface TrackedOrder {
   deliveredAt?: string;
 }
 
-export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
-  orderId,
-  onNavigate,
-  currentUser,
-}) => {
-  const { width } = useWindowDimensions();
-  const isDesktop = Platform.OS === 'web' && width >= 768;
-
-  const [loading, setLoading] = useState(true);
-  const [activeOrder, setActiveOrder] = useState<TrackedOrder | null>(null);
-  const [recentOrders, setRecentOrders] = useState<TrackedOrder[]>([]);
-  const [parentScrollEnabled, setParentScrollEnabled] = useState(true);
-
-  const webViewRef = useRef<any>(null);
-  const iframeRef = useRef<any>(null);
-  const socketRef = useRef<Socket | null>(null);
-
-  const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'https://extradiesel.in';
-
-  // Helper to push real-time GPS coordinates to Leaflet Map iframe or WebView
-  const sendCoordsToMap = (lat: number, lon: number, heading?: number | null) => {
-    const payload = JSON.stringify({ type: 'BOWSER_GPS', lat, lon, heading: heading ?? null });
-    try {
-      if (Platform.OS === 'web') {
-        if (iframeRef.current && (iframeRef.current as any).contentWindow) {
-          const win = (iframeRef.current as any).contentWindow;
-          win.postMessage(payload, '*');
-          if (typeof win.onIncomingGps === 'function') {
-            win.onIncomingGps({ type: 'BOWSER_GPS', lat, lon, heading: heading ?? null });
-          }
-        }
-      } else {
-        if (webViewRef.current) {
-          webViewRef.current.postMessage(payload);
-          const js = `if (window.onIncomingGps) { window.onIncomingGps(${payload}); } true;`;
-          webViewRef.current.injectJavaScript(js);
-        }
-      }
-    } catch (e) {}
-  };
-
-  // Load Order Data
-  useEffect(() => {
-    const fetchOrderData = async () => {
-      try {
-        setLoading(true);
-        const emailParam = currentUser?.email ? `email=${encodeURIComponent(currentUser.email)}` : 'all=true';
-        const res = await fetch(`${baseUrl}/api/orders?${emailParam}`);
-        const data = await res.json();
-
-        if (data.success && Array.isArray(data.orders)) {
-          setRecentOrders(data.orders);
-
-          // Find requested order or latest active non-delivered order
-          let found: TrackedOrder | null = null;
-          if (orderId) {
-            found = data.orders.find((o: TrackedOrder) => o.id === orderId) || null;
-          }
-          if (!found) {
-            found = data.orders.find(
-              (o: TrackedOrder) => o.status === 'out_for_delivery' || o.status === 'arrived' || o.status === 'assigned' || o.status === 'pending'
-            ) || data.orders[0] || null;
-          }
-
-          setActiveOrder(found);
-        }
-      } catch (e) {
-        console.error('Failed to load tracking data:', e);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchOrderData();
-  }, [orderId, currentUser?.email]);
-
-  // Real-Time Socket.io Live Tracking Connection
-  useEffect(() => {
-    if (!activeOrder?.id || activeOrder.status === 'delivered') return;
-
-    const socket = io(baseUrl, {
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionAttempts: 25,
-      reconnectionDelay: 1000,
-    });
-    socketRef.current = socket;
-
-    socket.on('connect', () => {
-      socket.emit('join_order_track', activeOrder.id);
-    });
-
-    // Receive sub-second live GPS coordinates broadcast from Bowser Captain's phone
-    socket.on('bowser_location_changed', (data: { orderId: string; lat: number; lon: number; heading?: number | null; speed?: number | null }) => {
-      if (data && data.orderId === activeOrder.id) {
-        setActiveOrder((prev) => {
-          if (!prev) return null;
-          return {
-            ...prev,
-            captainLat: data.lat,
-            captainLon: data.lon,
-            captainHeading: data.heading,
-            captainSpeed: data.speed,
-            lastLocationUpdate: new Date().toISOString(),
-          };
-        });
-        sendCoordsToMap(data.lat, data.lon, data.heading);
-      }
-    });
-
-    // Receive immediate status transitions (e.g. Assigned -> Out for Delivery -> Arrived)
-    socket.on('order_status_changed', (data: { orderId: string; status: any; statusText?: string; order?: any }) => {
-      if (data && data.orderId === activeOrder.id) {
-        setActiveOrder((prev) => {
-          if (!prev) return null;
-          return {
-            ...prev,
-            ...(data.order || {}),
-            status: data.status,
-            statusText: data.statusText || prev.statusText,
-          };
-        });
-      }
-    });
-
-    return () => {
-      socket.emit('leave_order_track', activeOrder.id);
-      socket.disconnect();
-      socketRef.current = null;
-    };
-  }, [activeOrder?.id, baseUrl]);
-
-  // Periodic 5-second polling fallback to keep order state in sync continuously
-  useEffect(() => {
-    if (!activeOrder?.id || activeOrder.status === 'delivered') return;
-
-    const pollTimer = setInterval(async () => {
-      try {
-        const res = await fetch(`${baseUrl}/api/orders/${activeOrder.id}`);
-        const data = await res.json();
-        if (data.success && data.order) {
-          setActiveOrder((prev) => ({
-            ...prev,
-            ...data.order,
-          }));
-          if (data.order.captainLat && data.order.captainLon) {
-            sendCoordsToMap(data.order.captainLat, data.order.captainLon, data.order.captainHeading);
-          }
-        }
-      } catch (e) {}
-    }, 5000);
-
-    return () => clearInterval(pollTimer);
-  }, [activeOrder?.id, activeOrder?.status]);
-
-  // Calculate genuine Haversine distance between Bowser and Delivery Site
-  const calcDistance = useMemo(() => {
-    if (!activeOrder?.captainLat || !activeOrder?.captainLon) return null;
-    let dLat = 17.313112;
-    let dLon = 78.545285;
-    if (activeOrder.mapsLink) {
-      const q = activeOrder.mapsLink.match(/(?:q|destination|query)=(-?\d+\.\d+),(-?\d+\.\d+)/);
-      if (q) {
-        dLat = parseFloat(q[1]);
-        dLon = parseFloat(q[2]);
-      }
-    } else if (activeOrder.address) {
-      const c = activeOrder.address.match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
-      if (c) {
-        dLat = parseFloat(c[1]);
-        dLon = parseFloat(c[2]);
-      }
+const getInteractiveMapHtml = (activeOrder: TrackedOrder) => {
+  // Dynamic Destination Coordinates from active order
+  let destLat = 17.313112;
+  let destLon = 78.545285;
+  if (activeOrder?.mapsLink) {
+    const qMatch = activeOrder.mapsLink.match(/(?:q|destination|query)=(-?\d+\.\d+),(-?\d+\.\d+)/);
+    if (qMatch) {
+      destLat = parseFloat(qMatch[1]);
+      destLon = parseFloat(qMatch[2]);
     }
-    const R = 6371; // km
-    const dL = ((dLat - activeOrder.captainLat) * Math.PI) / 180;
-    const dO = ((dLon - activeOrder.captainLon) * Math.PI) / 180;
-    const a =
-      Math.sin(dL / 2) * Math.sin(dL / 2) +
-      Math.cos((activeOrder.captainLat * Math.PI) / 180) *
-        Math.cos((dLat * Math.PI) / 180) *
-        Math.sin(dO / 2) *
-        Math.sin(dO / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return parseFloat((R * c).toFixed(1));
-  }, [activeOrder?.captainLat, activeOrder?.captainLon, activeOrder?.address, activeOrder?.mapsLink]);
-
-  // Listen for driver assignment update & trigger status bar push notification ONLY once per driver assignment
-  useEffect(() => {
-    if (!activeOrder?.id) return;
-
-    const checkAndNotify = async () => {
-      try {
-        // 1. Captain Assigned Notification
-        if (activeOrder.assignedToName) {
-          const assignKey = `ed_notif_assign_${activeOrder.id}_${activeOrder.assignedToName}`;
-          const alreadyAssigned = await AsyncStorage.getItem(assignKey);
-          if (!alreadyAssigned) {
-            await AsyncStorage.setItem(assignKey, 'true');
-            await sendSystemNotification(
-              '🚚 Bowser Captain Assigned!',
-              `Captain ${activeOrder.assignedToName} (${activeOrder.vehicleNumber || 'Bowser'}) has been assigned to your order #${activeOrder.id}.`,
-              'driver'
-            ).catch(() => {});
-          }
-        }
-
-        // 2. Out for Delivery Notification
-        if (activeOrder.status === 'out_for_delivery') {
-          const outKey = `ed_notif_out_${activeOrder.id}`;
-          const alreadyOut = await AsyncStorage.getItem(outKey);
-          if (!alreadyOut) {
-            await AsyncStorage.setItem(outKey, 'true');
-            await sendSystemNotification(
-              '🚀 Fuel Tanker Out for Delivery!',
-              `Bowser (${activeOrder.vehicleNumber || 'Bowser'}) is en route to your site. Expected shortly!`,
-              'driver'
-            ).catch(() => {});
-          }
-        }
-
-        // 3. Captain Arrived at Site Notification
-        if (activeOrder.status === 'arrived') {
-          const arriveKey = `ed_notif_arrive_${activeOrder.id}`;
-          const alreadyArrived = await AsyncStorage.getItem(arriveKey);
-          if (!alreadyArrived) {
-            await AsyncStorage.setItem(arriveKey, 'true');
-            await sendSystemNotification(
-              '📍 Bowser Captain Arrived at Site!',
-              `Captain ${activeOrder.assignedToName || 'Bowser'} has reached your delivery destination and is preparing smart meter dispensing.`,
-              'driver'
-            ).catch(() => {});
-          }
-        }
-
-        // 4. Delivered Notification
-        if (activeOrder.status === 'delivered') {
-          const deliverKey = `ed_notif_delivered_${activeOrder.id}`;
-          const alreadyDelivered = await AsyncStorage.getItem(deliverKey);
-          if (!alreadyDelivered) {
-            await AsyncStorage.setItem(deliverKey, 'true');
-            await sendSystemNotification(
-              '✅ Fuel Dispensed & Delivered!',
-              `Successfully dispensed ${activeOrder.liters} Liters of BS-VI Diesel for Order #${activeOrder.id}. Your digital tax invoice is ready.`,
-              'order'
-            ).catch(() => {});
-          }
-        }
-      } catch (e) {}
-    };
-
-    checkAndNotify();
-  }, [activeOrder?.status, activeOrder?.assignedToName, activeOrder?.id]);
-
-  const driverName = activeOrder?.assignedToName || 'Assigned Delivery Captain';
-  const bowserNo = activeOrder?.vehicleNumber || 'Bowser TS 09 UB 4521';
-  const driverPhone = '+919989551305';
-
-  const handleCallDriver = () => {
-    Linking.openURL(`tel:${driverPhone}`);
-  };
-
-  const handleWhatsAppDriver = () => {
-    const text = encodeURIComponent(
-      `Hi, checking live delivery status of Extra Diesel Order #${activeOrder?.id || ''}.`
-    );
-    Linking.openURL(`https://wa.me/919989551305?text=${text}`);
-  };
-
-  const getStatusBadge = (status?: string) => {
-    switch (status) {
-      case 'delivered':
-        return { label: 'SUCCESSFULLY DELIVERED', color: '#059669', bg: '#ECFDF5' };
-      case 'arrived':
-        return { label: 'CAPTAIN ARRIVED AT SITE', color: '#D97706', bg: '#FEF3C7' };
-      case 'out_for_delivery':
-        return { label: 'ON THE WAY • LIVE TRACKING', color: '#059669', bg: '#ECFDF5' };
-      case 'assigned':
-        return { label: 'BOWSER ASSIGNED • LOADING FUEL', color: '#2563EB', bg: '#EFF6FF' };
-      default:
-        return { label: 'ORDER CONFIRMED • DISPATCHING', color: '#2563EB', bg: '#EFF6FF' };
+  } else if (activeOrder?.address) {
+    const cMatch = activeOrder.address.match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
+    if (cMatch) {
+      destLat = parseFloat(cMatch[1]);
+      destLon = parseFloat(cMatch[2]);
     }
-  };
-
-  if (loading) {
-    return (
-      <View style={styles.centerBox}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={styles.loadingText}>Loading Live Delivery Status...</Text>
-      </View>
-    );
   }
 
-  // If no order exists at all
-  if (!activeOrder) {
-    return (
-      <ScrollView style={styles.container} contentContainerStyle={styles.emptyContent}>
-        <View style={styles.emptyCard}>
-          <View style={styles.emptyIconCircle}>
-            <Ionicons name="location-outline" size={48} color={COLORS.primary} />
-          </View>
-          <Text style={styles.emptyTitle}>No Active Deliveries to Track</Text>
-          <Text style={styles.emptySub}>
-            You do not have any ongoing diesel bowser orders right now. Place a new order to track doorstep fuel dispensing in real-time.
-          </Text>
-          <TouchableOpacity
-            style={styles.orderNowBtn}
-            onPress={() => onNavigate('order')}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="flash" size={18} color={COLORS.white} />
-            <Text style={styles.orderNowBtnText}>Order Diesel Now</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    );
-  }
-
-  const badge = getStatusBadge(activeOrder.status);
   const isDelivered = activeOrder.status === 'delivered';
   const isArrived = activeOrder.status === 'arrived' || isDelivered;
   const isTripActive = activeOrder.status === 'out_for_delivery' || (!!activeOrder.captainLat && !isArrived && !isDelivered);
-  const isOutForDelivery = isTripActive || isArrived;
-  const isAssigned = !!activeOrder.assignedToName || activeOrder.status === 'assigned' || isOutForDelivery;
+  const isStationaryAtDepot = !isTripActive && !isArrived && !isDelivered && activeOrder.status !== 'out_for_delivery';
+  const isStationaryAtSite = isArrived || isDelivered;
+  const bowserNo = activeOrder.vehicleNumber || 'Bowser TS 09 UB 4521';
 
-  const getInteractiveMapHtml = () => {
-    // Dynamic Destination Coordinates from active order
-    let destLat = 17.313112;
-    let destLon = 78.545285;
-    if (activeOrder?.mapsLink) {
-      const qMatch = activeOrder.mapsLink.match(/(?:q|destination|query)=(-?\d+\.\d+),(-?\d+\.\d+)/);
-      if (qMatch) {
-        destLat = parseFloat(qMatch[1]);
-        destLon = parseFloat(qMatch[2]);
-      }
-    } else if (activeOrder?.address) {
-      const cMatch = activeOrder.address.match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
-      if (cMatch) {
-        destLat = parseFloat(cMatch[1]);
-        destLon = parseFloat(cMatch[2]);
-      }
-    }
+  const depotLat = 17.3550;
+  const depotLon = 78.5150;
+  const midLat = (depotLat + destLat) / 2;
+  const midLon = (depotLon + destLon) / 2;
 
-    const depotLat = 17.3550;
-    const depotLon = 78.5150;
-    const midLat = (depotLat + destLat) / 2;
-    const midLon = (depotLon + destLon) / 2;
+  const currentLat = activeOrder?.captainLat || (activeOrder.status === 'out_for_delivery' ? midLat : (isArrived || isDelivered ? destLat : depotLat));
+  const currentLon = activeOrder?.captainLon || (activeOrder.status === 'out_for_delivery' ? midLon : (isArrived || isDelivered ? destLon : depotLon));
 
-    const currentLat = activeOrder?.captainLat || (activeOrder.status === 'out_for_delivery' ? midLat : (isArrived || isDelivered ? destLat : depotLat));
-    const currentLon = activeOrder?.captainLon || (activeOrder.status === 'out_for_delivery' ? midLon : (isArrived || isDelivered ? destLon : depotLon));
+  const shortSiteTitle = activeOrder?.address
+    ? activeOrder.address.split(',')[0].trim()
+    : 'Delivery Site';
 
-    const shortSiteTitle = activeOrder?.address
-      ? activeOrder.address.split(',')[0].trim()
-      : 'Delivery Site';
-
-    const isTripActive = activeOrder.status === 'out_for_delivery' || (!!activeOrder.captainLat && !isArrived && !isDelivered);
-    const isStationaryAtDepot = !isTripActive && !isArrived && !isDelivered && activeOrder.status !== 'out_for_delivery';
-    const isStationaryAtSite = isArrived || isDelivered;
-
-    return `<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8" />
@@ -681,12 +360,338 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
   </script>
 </body>
 </html>`;
+};
+
+export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
+  orderId,
+  onNavigate,
+  currentUser,
+}) => {
+  const { width } = useWindowDimensions();
+  const isDesktop = Platform.OS === 'web' && width >= 768;
+
+  const [loading, setLoading] = useState(true);
+  const [activeOrder, setActiveOrder] = useState<TrackedOrder | null>(null);
+  const [recentOrders, setRecentOrders] = useState<TrackedOrder[]>([]);
+  const [parentScrollEnabled, setParentScrollEnabled] = useState(true);
+
+  const webViewRef = useRef<any>(null);
+  const iframeRef = useRef<any>(null);
+  const socketRef = useRef<Socket | null>(null);
+
+  const baseUrl = APP_CONFIG.LIVE_API_BASE_URL || 'https://extradiesel.in';
+
+  // Helper to push real-time GPS coordinates to Leaflet Map iframe or WebView
+  const sendCoordsToMap = (lat: number, lon: number, heading?: number | null) => {
+    const payload = JSON.stringify({ type: 'BOWSER_GPS', lat, lon, heading: heading ?? null });
+    try {
+      if (Platform.OS === 'web') {
+        if (iframeRef.current && (iframeRef.current as any).contentWindow) {
+          const win = (iframeRef.current as any).contentWindow;
+          win.postMessage(payload, '*');
+          if (typeof win.onIncomingGps === 'function') {
+            win.onIncomingGps({ type: 'BOWSER_GPS', lat, lon, heading: heading ?? null });
+          }
+        }
+      } else {
+        if (webViewRef.current) {
+          webViewRef.current.postMessage(payload);
+          const js = `if (window.onIncomingGps) { window.onIncomingGps(${payload}); } true;`;
+          webViewRef.current.injectJavaScript(js);
+        }
+      }
+    } catch (e) {}
   };
 
+  // Load Order Data
+  useEffect(() => {
+    const fetchOrderData = async () => {
+      try {
+        setLoading(true);
+        const emailParam = currentUser?.email ? `email=${encodeURIComponent(currentUser.email)}` : 'all=true';
+        const res = await fetch(`${baseUrl}/api/orders?${emailParam}`);
+        const data = await res.json();
+
+        if (data.success && Array.isArray(data.orders)) {
+          setRecentOrders(data.orders);
+
+          // Find requested order or latest active non-delivered order
+          let found: TrackedOrder | null = null;
+          if (orderId) {
+            found = data.orders.find((o: TrackedOrder) => o.id === orderId) || null;
+          }
+          if (!found) {
+            found = data.orders.find(
+              (o: TrackedOrder) => o.status === 'out_for_delivery' || o.status === 'arrived' || o.status === 'assigned' || o.status === 'pending'
+            ) || data.orders[0] || null;
+          }
+
+          setActiveOrder(found);
+        }
+      } catch (e) {
+        console.error('Failed to load tracking data:', e);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOrderData();
+  }, [orderId, currentUser?.email]);
+
+  // Real-Time Socket.io Live Tracking Connection
+  useEffect(() => {
+    if (!activeOrder?.id || activeOrder.status === 'delivered') return;
+
+    const socket = io(baseUrl, {
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: 25,
+      reconnectionDelay: 1000,
+    });
+    socketRef.current = socket;
+
+    socket.on('connect', () => {
+      socket.emit('join_order_track', activeOrder.id);
+    });
+
+    // Receive sub-second live GPS coordinates broadcast from Bowser Captain's phone
+    socket.on('bowser_location_changed', (data: { orderId: string; lat: number; lon: number; heading?: number | null; speed?: number | null }) => {
+      if (data && data.orderId === activeOrder.id) {
+        setActiveOrder((prev) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            captainLat: data.lat,
+            captainLon: data.lon,
+            captainHeading: data.heading,
+            captainSpeed: data.speed,
+            lastLocationUpdate: new Date().toISOString(),
+          };
+        });
+        sendCoordsToMap(data.lat, data.lon, data.heading);
+      }
+    });
+
+    // Receive immediate status transitions (e.g. Assigned -> Out for Delivery -> Arrived)
+    socket.on('order_status_changed', (data: { orderId: string; status: any; statusText?: string; order?: any }) => {
+      if (data && data.orderId === activeOrder.id) {
+        setActiveOrder((prev) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            ...(data.order || {}),
+            status: data.status,
+            statusText: data.statusText || prev.statusText,
+          };
+        });
+      }
+    });
+
+    return () => {
+      socket.emit('leave_order_track', activeOrder.id);
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, [activeOrder?.id, baseUrl]);
+
+  // Periodic 5-second polling fallback to keep order state in sync continuously
+  useEffect(() => {
+    if (!activeOrder?.id || activeOrder.status === 'delivered') return;
+
+    const pollTimer = setInterval(async () => {
+      try {
+        const res = await fetch(`${baseUrl}/api/orders/${activeOrder.id}`);
+        const data = await res.json();
+        if (data.success && data.order) {
+          setActiveOrder((prev) => ({
+            ...prev,
+            ...data.order,
+          }));
+          if (data.order.captainLat && data.order.captainLon) {
+            sendCoordsToMap(data.order.captainLat, data.order.captainLon, data.order.captainHeading);
+          }
+        }
+      } catch (e) {}
+    }, 5000);
+
+    return () => clearInterval(pollTimer);
+  }, [activeOrder?.id, activeOrder?.status]);
+
+  // Calculate genuine Haversine distance between Bowser and Delivery Site
+  const calcDistance = useMemo(() => {
+    if (!activeOrder?.captainLat || !activeOrder?.captainLon) return null;
+    let dLat = 17.313112;
+    let dLon = 78.545285;
+    if (activeOrder.mapsLink) {
+      const q = activeOrder.mapsLink.match(/(?:q|destination|query)=(-?\d+\.\d+),(-?\d+\.\d+)/);
+      if (q) {
+        dLat = parseFloat(q[1]);
+        dLon = parseFloat(q[2]);
+      }
+    } else if (activeOrder.address) {
+      const c = activeOrder.address.match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
+      if (c) {
+        dLat = parseFloat(c[1]);
+        dLon = parseFloat(c[2]);
+      }
+    }
+    const R = 6371; // km
+    const dL = ((dLat - activeOrder.captainLat) * Math.PI) / 180;
+    const dO = ((dLon - activeOrder.captainLon) * Math.PI) / 180;
+    const a =
+      Math.sin(dL / 2) * Math.sin(dL / 2) +
+      Math.cos((activeOrder.captainLat * Math.PI) / 180) *
+        Math.cos((dLat * Math.PI) / 180) *
+        Math.sin(dO / 2) *
+        Math.sin(dO / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return parseFloat((R * c).toFixed(1));
+  }, [activeOrder?.captainLat, activeOrder?.captainLon, activeOrder?.address, activeOrder?.mapsLink]);
+
   // Persistent Map HTML: Only re-initialize if order changes, preventing reload resets!
+  // Declared at top level before any early returns to strictly follow React Rules of Hooks!
   const mapHtml = useMemo(() => {
-    return getInteractiveMapHtml();
+    if (!activeOrder) return '';
+    return getInteractiveMapHtml(activeOrder);
   }, [activeOrder?.id]);
+
+  // Listen for driver assignment update & trigger status bar push notification ONLY once per driver assignment
+  useEffect(() => {
+    if (!activeOrder?.id) return;
+
+    const checkAndNotify = async () => {
+      try {
+        // 1. Captain Assigned Notification
+        if (activeOrder.assignedToName) {
+          const assignKey = `ed_notif_assign_${activeOrder.id}_${activeOrder.assignedToName}`;
+          const alreadyAssigned = await AsyncStorage.getItem(assignKey);
+          if (!alreadyAssigned) {
+            await AsyncStorage.setItem(assignKey, 'true');
+            await sendSystemNotification(
+              '🚚 Bowser Captain Assigned!',
+              `Captain ${activeOrder.assignedToName} (${activeOrder.vehicleNumber || 'Bowser'}) has been assigned to your order #${activeOrder.id}.`,
+              'driver'
+            ).catch(() => {});
+          }
+        }
+
+        // 2. Out for Delivery Notification
+        if (activeOrder.status === 'out_for_delivery') {
+          const outKey = `ed_notif_out_${activeOrder.id}`;
+          const alreadyOut = await AsyncStorage.getItem(outKey);
+          if (!alreadyOut) {
+            await AsyncStorage.setItem(outKey, 'true');
+            await sendSystemNotification(
+              '🚀 Fuel Tanker Out for Delivery!',
+              `Bowser (${activeOrder.vehicleNumber || 'Bowser'}) is en route to your site. Expected shortly!`,
+              'driver'
+            ).catch(() => {});
+          }
+        }
+
+        // 3. Captain Arrived at Site Notification
+        if (activeOrder.status === 'arrived') {
+          const arriveKey = `ed_notif_arrive_${activeOrder.id}`;
+          const alreadyArrived = await AsyncStorage.getItem(arriveKey);
+          if (!alreadyArrived) {
+            await AsyncStorage.setItem(arriveKey, 'true');
+            await sendSystemNotification(
+              '📍 Bowser Captain Arrived at Site!',
+              `Captain ${activeOrder.assignedToName || 'Bowser'} has reached your delivery destination and is preparing smart meter dispensing.`,
+              'driver'
+            ).catch(() => {});
+          }
+        }
+
+        // 4. Delivered Notification
+        if (activeOrder.status === 'delivered') {
+          const deliverKey = `ed_notif_delivered_${activeOrder.id}`;
+          const alreadyDelivered = await AsyncStorage.getItem(deliverKey);
+          if (!alreadyDelivered) {
+            await AsyncStorage.setItem(deliverKey, 'true');
+            await sendSystemNotification(
+              '✅ Fuel Dispensed & Delivered!',
+              `Successfully dispensed ${activeOrder.liters} Liters of BS-VI Diesel for Order #${activeOrder.id}. Your digital tax invoice is ready.`,
+              'order'
+            ).catch(() => {});
+          }
+        }
+      } catch (e) {}
+    };
+
+    checkAndNotify();
+  }, [activeOrder?.status, activeOrder?.assignedToName, activeOrder?.id]);
+
+  const driverName = activeOrder?.assignedToName || 'Assigned Delivery Captain';
+  const bowserNo = activeOrder?.vehicleNumber || 'Bowser TS 09 UB 4521';
+  const driverPhone = '+919989551305';
+
+  const handleCallDriver = () => {
+    Linking.openURL(`tel:${driverPhone}`);
+  };
+
+  const handleWhatsAppDriver = () => {
+    const text = encodeURIComponent(
+      `Hi, checking live delivery status of Extra Diesel Order #${activeOrder?.id || ''}.`
+    );
+    Linking.openURL(`https://wa.me/919989551305?text=${text}`);
+  };
+
+  const getStatusBadge = (status?: string) => {
+    switch (status) {
+      case 'delivered':
+        return { label: 'SUCCESSFULLY DELIVERED', color: '#059669', bg: '#ECFDF5' };
+      case 'arrived':
+        return { label: 'CAPTAIN ARRIVED AT SITE', color: '#D97706', bg: '#FEF3C7' };
+      case 'out_for_delivery':
+        return { label: 'ON THE WAY • LIVE TRACKING', color: '#059669', bg: '#ECFDF5' };
+      case 'assigned':
+        return { label: 'BOWSER ASSIGNED • LOADING FUEL', color: '#2563EB', bg: '#EFF6FF' };
+      default:
+        return { label: 'ORDER CONFIRMED • DISPATCHING', color: '#2563EB', bg: '#EFF6FF' };
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.centerBox}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text style={styles.loadingText}>Loading Live Delivery Status...</Text>
+      </View>
+    );
+  }
+
+  // If no order exists at all
+  if (!activeOrder) {
+    return (
+      <ScrollView style={styles.container} contentContainerStyle={styles.emptyContent}>
+        <View style={styles.emptyCard}>
+          <View style={styles.emptyIconCircle}>
+            <Ionicons name="location-outline" size={48} color={COLORS.primary} />
+          </View>
+          <Text style={styles.emptyTitle}>No Active Deliveries to Track</Text>
+          <Text style={styles.emptySub}>
+            You do not have any ongoing diesel bowser orders right now. Place a new order to track doorstep fuel dispensing in real-time.
+          </Text>
+          <TouchableOpacity
+            style={styles.orderNowBtn}
+            onPress={() => onNavigate('order')}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="flash" size={18} color={COLORS.white} />
+            <Text style={styles.orderNowBtnText}>Order Diesel Now</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    );
+  }
+
+  const badge = getStatusBadge(activeOrder.status);
+  const isDelivered = activeOrder.status === 'delivered';
+  const isArrived = activeOrder.status === 'arrived' || isDelivered;
+  const isTripActive = activeOrder.status === 'out_for_delivery' || (!!activeOrder.captainLat && !isArrived && !isDelivered);
+  const isOutForDelivery = isTripActive || isArrived;
+  const isAssigned = !!activeOrder.assignedToName || activeOrder.status === 'assigned' || isOutForDelivery;
 
   return (
     <ScrollView
@@ -724,9 +729,9 @@ export const TrackOrderScreen: React.FC<TrackOrderScreenProps> = ({
         </View>
         <Text style={styles.siteAddressText}>{activeOrder.address || 'Plot 42, Hitech City, Hyderabad'}</Text>
         <View style={styles.siteMetaRow}>
-          <Text style={styles.siteMetaPill}>Fuel: {activeOrder.liters} Liters</Text>
-          <Text style={styles.siteMetaPill}>Total: ₹{Number(activeOrder.total).toLocaleString('en-IN')}</Text>
-          <Text style={styles.siteMetaPill}>Date: {activeOrder.date}</Text>
+          <Text style={styles.siteMetaPill}>Fuel: {activeOrder.liters || 0} Liters</Text>
+          <Text style={styles.siteMetaPill}>Total: ₹{Number(activeOrder.total || 0).toLocaleString('en-IN')}</Text>
+          <Text style={styles.siteMetaPill}>Date: {activeOrder.date || 'Today'}</Text>
         </View>
       </View>
 
