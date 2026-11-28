@@ -64,8 +64,9 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
   onLogout,
   currentUser,
 }) => {
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const isDesktop = Platform.OS === 'web' && width >= 768;
+  const isPipMode = height > 0 && height < 360;
 
   const [activeTab, setActiveTab] = useState<'assigned' | 'completed'>('assigned');
   const [orders, setOrders] = useState<DeliveryOrder[]>([]);
@@ -614,6 +615,78 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
   // Split orders into Assigned (Active) and Completed
   const assignedOrders = orders.filter((o) => o.status !== 'delivered' && o.status !== 'cancelled');
   const completedOrders = orders.filter((o) => o.status === 'delivered');
+
+  // When Android OS enters Picture-in-Picture mode (floating over Google Maps or Home screen)
+  if (isPipMode) {
+    const activeOrder = floatingPipOrder || assignedOrders[0] || orders[0];
+    return (
+      <View style={styles.pipFullscreenContainer}>
+        <View style={styles.pipCardInner}>
+          {/* Top Bar: 🔴 Captain App • LIVE GPS */}
+          <View style={styles.floatingPipHeader}>
+            <View style={styles.floatingPipLiveRow}>
+              <View style={styles.floatingPipPulseDot} />
+              <Text style={styles.floatingPipLiveText}>Captain App</Text>
+              <Text style={styles.floatingPipGpsTag}>• LIVE GPS</Text>
+            </View>
+
+            {activeOrder && (
+              <TouchableOpacity
+                onPress={() => openExternalMapsApp(activeOrder)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={styles.floatingPipMapsIconBtn}
+              >
+                <Ionicons name="navigate" size={12} color={COLORS.primary} />
+                <Text style={styles.floatingPipMapsIconText}>Maps</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Body: Order Info & Status Action Button */}
+          {activeOrder ? (
+            <View style={styles.floatingPipBody}>
+              <View style={{ flex: 1, marginRight: 8 }}>
+                <Text style={styles.floatingPipOrderTitle} numberOfLines={1}>
+                  {activeOrder.name}
+                </Text>
+                {activeOrder.status === 'arrived' ? (
+                  <Text style={styles.floatingPipStatusArrived}>Arrived at Location</Text>
+                ) : (
+                  <Text style={styles.floatingPipSubEnroute} numberOfLines={1}>
+                    ETA {getEtaMinutes(activeOrder)}m | {getRemainingDistance(activeOrder) || '0.8'} km
+                  </Text>
+                )}
+              </View>
+
+              <View style={{ justifyContent: 'center' }}>
+                {activeOrder.status === 'out_for_delivery' || activeOrder.status === 'assigned' ? (
+                  <TouchableOpacity
+                    style={styles.floatingPipArrivedBtn}
+                    onPress={() => {
+                      handleUpdateStatus(activeOrder.id, 'arrived');
+                      setFloatingPipOrder((prev) => (prev ? { ...prev, status: 'arrived' } : null));
+                    }}
+                    activeOpacity={0.88}
+                  >
+                    <Text style={styles.floatingPipArrivedBtnText}>ARRIVED</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={styles.floatingPipReachedBtn}>
+                    <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                    <Text style={styles.floatingPipReachedBtnText}>REACHED</Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          ) : (
+            <View style={styles.floatingPipBody}>
+              <Text style={styles.floatingPipOrderTitle}>Extra Diesel Captain</Text>
+            </View>
+          )}
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -1226,92 +1299,6 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
           </View>
         )}
       </Modal>
-      {/* Rapido-Style Floating Screen Overlay (Active during Google Maps Navigation) */}
-      {floatingPipOrder && (
-        <View style={styles.floatingPipCard}>
-          {/* Top Bar: 🟢 Captain App & Controls */}
-          <View style={styles.floatingPipHeader}>
-            <View style={styles.floatingPipLiveRow}>
-              <View style={styles.floatingPipPulseDot} />
-              <Text style={styles.floatingPipLiveText}>Captain App</Text>
-              <Text style={styles.floatingPipGpsTag}>• LIVE GPS</Text>
-            </View>
-
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <TouchableOpacity
-                onPress={() => openExternalMapsApp(floatingPipOrder)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                style={styles.floatingPipMapsIconBtn}
-              >
-                <Ionicons name="navigate" size={13} color={COLORS.primary} />
-                <Text style={styles.floatingPipMapsIconText}>Maps</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => setFloatingPipOrder(null)}
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                style={styles.floatingPipCloseBtn}
-              >
-                <Ionicons name="close" size={16} color="#94A3B8" />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Card Middle: Clickable Body -> switches straight into Captain Dashboard! */}
-          <TouchableOpacity
-            style={styles.floatingPipBody}
-            onPress={handleFloatingCardPress}
-            activeOpacity={0.85}
-          >
-            <View style={{ flex: 1, marginRight: 12 }}>
-              <Text style={styles.floatingPipOrderTitle} numberOfLines={1}>
-                {floatingPipOrder.name} - Order #{floatingPipOrder.id}
-              </Text>
-              {floatingPipOrder.status === 'arrived' ? (
-                <>
-                  <Text style={styles.floatingPipStatusArrived}>Arrived at Location</Text>
-                  <Text style={styles.floatingPipSubArrived}>• Awaiting Customer</Text>
-                </>
-              ) : (
-                <>
-                  <Text style={styles.floatingPipStatusEnroute}>Arriving Soon</Text>
-                  <Text style={styles.floatingPipSubEnroute}>
-                    ETA {getEtaMinutes(floatingPipOrder)} mins away | {getRemainingDistance(floatingPipOrder) || '0.8'} km
-                  </Text>
-                </>
-              )}
-            </View>
-
-            {/* Prominent Action Button: ARRIVED or ✓ REACHED */}
-            <View style={{ justifyContent: 'center' }}>
-              {floatingPipOrder.status === 'out_for_delivery' || floatingPipOrder.status === 'assigned' ? (
-                <TouchableOpacity
-                  style={styles.floatingPipArrivedBtn}
-                  onPress={() => {
-                    handleUpdateStatus(floatingPipOrder.id, 'arrived');
-                    setFloatingPipOrder((prev) => (prev ? { ...prev, status: 'arrived' } : null));
-                  }}
-                  activeOpacity={0.88}
-                >
-                  <Text style={styles.floatingPipArrivedBtnText}>ARRIVED</Text>
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity
-                  style={styles.floatingPipReachedBtn}
-                  onPress={() => {
-                    handleDeliveredClick(floatingPipOrder);
-                    setFloatingPipOrder(null);
-                  }}
-                  activeOpacity={0.88}
-                >
-                  <Ionicons name="checkmark" size={16} color="#FFFFFF" />
-                  <Text style={styles.floatingPipReachedBtnText}>REACHED</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          </TouchableOpacity>
-        </View>
-      )}
     </View>
   );
 };
@@ -2208,6 +2195,24 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
   },
   // Extra Diesel Brand-Themed Floating Screen Overlay Styles (Compact Bottom-Right Widget)
+  pipFullscreenContainer: {
+    flex: 1,
+    backgroundColor: '#0F172A',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 6,
+  },
+  pipCardInner: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#0F172A',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1.5,
+    borderColor: 'rgba(213, 0, 0, 0.7)',
+    justifyContent: 'space-between',
+  },
   floatingPipCard: {
     position: 'absolute',
     bottom: Platform.OS === 'ios' ? 24 : 16,

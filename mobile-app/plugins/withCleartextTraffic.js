@@ -1,7 +1,7 @@
 const { withAndroidManifest, withMainActivity } = require('@expo/config-plugins');
 
 const withCleartextTraffic = (config) => {
-  // 1. Android Manifest updates (Cleartext Traffic + Picture-in-Picture)
+  // 1. Android Manifest updates (Cleartext Traffic + Picture-in-Picture + configChanges)
   config = withAndroidManifest(config, (config) => {
     const androidManifest = config.modResults;
     if (androidManifest?.manifest?.application?.[0]) {
@@ -15,21 +15,58 @@ const withCleartextTraffic = (config) => {
         );
         if (mainActivity) {
           mainActivity.$['android:supportsPictureInPicture'] = 'true';
+
+          // PiP requires smallestScreenSize and screenLayout in configChanges
+          const existingConfig = mainActivity.$['android:configChanges'] || '';
+          const currentConfigs = existingConfig ? existingConfig.split('|').filter(Boolean) : [];
+          const neededConfigs = ['smallestScreenSize', 'screenLayout', 'screenSize', 'orientation'];
+          neededConfigs.forEach((cfg) => {
+            if (!currentConfigs.includes(cfg)) {
+              currentConfigs.push(cfg);
+            }
+          });
+          mainActivity.$['android:configChanges'] = currentConfigs.join('|');
         }
       }
     }
     return config;
   });
 
-  // 2. MainActivity updates (onUserLeaveHint callback to enter PiP when switching to Google Maps)
+  // 2. MainActivity updates (onResume with setAutoEnterEnabled for Android 12+, onUserLeaveHint for Android 8+)
   config = withMainActivity(config, (config) => {
     let contents = config.modResults.contents;
-    if (!contents.includes('onUserLeaveHint')) {
-      const pipCallback = `
+
+    // Remove any previous PiP callback blocks if present to keep code clean & up-to-date
+    if (contents.includes('onUserLeaveHint')) {
+      const startIdx = contents.indexOf('/**\n   * Automatically trigger native Android Picture-in-Picture');
+      if (startIdx !== -1) {
+        const lastBrace = contents.lastIndexOf('}');
+        if (lastBrace > startIdx) {
+          contents = contents.slice(0, startIdx) + contents.slice(lastBrace);
+        }
+      }
+    }
+
+    if (!contents.includes('setAutoEnterEnabled')) {
+      const pipCallbacks = `
   /**
    * Automatically trigger native Android Picture-in-Picture floating window
    * on top of Google Maps when navigating or user leaves app
    */
+  override fun onResume() {
+    super.onResume()
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+      try {
+        val rational = android.util.Rational(16, 9)
+        val params = android.app.PictureInPictureParams.Builder()
+          .setAspectRatio(rational)
+          .setAutoEnterEnabled(true)
+          .build()
+        setPictureInPictureParams(params)
+      } catch (e: Exception) {}
+    }
+  }
+
   override fun onUserLeaveHint() {
     super.onUserLeaveHint()
     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
@@ -46,7 +83,7 @@ const withCleartextTraffic = (config) => {
 `;
       const lastIndex = contents.lastIndexOf('}');
       if (lastIndex !== -1) {
-        contents = contents.slice(0, lastIndex) + pipCallback + '\n}';
+        contents = contents.slice(0, lastIndex) + pipCallbacks + '\n}';
       }
     }
     config.modResults.contents = contents;
