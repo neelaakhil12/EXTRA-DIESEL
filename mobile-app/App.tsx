@@ -450,9 +450,13 @@ function MainApp() {
   useEffect(() => {
     let cleanupFn: (() => void) | undefined;
     const init = async () => {
-      cleanupFn = await initNotifications(() => {
-        // Tapping status bar notification navigates to full Notifications Screen
-        navigateTo('notifications');
+      cleanupFn = await initNotifications((data?: any) => {
+        // Tapping status bar notification navigates to Captain Dashboard if from driver, else Notifications Screen
+        if (data?.screen === 'delivery' || data?.screen === 'delivery_dashboard') {
+          navigateTo('delivery');
+        } else {
+          navigateTo('notifications');
+        }
       });
     };
     init();

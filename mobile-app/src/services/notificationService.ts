@@ -25,7 +25,7 @@ Notifications.setNotificationHandler({
 });
 
 // Initialize Notification Channels and Permissions
-export const initNotifications = async (onNotificationClicked?: () => void) => {
+export const initNotifications = async (onNotificationClicked?: (data?: any) => void) => {
   try {
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('default', {
@@ -50,7 +50,8 @@ export const initNotifications = async (onNotificationClicked?: () => void) => {
     // Response Listener: Called when user taps notification in system status bar
     const responseSub = Notifications.addNotificationResponseReceivedListener((response) => {
       if (onNotificationClicked) {
-        onNotificationClicked();
+        const data = response?.notification?.request?.content?.data;
+        onNotificationClicked(data);
       }
     });
 
