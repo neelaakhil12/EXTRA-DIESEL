@@ -1243,7 +1243,7 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 style={styles.floatingPipMapsIconBtn}
               >
-                <Ionicons name="navigate" size={13} color="#38BDF8" />
+                <Ionicons name="navigate" size={13} color={COLORS.primary} />
                 <Text style={styles.floatingPipMapsIconText}>Maps</Text>
               </TouchableOpacity>
 
@@ -2207,7 +2207,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 13.5,
   },
-  // Rapido-Style Floating Screen Overlay Styles
+  // Extra Diesel Brand-Themed Floating Screen Overlay Styles
   floatingPipCard: {
     position: 'absolute',
     bottom: Platform.OS === 'ios' ? 24 : 16,
@@ -2219,10 +2219,10 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 14,
     borderWidth: 1.5,
-    borderColor: '#334155',
-    shadowColor: '#000',
+    borderColor: 'rgba(213, 0, 0, 0.65)',
+    shadowColor: COLORS.primary,
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.55,
+    shadowOpacity: 0.45,
     shadowRadius: 16,
     elevation: 25,
     zIndex: 99999,
@@ -2245,7 +2245,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#10B981',
+    backgroundColor: COLORS.primary,
   },
   floatingPipLiveText: {
     color: '#FFFFFF',
@@ -2254,7 +2254,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   floatingPipGpsTag: {
-    color: '#38BDF8',
+    color: COLORS.primary,
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.5,
@@ -2263,15 +2263,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+    backgroundColor: 'rgba(213, 0, 0, 0.15)',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: 'rgba(56, 189, 248, 0.3)',
+    borderColor: 'rgba(213, 0, 0, 0.35)',
   },
   floatingPipMapsIconText: {
-    color: '#38BDF8',
+    color: COLORS.primary,
     fontSize: 10.5,
     fontWeight: '700',
   },
@@ -2292,7 +2292,7 @@ const styles = StyleSheet.create({
     marginBottom: 3,
   },
   floatingPipStatusEnroute: {
-    color: '#38BDF8',
+    color: '#F87171',
     fontSize: 12,
     fontWeight: '700',
   },
@@ -2303,7 +2303,7 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   floatingPipStatusArrived: {
-    color: '#10B981',
+    color: '#EF4444',
     fontSize: 12,
     fontWeight: '700',
   },
@@ -2314,13 +2314,13 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   floatingPipArrivedBtn: {
-    backgroundColor: '#10B981',
+    backgroundColor: COLORS.primary,
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 24,
-    shadowColor: '#10B981',
+    shadowColor: COLORS.primary,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
+    shadowOpacity: 0.5,
     shadowRadius: 8,
     elevation: 6,
   },
@@ -2331,16 +2331,16 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   floatingPipReachedBtn: {
-    backgroundColor: '#2563EB',
+    backgroundColor: COLORS.primaryDark,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 18,
     paddingVertical: 12,
     borderRadius: 24,
-    shadowColor: '#2563EB',
+    shadowColor: COLORS.primaryDark,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
+    shadowOpacity: 0.5,
     shadowRadius: 8,
     elevation: 6,
   },
