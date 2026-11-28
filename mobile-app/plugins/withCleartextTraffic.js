@@ -25,15 +25,6 @@ const withCleartextTraffic = (config) => {
   config = withMainActivity(config, (config) => {
     let contents = config.modResults.contents;
     if (!contents.includes('onUserLeaveHint')) {
-      const pipImports = `\nimport android.app.PictureInPictureParams\nimport android.util.Rational\nimport android.os.Build\n`;
-      const packageIndex = contents.indexOf('package ');
-      if (packageIndex !== -1) {
-        const nextLineIndex = contents.indexOf('\n', packageIndex);
-        contents = contents.slice(0, nextLineIndex + 1) + pipImports + contents.slice(nextLineIndex + 1);
-      } else {
-        contents = pipImports + contents;
-      }
-
       const pipCallback = `
   /**
    * Automatically trigger native Android Picture-in-Picture floating window
@@ -41,11 +32,11 @@ const withCleartextTraffic = (config) => {
    */
   override fun onUserLeaveHint() {
     super.onUserLeaveHint()
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
       try {
-        val rational = Rational(16, 9)
-        val builder = PictureInPictureParams.Builder().setAspectRatio(rational)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        val rational = android.util.Rational(16, 9)
+        val builder = android.app.PictureInPictureParams.Builder().setAspectRatio(rational)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
           builder.setAutoEnterEnabled(true)
         }
         enterPictureInPictureMode(builder.build())
