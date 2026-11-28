@@ -10,6 +10,7 @@ import {
   Platform,
   Linking,
   Modal,
+  AppState,
   useWindowDimensions,
 } from 'react-native';
 import * as Location from 'expo-location';
@@ -20,6 +21,7 @@ import { COLORS } from '../constants/theme';
 import { ScreenName } from '../types';
 import { APP_CONFIG } from '../constants/config';
 import { sendSystemNotification } from '../services/notificationService';
+import { floatingOverlayService } from '../services/floatingOverlayService';
 import { TANKER_MARKER_BASE64 } from '../constants/tankerMarkerBase64';
 
 interface DeliveryDashboardScreenProps {
@@ -64,9 +66,8 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
   onLogout,
   currentUser,
 }) => {
-  const { width, height } = useWindowDimensions();
+  const { width } = useWindowDimensions();
   const isDesktop = Platform.OS === 'web' && width >= 768;
-  const isPipMode = height > 0 && height < 360;
 
   const [activeTab, setActiveTab] = useState<'assigned' | 'completed'>('assigned');
   const [orders, setOrders] = useState<DeliveryOrder[]>([]);
@@ -80,6 +81,7 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
   const [lastGpsSyncTime, setLastGpsSyncTime] = useState<string | null>(null);
   const [navigatingOrder, setNavigatingOrder] = useState<DeliveryOrder | null>(null);
   const [floatingPipOrder, setFloatingPipOrder] = useState<DeliveryOrder | null>(null);
+  const floatingPipOrderRef = useRef<DeliveryOrder | null>(null);
   const scrollViewRef = useRef<any>(null);
   const gpsIntervalRef = useRef<any>(null);
   const locationSubRef = useRef<any>(null);
@@ -87,7 +89,11 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
   const ordersRef = useRef<DeliveryOrder[]>(orders);
   const knownOrderIdsRef = useRef<Set<string>>(new Set());
 
-  // Keep ordersRef in sync with latest orders state to avoid stale closure in timers
+  // Keep refs in sync with latest orders & active navigation order
+  useEffect(() => {
+    floatingPipOrderRef.current = floatingPipOrder;
+  }, [floatingPipOrder]);
+
   useEffect(() => {
     ordersRef.current = orders;
     if (floatingPipOrder) {
@@ -95,12 +101,44 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
       if (updated) {
         if (updated.status === 'delivered' || updated.status === 'cancelled') {
           setFloatingPipOrder(null);
+          floatingOverlayService.hide();
         } else {
           setFloatingPipOrder(updated);
         }
       }
     }
   }, [orders]);
+
+  // Show native floating overlay ONLY when leaving app (Google Maps / Home), hide when inside app
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'background' || nextState === 'inactive') {
+        const activeOrder =
+          floatingPipOrderRef.current ||
+          ordersRef.current.find((o) => o.status === 'out_for_delivery' || o.status === 'arrived');
+        if (activeOrder) {
+          floatingOverlayService.show({
+            id: activeOrder.id,
+            name: activeOrder.name,
+            status: activeOrder.status,
+            etaMins: getEtaMinutes(activeOrder),
+            distanceKm: getRemainingDistance(activeOrder) || '0.8',
+            baseUrl: APP_CONFIG.LIVE_API_BASE_URL || 'https://extradiesel.in',
+          });
+        }
+      } else if (nextState === 'active') {
+        floatingOverlayService.hide();
+        loadDriverOrders();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+      floatingOverlayService.hide();
+    };
+  }, []);
 
   // Cash on Delivery Collection Modal State
   const [cashCollectOrder, setCashCollectOrder] = useState<DeliveryOrder | null>(null);
@@ -477,7 +515,7 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
     Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${query}`);
   };
 
-  // Redirect directly to Google Maps navigation + activate PiP floating screen & continuous GPS streaming
+  // Redirect directly to Google Maps navigation + activate native Floating Overlay & continuous GPS streaming
   const handleOpenMaps = async (order: DeliveryOrder) => {
     // 1. Ensure GPS tracking is active
     if (!isGpsActive) {
@@ -490,7 +528,7 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
       } catch (e) {}
     }
 
-    // 2. Set Floating PiP active order for continuous dashboard presence
+    // 2. Set active floating order
     setFloatingPipOrder(order);
 
     // 3. Post Sticky System Notification for OS Foreground continuity
@@ -501,7 +539,39 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
       true
     ).catch(() => {});
 
-    // 4. Open External Google Maps Navigation App
+    // 4. Check Android "Display over other apps" permission & launch floating overlay + Maps
+    if (Platform.OS === 'android') {
+      const hasPerm = await floatingOverlayService.hasPermission();
+      if (!hasPerm) {
+        Alert.alert(
+          'Floating Card Permission',
+          'Google Maps పైన Rapido లాగా ఫ్లోటింగ్ కార్డ్ కనిపించడానికి "Display over other apps" పర్మిషన్ Allow చేయండి.',
+          [
+            {
+              text: 'Allow Now',
+              onPress: () => floatingOverlayService.requestPermission(),
+            },
+            {
+              text: 'Open Maps Only',
+              style: 'cancel',
+              onPress: () => openExternalMapsApp(order),
+            },
+          ]
+        );
+        return;
+      }
+
+      floatingOverlayService.show({
+        id: order.id,
+        name: order.name,
+        status: order.status,
+        etaMins: getEtaMinutes(order),
+        distanceKm: getRemainingDistance(order) || '0.8',
+        baseUrl: APP_CONFIG.LIVE_API_BASE_URL || 'https://extradiesel.in',
+      });
+    }
+
+    // 5. Open External Google Maps Navigation App
     openExternalMapsApp(order);
   };
 
@@ -615,78 +685,6 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
   // Split orders into Assigned (Active) and Completed
   const assignedOrders = orders.filter((o) => o.status !== 'delivered' && o.status !== 'cancelled');
   const completedOrders = orders.filter((o) => o.status === 'delivered');
-
-  // When Android OS enters Picture-in-Picture mode (floating over Google Maps or Home screen)
-  if (isPipMode) {
-    const activeOrder = floatingPipOrder || assignedOrders[0] || orders[0];
-    return (
-      <View style={styles.pipFullscreenContainer}>
-        <View style={styles.pipCardInner}>
-          {/* Top Bar: 🔴 Captain App • LIVE GPS */}
-          <View style={styles.floatingPipHeader}>
-            <View style={styles.floatingPipLiveRow}>
-              <View style={styles.floatingPipPulseDot} />
-              <Text style={styles.floatingPipLiveText}>Captain App</Text>
-              <Text style={styles.floatingPipGpsTag}>• LIVE GPS</Text>
-            </View>
-
-            {activeOrder && (
-              <TouchableOpacity
-                onPress={() => openExternalMapsApp(activeOrder)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                style={styles.floatingPipMapsIconBtn}
-              >
-                <Ionicons name="navigate" size={12} color={COLORS.primary} />
-                <Text style={styles.floatingPipMapsIconText}>Maps</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {/* Body: Order Info & Status Action Button */}
-          {activeOrder ? (
-            <View style={styles.floatingPipBody}>
-              <View style={{ flex: 1, marginRight: 8 }}>
-                <Text style={styles.floatingPipOrderTitle} numberOfLines={1}>
-                  {activeOrder.name}
-                </Text>
-                {activeOrder.status === 'arrived' ? (
-                  <Text style={styles.floatingPipStatusArrived}>Arrived at Location</Text>
-                ) : (
-                  <Text style={styles.floatingPipSubEnroute} numberOfLines={1}>
-                    ETA {getEtaMinutes(activeOrder)}m | {getRemainingDistance(activeOrder) || '0.8'} km
-                  </Text>
-                )}
-              </View>
-
-              <View style={{ justifyContent: 'center' }}>
-                {activeOrder.status === 'out_for_delivery' || activeOrder.status === 'assigned' ? (
-                  <TouchableOpacity
-                    style={styles.floatingPipArrivedBtn}
-                    onPress={() => {
-                      handleUpdateStatus(activeOrder.id, 'arrived');
-                      setFloatingPipOrder((prev) => (prev ? { ...prev, status: 'arrived' } : null));
-                    }}
-                    activeOpacity={0.88}
-                  >
-                    <Text style={styles.floatingPipArrivedBtnText}>ARRIVED</Text>
-                  </TouchableOpacity>
-                ) : (
-                  <View style={styles.floatingPipReachedBtn}>
-                    <Ionicons name="checkmark" size={14} color="#FFFFFF" />
-                    <Text style={styles.floatingPipReachedBtnText}>REACHED</Text>
-                  </View>
-                )}
-              </View>
-            </View>
-          ) : (
-            <View style={styles.floatingPipBody}>
-              <Text style={styles.floatingPipOrderTitle}>Extra Diesel Captain</Text>
-            </View>
-          )}
-        </View>
-      </View>
-    );
-  }
 
   return (
     <View style={styles.container}>
