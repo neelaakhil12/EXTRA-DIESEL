@@ -25,8 +25,14 @@ const withCleartextTraffic = (config) => {
   config = withMainActivity(config, (config) => {
     let contents = config.modResults.contents;
     if (!contents.includes('onUserLeaveHint')) {
-      const pipImports = `import android.app.PictureInPictureParams\nimport android.util.Rational\nimport android.os.Build\n`;
-      contents = pipImports + contents;
+      const pipImports = `\nimport android.app.PictureInPictureParams\nimport android.util.Rational\nimport android.os.Build\n`;
+      const packageIndex = contents.indexOf('package ');
+      if (packageIndex !== -1) {
+        const nextLineIndex = contents.indexOf('\n', packageIndex);
+        contents = contents.slice(0, nextLineIndex + 1) + pipImports + contents.slice(nextLineIndex + 1);
+      } else {
+        contents = pipImports + contents;
+      }
 
       const pipCallback = `
   /**
