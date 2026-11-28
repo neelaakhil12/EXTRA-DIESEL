@@ -78,6 +78,7 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
   const [captainCoords, setCaptainCoords] = useState<{ lat: number; lon: number } | null>(null);
   const [lastGpsSyncTime, setLastGpsSyncTime] = useState<string | null>(null);
   const [navigatingOrder, setNavigatingOrder] = useState<DeliveryOrder | null>(null);
+  const [floatingPipOrder, setFloatingPipOrder] = useState<DeliveryOrder | null>(null);
   const gpsIntervalRef = useRef<any>(null);
   const locationSubRef = useRef<any>(null);
   const socketRef = useRef<Socket | null>(null);
@@ -87,6 +88,16 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
   // Keep ordersRef in sync with latest orders state to avoid stale closure in timers
   useEffect(() => {
     ordersRef.current = orders;
+    if (floatingPipOrder) {
+      const updated = orders.find((o) => o.id === floatingPipOrder.id);
+      if (updated) {
+        if (updated.status === 'delivered' || updated.status === 'cancelled') {
+          setFloatingPipOrder(null);
+        } else {
+          setFloatingPipOrder(updated);
+        }
+      }
+    }
   }, [orders]);
 
   // Cash on Delivery Collection Modal State
@@ -449,9 +460,32 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
     Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${query}`);
   };
 
-  // Open In-App Live GPS Navigation Map directly inside app (keeps app foregrounded for 100% continuous tracking)
-  const handleOpenMaps = (order: DeliveryOrder) => {
-    setNavigatingOrder(order);
+  // Redirect directly to Google Maps navigation + activate PiP floating screen & continuous GPS streaming
+  const handleOpenMaps = async (order: DeliveryOrder) => {
+    // 1. Ensure GPS tracking is active
+    if (!isGpsActive) {
+      await handleAllowGps();
+    }
+    // Request background location permission on native if available
+    if (Platform.OS !== 'web' && (Location as any).requestBackgroundPermissionsAsync) {
+      try {
+        await (Location as any).requestBackgroundPermissionsAsync();
+      } catch (e) {}
+    }
+
+    // 2. Set Floating PiP active order for continuous dashboard presence
+    setFloatingPipOrder(order);
+
+    // 3. Post Sticky System Notification for OS Foreground continuity
+    sendSystemNotification(
+      '🚚 Bowser Live Navigation Active',
+      `Streaming GPS for Order #${order.id} (${order.liters}L). Live tracking active for customer.`,
+      'driver',
+      true
+    ).catch(() => {});
+
+    // 4. Open External Google Maps Navigation App
+    openExternalMapsApp(order);
   };
 
   // Navigation Interactive Map HTML
@@ -1175,6 +1209,93 @@ export const DeliveryDashboardScreen: React.FC<DeliveryDashboardScreenProps> = (
           </View>
         )}
       </Modal>
+      {/* Floating PiP Navigation Card (Active when Google Maps is opened or navigating) */}
+      {floatingPipOrder && (
+        <View style={styles.floatingPipCard}>
+          {/* PiP Header */}
+          <View style={styles.floatingPipHeader}>
+            <View style={styles.floatingPipLiveRow}>
+              <View style={styles.floatingPipPulseDot} />
+              <Text style={styles.floatingPipLiveText}>NAVIGATING (GOOGLE MAPS) • LIVE GPS ACTIVE</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => setFloatingPipOrder(null)}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              style={styles.floatingPipCloseBtn}
+            >
+              <Ionicons name="close" size={18} color="#94A3B8" />
+            </TouchableOpacity>
+          </View>
+
+          {/* PiP Body */}
+          <View style={styles.floatingPipBody}>
+            <View style={{ flex: 1, marginRight: 8 }}>
+              <Text style={styles.floatingPipOrderTitle} numberOfLines={1}>
+                Order #{floatingPipOrder.id} • {floatingPipOrder.liters}L ({floatingPipOrder.name})
+              </Text>
+              <Text style={styles.floatingPipAddress} numberOfLines={1}>
+                📍 {floatingPipOrder.address}
+              </Text>
+            </View>
+
+            {getRemainingDistance(floatingPipOrder) ? (
+              <View style={styles.floatingPipDistBadge}>
+                <Text style={styles.floatingPipDistVal}>{getRemainingDistance(floatingPipOrder)}</Text>
+                <Text style={styles.floatingPipDistUnit}>km left</Text>
+              </View>
+            ) : null}
+          </View>
+
+          {/* PiP Quick Actions */}
+          <View style={styles.floatingPipActions}>
+            <TouchableOpacity
+              style={styles.floatingPipMapsBtn}
+              onPress={() => openExternalMapsApp(floatingPipOrder)}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="navigate" size={16} color="#FFFFFF" />
+              <Text style={styles.floatingPipBtnText}>Re-open Maps</Text>
+            </TouchableOpacity>
+
+            {floatingPipOrder.phone ? (
+              <TouchableOpacity
+                style={styles.floatingPipCallBtn}
+                onPress={() => handleCallCustomer(floatingPipOrder.phone)}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="call" size={15} color="#059669" />
+                <Text style={styles.floatingPipCallBtnText}>Call</Text>
+              </TouchableOpacity>
+            ) : null}
+
+            {floatingPipOrder.status === 'out_for_delivery' || floatingPipOrder.status === 'assigned' ? (
+              <TouchableOpacity
+                style={styles.floatingPipArrivedBtn}
+                onPress={() => {
+                  handleUpdateStatus(floatingPipOrder.id, 'arrived');
+                  setFloatingPipOrder((prev) => (prev ? { ...prev, status: 'arrived' } : null));
+                }}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="location" size={16} color="#FFFFFF" />
+                <Text style={styles.floatingPipBtnText}>Mark Arrived</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={styles.floatingPipDeliveredBtn}
+                onPress={() => {
+                  handleDeliveredClick(floatingPipOrder);
+                  setFloatingPipOrder(null);
+                }}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="checkmark-done" size={16} color="#FFFFFF" />
+                <Text style={styles.floatingPipBtnText}>Delivered</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      )}
     </View>
   );
 };
@@ -2069,5 +2190,144 @@ const styles = StyleSheet.create({
     color: '#64748B',
     fontWeight: '700',
     fontSize: 13.5,
+  },
+  // Floating PiP Card Styles
+  floatingPipCard: {
+    position: 'absolute',
+    bottom: Platform.OS === 'ios' ? 24 : 16,
+    left: 14,
+    right: 14,
+    backgroundColor: '#0F172A',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: '#38BDF8',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.45,
+    shadowRadius: 12,
+    elevation: 20,
+    zIndex: 9999,
+  },
+  floatingPipHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  floatingPipLiveRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  floatingPipPulseDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: '#22C55E',
+  },
+  floatingPipLiveText: {
+    color: '#38BDF8',
+    fontSize: 10.5,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  floatingPipCloseBtn: {
+    padding: 2,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  floatingPipBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  floatingPipOrderTitle: {
+    color: '#FFFFFF',
+    fontSize: 14.5,
+    fontWeight: '800',
+  },
+  floatingPipAddress: {
+    color: '#94A3B8',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  floatingPipDistBadge: {
+    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.3)',
+    borderRadius: 10,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  floatingPipDistVal: {
+    color: '#38BDF8',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  floatingPipDistUnit: {
+    color: '#94A3B8',
+    fontSize: 9.5,
+    fontWeight: '700',
+    marginTop: -2,
+  },
+  floatingPipActions: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  floatingPipMapsBtn: {
+    flex: 1.3,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#2563EB',
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  floatingPipCallBtn: {
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  floatingPipCallBtnText: {
+    color: '#059669',
+    fontWeight: '800',
+    fontSize: 12.5,
+  },
+  floatingPipArrivedBtn: {
+    flex: 1.1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    backgroundColor: '#D97706',
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  floatingPipDeliveredBtn: {
+    flex: 1.1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    backgroundColor: '#059669',
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  floatingPipBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 12.5,
   },
 });
